@@ -1,0 +1,3 @@
+[submodule "belt.pp"]
+	path = belt.pp
+	url = https://github.com/tigrangh/belt.pp
