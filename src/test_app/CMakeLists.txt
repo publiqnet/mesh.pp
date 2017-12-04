@@ -1,10 +1,14 @@
-
-
+# define the executable
 add_executable(test_app
     main.cpp)
 
-target_link_libraries(test_app mesh.pp message)
+# libraries this module links to
+target_link_libraries(test_app PUBLIC
+    mesh.pp
+    message)
 
+# what to do on make install
 install(TARGETS test_app
-        RUNTIME DESTINATION bin/mesh.pp
-        LIBRARY DESTINATION lib/mesh.pp)
+        EXPORT mesh.pp.package
+        RUNTIME DESTINATION bin/mesh.pp)
+

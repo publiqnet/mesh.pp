@@ -4,7 +4,7 @@
 
 int main()
 {
-   auto test = 1;
+   //auto test = 1;
    beltpp::message msg;
    std::cout << msg.type() << std::endl;
    return 0;
