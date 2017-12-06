@@ -184,6 +184,7 @@ int main(int argc, char* argv[])
         using beltpp::message_code_join;
         using beltpp::message_code_drop;
         using beltpp::message_code_hello;
+        using beltpp::message_code_get_peers;
         using beltpp::message_code_peer_info;
 
         std::unique_ptr<unsigned short> fixed_local_port;
@@ -249,6 +250,15 @@ int main(int argc, char* argv[])
                         if (set_listening.find(to_listen) ==
                             set_listening.end())
                             set_to_listen.insert(to_listen);
+
+                        message_code_hello msg_hello;
+                        msg_hello.m_message = "hi from " +
+                                string(option_node_name);
+                        write_message.set(msg_hello);
+                        sk.write(read_peer, write_message);
+
+                        write_message.set(message_code_get_peers());
+                        sk.write(read_peer, write_message);
                     }
                     else
                     {
@@ -267,6 +277,37 @@ int main(int argc, char* argv[])
                     cout << "dropped " << iter->to_string() << endl;
                     set_connected.erase(iter);
                 }
+                    break;
+                case message_code_get_peers::rtt:
+                    for (auto const& item : set_connected)
+                    {
+                        message_code_peer_info msg_peer_info;
+                        msg_peer_info.address = item;
+                        write_message.set(msg_peer_info);
+                        sk.write(read_peer, write_message);
+                    }
+                    break;
+                case message_code_peer_info::rtt:
+                {
+                    message_code_peer_info msg_peer_info;
+                    msg.get(msg_peer_info);
+
+                    ip_address connect_to = msg_peer_info.address;
+                    if (set_connected.end() !=
+                        set_connected.find(connect_to))
+                    {
+                        connect_to.local = sk.info(read_peer).local;
+                        cout << "connecting to peer's peer " <<
+                                connect_to.to_string() << endl;
+                        sk.open(connect_to);
+                    }
+                }
+                    break;
+                case message_code_hello::rtt:
+                    message_code_hello msg_hello;
+                    msg.get(msg_hello);
+
+                    cout << msg_hello.m_message << endl;
                     break;
                 }
             }
