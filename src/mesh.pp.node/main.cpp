@@ -18,6 +18,7 @@ using peer_ids = beltpp::socket::peer_ids;
 using std::cout;
 using std::endl;
 using address_set = std::unordered_set<ip_address, class ip_address_hash>;
+using address_map = std::unordered_map<ip_address, string, class ip_address_hash>;
 using std::unordered_map;
 using std::hash;
 
@@ -172,8 +173,8 @@ int main(int argc, char* argv[])
         //  is possible too.
         //
 
-        address_set set_to_listen, set_listening;
-        address_set set_to_connect, set_connected;
+        address_set set_to_listen, set_to_connect;
+        address_map map_listening, map_connected;
 
         if (false == connect.remote.empty())
             set_to_connect.insert(connect);
@@ -205,7 +206,7 @@ int main(int argc, char* argv[])
                 {
                     auto conn_item = sk.info(peer_item);
                     cout << "listening on " << conn_item.to_string() << endl;
-                    set_listening.insert(conn_item);
+                    map_listening.insert(std::make_pair(conn_item, peer_item));
 
                     if (fixed_local_port)
                     {
@@ -242,13 +243,14 @@ int main(int argc, char* argv[])
                     if (nullptr == fixed_local_port ||
                         conn_item.local.port == *fixed_local_port)
                     {
-                        set_connected.insert(conn_item);
+                        map_connected.insert(
+                                    std::make_pair(conn_item, read_peer));
                         fixed_local_port.reset(
                                     new unsigned short(conn_item.local.port));
 
                         ip_address to_listen(conn_item.local, conn_item.type);
-                        if (set_listening.find(to_listen) ==
-                            set_listening.end())
+                        if (map_listening.find(to_listen) ==
+                            map_listening.end())
                             set_to_listen.insert(to_listen);
 
                         message_code_hello msg_hello;
@@ -271,29 +273,38 @@ int main(int argc, char* argv[])
                     break;
                 case message_code_drop::rtt:
                 {
-                    auto iter = set_connected.find(sk.info(read_peer));
+                    auto iter = map_connected.find(sk.info(read_peer));
                     assert(iter !=
-                            set_connected.end());
-                    cout << "dropped " << iter->to_string() << endl;
-                    set_connected.erase(iter);
+                            map_connected.end());
+                    cout << "dropped " << iter->first.to_string() << endl;
+                    map_connected.erase(iter);
                 }
                     break;
                 case message_code_get_peers::rtt:
                 {
                     auto const& current_connection = sk.info(read_peer);
-                    for (auto const& item : set_connected)
+                    for (auto const& item : map_connected)
                     {
-                        if (item == current_connection)
+                        if (item.first == current_connection)
                             continue;
                         message_code_peer_info msg_peer_info;
-                        msg_peer_info.address = item;
+                        msg_peer_info.address = item.first;
                         write_message.set(msg_peer_info);
                         sk.write(read_peer, write_message);
 
                         cout << "sent peer info "
-                             << item.to_string()
+                             << item.first.to_string()
                              << " to peer "
                              << current_connection.to_string() << endl;
+
+                        msg_peer_info.address = current_connection;
+                        write_message.set(msg_peer_info);
+                        sk.write(item.second, write_message);
+
+                        cout << "sent peer info "
+                             << current_connection.to_string()
+                             << " to peer "
+                             << item.first.to_string() << endl;
                     }
                 }
                     break;
@@ -310,8 +321,8 @@ int main(int argc, char* argv[])
                          << " from peer "
                          << current_connection.to_string() << endl;
 
-                    if (set_connected.end() ==
-                        set_connected.find(connect_to))
+                    if (map_connected.end() ==
+                        map_connected.find(connect_to))
                     {
                         connect_to.local = sk.info(read_peer).local;
                         cout << "connecting to peer's peer " <<
@@ -341,14 +352,14 @@ int main(int argc, char* argv[])
             }
             if (false == read_messages.empty())
             {
-                if (false == set_connected.empty())
-                    cout << "connected" << endl;
-                for (auto const& item : set_connected)
-                    cout << "\t" << item.to_string() << endl;
-                if (false == set_listening.empty())
-                    cout << "listening" << endl;
-                for (auto const& item : set_listening)
-                    cout << "\t" << item.to_string() << endl;
+                if (false == map_connected.empty())
+                    cout << "status connected" << endl;
+                for (auto const& item : map_connected)
+                    cout << "\t" << item.first.to_string() << endl;
+                if (false == map_listening.empty())
+                    cout << "status listening" << endl;
+                for (auto const& item : map_listening)
+                    cout << "\t" << item.first.to_string() << endl;
             }
         }
     }
