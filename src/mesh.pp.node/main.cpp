@@ -279,13 +279,18 @@ int main(int argc, char* argv[])
                 }
                     break;
                 case message_code_get_peers::rtt:
+                {
+                    auto const& current_connection = sk.info(read_peer);
                     for (auto const& item : set_connected)
                     {
+                        if (item == current_connection)
+                            continue;
                         message_code_peer_info msg_peer_info;
                         msg_peer_info.address = item;
                         write_message.set(msg_peer_info);
                         sk.write(read_peer, write_message);
                     }
+                }
                     break;
                 case message_code_peer_info::rtt:
                 {
@@ -293,7 +298,7 @@ int main(int argc, char* argv[])
                     msg.get(msg_peer_info);
 
                     ip_address connect_to = msg_peer_info.address;
-                    if (set_connected.end() !=
+                    if (set_connected.end() ==
                         set_connected.find(connect_to))
                     {
                         connect_to.local = sk.info(read_peer).local;
