@@ -289,15 +289,27 @@ int main(int argc, char* argv[])
                         msg_peer_info.address = item;
                         write_message.set(msg_peer_info);
                         sk.write(read_peer, write_message);
+
+                        cout << "sent peer info "
+                             << item.to_string()
+                             << " to peer "
+                             << current_connection.to_string() << endl;
                     }
                 }
                     break;
                 case message_code_peer_info::rtt:
                 {
+                    auto const& current_connection = sk.info(read_peer);
                     message_code_peer_info msg_peer_info;
                     msg.get(msg_peer_info);
 
                     ip_address connect_to = msg_peer_info.address;
+
+                    cout << "got peer info "
+                         << connect_to.to_string()
+                         << " from peer "
+                         << current_connection.to_string() << endl;
+
                     if (set_connected.end() ==
                         set_connected.find(connect_to))
                     {
