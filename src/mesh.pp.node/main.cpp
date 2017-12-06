@@ -327,7 +327,7 @@ int main(int argc, char* argv[])
                         connect_to.local = sk.info(read_peer).local;
                         cout << "connecting to peer's peer " <<
                                 connect_to.to_string() << endl;
-                        sk.open(connect_to);
+                        sk.open(connect_to, 100);
                     }
                 }
                     break;
