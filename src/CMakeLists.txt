@@ -12,6 +12,7 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/mesh.pp")
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/belt.pp")
 
 add_subdirectory(mesh.pp)
+add_subdirectory(mesh.pp.node)
 add_subdirectory(test_app)
 
 # following is used for find_package functionality

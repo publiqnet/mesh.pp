@@ -1,16 +1,16 @@
 # define the executable
-add_executable(test_app
+add_executable(mesh.pp.node
     main.cpp)
 
 # libraries this module links to
-target_link_libraries(test_app PUBLIC
+target_link_libraries(mesh.pp.node PUBLIC
     mesh.pp
     message
     messagecodes
     socket)
 
 # what to do on make install
-install(TARGETS test_app
+install(TARGETS mesh.pp.node
         EXPORT mesh.pp.package
         RUNTIME DESTINATION bin/mesh.pp)
 
