@@ -22,6 +22,12 @@ using address_map = std::unordered_map<ip_address, string, class ip_address_hash
 using std::unordered_map;
 using std::hash;
 
+using beltpp::message_code_join;
+using beltpp::message_code_drop;
+using beltpp::message_code_hello;
+using beltpp::message_code_get_peers;
+using beltpp::message_code_peer_info;
+
 using sf = beltpp::socket_family_t<beltpp::message_code_join::rtt,
 beltpp::message_code_drop::rtt,
 &beltpp::message_code_join::creator,
@@ -161,10 +167,6 @@ int main(int argc, char* argv[])
             connect.remote.port = 3450;
         }
 
-        /*if (false == connect.remote.empty() &&
-            false == bind.local.empty())
-            connect.local = bind.local;*/
-
         beltpp::socket sk = beltpp::getsocket<sf>();
 
         //
@@ -173,8 +175,15 @@ int main(int argc, char* argv[])
         //  is possible too.
         //
 
+        //  below variables basically define the state of
+        //  the program at any given point in time
+        //  so below infinite loop will need to consider
+        //  strong exception safety guarantees while working
+        //  with these
+        std::unique_ptr<unsigned short> fixed_local_port;
         address_set set_to_listen, set_to_connect;
         address_map map_listening, map_connected;
+        //
 
         if (false == connect.remote.empty())
             set_to_connect.insert(connect);
@@ -182,26 +191,25 @@ int main(int argc, char* argv[])
         if (false == bind.local.empty())
             set_to_listen.insert(bind);
 
-        using beltpp::message_code_join;
-        using beltpp::message_code_drop;
-        using beltpp::message_code_hello;
-        using beltpp::message_code_get_peers;
-        using beltpp::message_code_peer_info;
-
-        std::unique_ptr<unsigned short> fixed_local_port;
-
+        //  these do not represent any state, just being used temporarily
         peer_id read_peer;
         messages read_messages;
         message write_message;
+
+        while (true) { try {
         while (true)
         {
-            for (auto item : set_to_listen)
+            auto iter_listen = set_to_listen.begin();
+            while (iter_listen != set_to_listen.end())
             {
+                auto item = *iter_listen;
                 if (fixed_local_port)
                     item.local.port = *fixed_local_port;
 
                 cout << "start to listen on " << item.to_string() << endl;
                 peer_ids peers = sk.listen(item);
+                iter_listen = set_to_listen.erase(iter_listen);
+
                 for (auto const& peer_item : peers)
                 {
                     auto conn_item = sk.info(peer_item);
@@ -217,38 +225,45 @@ int main(int argc, char* argv[])
                                     new unsigned short(conn_item.local.port));
                 }
             }
-            for (auto const& item : set_to_connect)
+
+            auto iter_connect = set_to_connect.begin();
+            while (iter_connect != set_to_connect.end())
             {
                 //  don't know which interface to bind to
                 //  so will not specify local fixed port here
                 //  but will drop the connection and create a new one
                 //  if needed
+                auto const& item = *iter_connect;
                 cout << "connect to " << item.to_string() << endl;
                 sk.open(item);
-            }
 
-            set_to_connect.clear();
-            set_to_listen.clear();
+                iter_connect = set_to_connect.erase(iter_connect);
+            }
 
             std::cout << option_node_name << " reading...\n";
             read_messages = sk.read(read_peer);
+            ip_address current_connection;
+
+            if (false == read_messages.empty())
+                current_connection = sk.info(read_peer);
+
             for (auto const& msg : read_messages)
             {
                 switch (msg.type())
                 {
                 case message_code_join::rtt:
                 {
-                    auto conn_item = sk.info(read_peer);
-
                     if (nullptr == fixed_local_port ||
-                        conn_item.local.port == *fixed_local_port)
+                        current_connection.local.port == *fixed_local_port)
                     {
                         map_connected.insert(
-                                    std::make_pair(conn_item, read_peer));
+                                    std::make_pair(current_connection,
+                                                   read_peer));
                         fixed_local_port.reset(
-                                    new unsigned short(conn_item.local.port));
+                            new unsigned short(current_connection.local.port));
 
-                        ip_address to_listen(conn_item.local, conn_item.type);
+                        ip_address to_listen(current_connection.local,
+                                             current_connection.type);
                         if (map_listening.find(to_listen) ==
                             map_listening.end())
                             set_to_listen.insert(to_listen);
@@ -266,23 +281,24 @@ int main(int argc, char* argv[])
                     {
                         write_message.set(message_code_drop());
                         sk.write(read_peer, write_message);
-                        conn_item.local.port = *fixed_local_port;
-                        sk.open(conn_item);
+                        current_connection.local.port = *fixed_local_port;
+                        sk.open(current_connection);
                     }
                 }
                     break;
                 case message_code_drop::rtt:
                 {
-                    auto iter = map_connected.find(sk.info(read_peer));
-                    assert(iter !=
-                            map_connected.end());
-                    cout << "dropped " << iter->first.to_string() << endl;
-                    map_connected.erase(iter);
+                    auto iter = map_connected.find(current_connection);
+                    if (iter != map_connected.end())
+                    {   //  this "if" may not hold only if prior insert to
+                        //  map_connected failed with an exception
+                        cout << "dropped " << iter->first.to_string() << endl;
+                        map_connected.erase(iter);
+                    }
                 }
                     break;
                 case message_code_get_peers::rtt:
                 {
-                    auto const& current_connection = sk.info(read_peer);
                     for (auto const& item : map_connected)
                     {
                         if (item.first == current_connection)
@@ -310,7 +326,6 @@ int main(int argc, char* argv[])
                     break;
                 case message_code_peer_info::rtt:
                 {
-                    auto const& current_connection = sk.info(read_peer);
                     message_code_peer_info msg_peer_info;
                     msg.get(msg_peer_info);
 
@@ -324,7 +339,7 @@ int main(int argc, char* argv[])
                     if (map_connected.end() ==
                         map_connected.find(connect_to))
                     {
-                        connect_to.local = sk.info(read_peer).local;
+                        connect_to.local = current_connection.local;
                         cout << "connecting to peer's peer " <<
                                 connect_to.to_string() << endl;
                         sk.open(connect_to, 100);
@@ -361,7 +376,15 @@ int main(int argc, char* argv[])
                 for (auto const& item : map_listening)
                     cout << "\t" << item.first.to_string() << endl;
             }
+        }}
+        catch(std::exception const& ex)
+        {
+            std::cout << ex.what() << std::endl;
         }
+        catch(...)
+        {
+            std::cout << "too well done ...\nthat was an exception\n";
+        }}
     }
     catch(std::exception const& ex)
     {
@@ -369,7 +392,7 @@ int main(int argc, char* argv[])
     }
     catch(...)
     {
-        std::cout << "too well done ..., that was an exception\n";
+        std::cout << "too well done ...\nthat was an exception\n";
     }
     return 0;
 }
