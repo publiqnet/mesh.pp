@@ -25,6 +25,7 @@ using std::hash;
 using beltpp::message_code_join;
 using beltpp::message_code_drop;
 using beltpp::message_code_hello;
+using beltpp::message_code_error;
 using beltpp::message_code_get_peers;
 using beltpp::message_code_peer_info;
 
@@ -347,15 +348,24 @@ int main(int argc, char* argv[])
                 }
                     break;
                 case message_code_hello::rtt:
+                {
                     message_code_hello msg_hello;
                     msg.get(msg_hello);
 
                     cout << msg_hello.m_message << endl;
+                }
+                    break;
+                case message_code_error::rtt:
+                    cout << "got error from bad guy "
+                         << current_connection.to_string()
+                         << endl;
+                    write_message.set(message_code_drop());
+                    sk.write(read_peer, write_message);
                     break;
                 }
             }
 
-            if (read_messages.empty())
+            /*if (read_messages.empty())
             {
                 cout << "   reading returned, but there are"
                         " no messages. either internal \n"
@@ -364,7 +374,7 @@ int main(int argc, char* argv[])
                         "   form a full message, or this could"
                         " indicate an internal silent error\n"
                         "   such as not able to connect\n";
-            }
+            }*/
             if (false == read_messages.empty())
             {
                 if (false == map_connected.empty())
