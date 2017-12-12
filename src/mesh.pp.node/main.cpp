@@ -197,6 +197,8 @@ int main(int argc, char* argv[])
         messages read_messages;
         message write_message;
 
+        size_t read_attempt_count = 0;
+
         while (true) { try {
         while (true)
         {
@@ -241,12 +243,22 @@ int main(int argc, char* argv[])
                 iter_connect = set_to_connect.erase(iter_connect);
             }
 
-            std::cout << option_node_name << " reading...\n";
+            if (0 == read_attempt_count)
+                cout << option_node_name << " reading...";
+            else
+                cout << " " << read_attempt_count << "...";
+
             read_messages = sk.read(read_peer);
             ip_address current_connection;
 
             if (false == read_messages.empty())
+            {
+                read_attempt_count = 0;
                 current_connection = sk.info(read_peer);
+                cout << " done" << endl;
+            }
+            else
+                ++read_attempt_count;
 
             for (auto const& msg : read_messages)
             {
@@ -378,11 +390,11 @@ int main(int argc, char* argv[])
             if (false == read_messages.empty())
             {
                 if (false == map_connected.empty())
-                    cout << "status connected" << endl;
+                    cout << "status summary - connected" << endl;
                 for (auto const& item : map_connected)
                     cout << "\t" << item.first.to_string() << endl;
                 if (false == map_listening.empty())
-                    cout << "status listening" << endl;
+                    cout << "status summary - listening" << endl;
                 for (auto const& item : map_listening)
                     cout << "\t" << item.first.to_string() << endl;
             }
