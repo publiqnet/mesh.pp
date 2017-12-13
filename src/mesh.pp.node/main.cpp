@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <functional>
 #include <memory>
+#include <ctime>
 
 using std::string;
 using beltpp::ip_address;
@@ -405,6 +406,9 @@ int main(int argc, char* argv[])
             }*/
             if (false == read_messages.empty())
             {
+                auto tp_now = std::chrono::system_clock::now();
+                std::time_t t_now = std::chrono::system_clock::to_time_t(tp_now);
+                std::cout << std::ctime(&t_now) << std::endl;
                 if (false == map_connected.empty())
                     cout << "status summary - connected" << endl;
                 for (auto const& item : map_connected)
