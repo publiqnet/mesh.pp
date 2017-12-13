@@ -10,6 +10,13 @@
 #include <memory>
 #include <ctime>
 
+class address_map_value
+{
+public:
+    std::string str_peer_id;
+    std::string str_hi_message;
+};
+
 using std::string;
 using beltpp::ip_address;
 using beltpp::message;
@@ -19,7 +26,7 @@ using peer_ids = beltpp::socket::peer_ids;
 using std::cout;
 using std::endl;
 using address_set = std::unordered_set<ip_address, class ip_address_hash>;
-using address_map = std::unordered_map<ip_address, string, class ip_address_hash>;
+using address_map = std::unordered_map<ip_address, address_map_value, class ip_address_hash>;
 using std::unordered_map;
 using std::hash;
 
@@ -223,7 +230,8 @@ int main(int argc, char* argv[])
                 {
                     auto conn_item = sk.info(peer_item);
                     cout << "listening on " << conn_item.to_string() << endl;
-                    map_listening.insert(std::make_pair(conn_item, peer_item));
+                    map_listening.insert(std::make_pair(conn_item,
+                                    address_map_value{peer_item, string()}));
 
                     if (fixed_local_port)
                     {
@@ -276,9 +284,13 @@ int main(int argc, char* argv[])
                     if (nullptr == fixed_local_port ||
                         current_connection.local.port == *fixed_local_port)
                     {
-                        map_connected.insert(
+                        auto insert_result = map_connected.insert(
                                     std::make_pair(current_connection,
-                                                   read_peer));
+                                    address_map_value{read_peer, string()}));
+
+                        if (insert_result.second)
+                            cout << "WARNING: new connection already exists\n";
+
                         fixed_local_port.reset(
                             new unsigned short(current_connection.local.port));
 
@@ -335,7 +347,7 @@ int main(int argc, char* argv[])
 
                         msg_peer_info.address = current_connection;
                         write_message.set(msg_peer_info);
-                        sk.write(item.second, write_message);
+                        sk.write(item.second.str_peer_id, write_message);
 
                         cout << "sent peer info "
                              << current_connection.to_string()
@@ -372,6 +384,18 @@ int main(int argc, char* argv[])
                     msg.get(msg_hello);
 
                     cout << msg_hello.m_message << endl;
+
+                    auto iter_find = map_connected.find(current_connection);
+                    if (iter_find == map_connected.end())
+                        cout << "WARNING: hi message from non registered"
+                                " connection " << current_connection.to_string();
+                    else if (iter_find->second.str_hi_message.empty())
+                        iter_find->second.str_hi_message = msg_hello.m_message;
+                    else if (iter_find->second.str_hi_message !=
+                             msg_hello.m_message)
+                        cout << "WARNING: got unexpected message from peer "
+                             << current_connection.to_string()
+                             << endl;
                 }
                     break;
                 case message_code_error::rtt:
@@ -388,7 +412,11 @@ int main(int argc, char* argv[])
                         msg_hello.m_message = "hi from " +
                                 string(option_node_name);
                         write_message.set(msg_hello);
-                        sk.write(item.second, write_message);
+                        sk.write(item.second.str_peer_id, write_message);
+
+                        if (item.second.str_hi_message.empty())
+                            cout << "WARNING: never got message from peer "
+                                 << item.first.to_string() << endl;
                     }
                     break;
                 }
