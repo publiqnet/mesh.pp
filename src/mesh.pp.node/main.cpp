@@ -290,7 +290,8 @@ int main(int argc, char* argv[])
                                  << endl
                                  << " existing " << find_iter->second.str_peer_id
                                  << endl
-                                 << " new " << read_peer;
+                                 << " new " << read_peer
+                                 << endl;
 
                         map_connected.insert(
                                     std::make_pair(current_connection,
