@@ -26,15 +26,19 @@ using beltpp::message_code_join;
 using beltpp::message_code_drop;
 using beltpp::message_code_hello;
 using beltpp::message_code_error;
+using beltpp::message_code_timer_out;
 using beltpp::message_code_get_peers;
 using beltpp::message_code_peer_info;
 
 using sf = beltpp::socket_family_t<beltpp::message_code_join::rtt,
 beltpp::message_code_drop::rtt,
+beltpp::message_code_timer_out::rtt,
 &beltpp::message_code_join::creator,
 &beltpp::message_code_drop::creator,
+&beltpp::message_code_timer_out::creator,
 &beltpp::message_code_join::saver,
 &beltpp::message_code_drop::saver,
+&beltpp::message_code_timer_out::saver,
 &beltpp::message_list_load
 >;
 
@@ -169,6 +173,7 @@ int main(int argc, char* argv[])
         }
 
         beltpp::socket sk = beltpp::getsocket<sf>();
+        sk.set_timer(std::chrono::seconds(10));
 
         //
         //  by this point either bind or connect
@@ -254,7 +259,8 @@ int main(int argc, char* argv[])
             if (false == read_messages.empty())
             {
                 read_attempt_count = 0;
-                current_connection = sk.info(read_peer);
+                if (false == read_peer.empty())
+                    current_connection = sk.info(read_peer);
                 cout << " done" << endl;
             }
             else
@@ -373,6 +379,16 @@ int main(int argc, char* argv[])
                          << endl;
                     write_message.set(message_code_drop());
                     sk.write(read_peer, write_message);
+                    break;
+                case message_code_timer_out::rtt:
+                    for (auto const& item : map_connected)
+                    {
+                        message_code_hello msg_hello;
+                        msg_hello.m_message = "hi from " +
+                                string(option_node_name);
+                        write_message.set(msg_hello);
+                        sk.write(item.second, write_message);
+                    }
                     break;
                 }
             }
