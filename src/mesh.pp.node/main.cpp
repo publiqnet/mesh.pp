@@ -284,12 +284,16 @@ int main(int argc, char* argv[])
                     if (nullptr == fixed_local_port ||
                         current_connection.local.port == *fixed_local_port)
                     {
-                        auto insert_result = map_connected.insert(
+                        auto find_iter = map_connected.find(current_connection);
+                        if (find_iter != map_connected.end())
+                            cout << "WARNING: new connection already exists"
+                                 << " existing " << find_iter->first.to_string()
+                                 << endl
+                                 << " new " << current_connection.to_string();
+
+                        map_connected.insert(
                                     std::make_pair(current_connection,
                                     address_map_value{read_peer, string()}));
-
-                        if (insert_result.second)
-                            cout << "WARNING: new connection already exists\n";
 
                         fixed_local_port.reset(
                             new unsigned short(current_connection.local.port));
@@ -388,7 +392,9 @@ int main(int argc, char* argv[])
                     auto iter_find = map_connected.find(current_connection);
                     if (iter_find == map_connected.end())
                         cout << "WARNING: hi message from non registered"
-                                " connection " << current_connection.to_string();
+                                " connection "
+                             << current_connection.to_string()
+                             << endl;
                     else if (iter_find->second.str_hi_message.empty())
                         iter_find->second.str_hi_message = msg_hello.m_message;
                     else if (iter_find->second.str_hi_message !=
