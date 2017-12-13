@@ -287,9 +287,10 @@ int main(int argc, char* argv[])
                         auto find_iter = map_connected.find(current_connection);
                         if (find_iter != map_connected.end())
                             cout << "WARNING: new connection already exists"
-                                 << " existing " << find_iter->first.to_string()
                                  << endl
-                                 << " new " << current_connection.to_string();
+                                 << " existing " << find_iter->second.str_peer_id
+                                 << endl
+                                 << " new " << read_peer;
 
                         map_connected.insert(
                                     std::make_pair(current_connection,
