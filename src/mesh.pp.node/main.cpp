@@ -407,11 +407,20 @@ int main(int argc, char* argv[])
                 }
                     break;
                 case message_code_error::rtt:
+                {
                     cout << "got error from bad guy "
                          << current_connection.to_string()
                          << endl;
                     write_message.set(message_code_drop());
                     sk.write(read_peer, write_message);
+
+                    auto iter_find = map_connected.find(current_connection);
+                    if (iter_find == map_connected.end())
+                        cout << "WARNING: this was a non registered"
+                                " connection";
+                    else
+                        map_connected.erase(iter_find);
+                }
                     break;
                 case message_code_timer_out::rtt:
                     for (auto const& item : map_connected)
