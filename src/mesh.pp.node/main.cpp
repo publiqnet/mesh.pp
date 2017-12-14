@@ -269,7 +269,13 @@ int main(int argc, char* argv[])
             {
                 read_attempt_count = 0;
                 if (false == read_peer.empty())
-                    current_connection = sk.info(read_peer);
+                {
+                    try //  this is something quick for now
+                    {
+                        current_connection = sk.info(read_peer);
+                    }
+                    catch(...){}
+                }
                 cout << " done" << endl;
             }
             else
@@ -326,12 +332,16 @@ int main(int argc, char* argv[])
                     break;
                 case message_code_drop::rtt:
                 {
-                    auto iter = map_connected.find(current_connection);
-                    if (iter != map_connected.end())
-                    {   //  this "if" may not hold only if prior insert to
-                        //  map_connected failed with an exception
-                        cout << "dropped " << iter->first.to_string() << endl;
-                        map_connected.erase(iter);
+                    //  this is something quick for now
+                    auto iter = map_connected.begin();
+                    for (; iter != map_connected.end(); ++iter)
+                    {
+                        if (iter->second.str_peer_id == read_peer)
+                        {
+                            map_connected.erase(iter);
+                            cout << "dropped " << iter->first.to_string() << endl;
+                            break;
+                        }
                     }
                 }
                     break;
