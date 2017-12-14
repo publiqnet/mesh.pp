@@ -476,7 +476,7 @@ int main(int argc, char* argv[])
         }}
         catch(std::exception const& ex)
         {
-            std::cout << ex.what() << std::endl;
+            std::cout << "exception: " << ex.what() << std::endl;
         }
         catch(...)
         {
@@ -485,7 +485,7 @@ int main(int argc, char* argv[])
     }
     catch(std::exception const& ex)
     {
-        std::cout << ex.what() << std::endl;
+        std::cout << "exception: " << ex.what() << std::endl;
     }
     catch(...)
     {
