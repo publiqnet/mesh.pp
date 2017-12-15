@@ -208,7 +208,6 @@ int main(int argc, char* argv[])
         //  these do not represent any state, just being used temporarily
         peer_id read_peer;
         messages read_messages;
-        message write_message;
 
         size_t read_attempt_count = 0;
 
@@ -315,16 +314,13 @@ int main(int argc, char* argv[])
                         message_code_hello msg_hello;
                         msg_hello.m_message = "hi from " +
                                 string(option_node_name);
-                        write_message.set(msg_hello);
-                        sk.write(read_peer, write_message);
+                        sk.write(read_peer, msg_hello);
 
-                        write_message.set(message_code_get_peers());
-                        sk.write(read_peer, write_message);
+                        sk.write(read_peer, message_code_get_peers());
                     }
                     else
                     {
-                        write_message.set(message_code_drop());
-                        sk.write(read_peer, write_message);
+                        sk.write(read_peer, message_code_drop());
                         current_connection.local.port = *fixed_local_port;
                         sk.open(current_connection);
                     }
@@ -353,8 +349,7 @@ int main(int argc, char* argv[])
                             continue;
                         message_code_peer_info msg_peer_info;
                         msg_peer_info.address = item.first;
-                        write_message.set(msg_peer_info);
-                        sk.write(read_peer, write_message);
+                        sk.write(read_peer, msg_peer_info);
 
                         cout << "sent peer info "
                              << item.first.to_string()
@@ -362,8 +357,7 @@ int main(int argc, char* argv[])
                              << current_connection.to_string() << endl;
 
                         msg_peer_info.address = current_connection;
-                        write_message.set(msg_peer_info);
-                        sk.write(item.second.str_peer_id, write_message);
+                        sk.write(item.second.str_peer_id, msg_peer_info);
 
                         cout << "sent peer info "
                              << current_connection.to_string()
@@ -421,8 +415,7 @@ int main(int argc, char* argv[])
                     cout << "got error from bad guy "
                          << current_connection.to_string()
                          << endl;
-                    write_message.set(message_code_drop());
-                    sk.write(read_peer, write_message);
+                    sk.write(read_peer, message_code_drop());
 
                     auto iter_find = map_connected.find(current_connection);
                     if (iter_find == map_connected.end())
@@ -438,8 +431,7 @@ int main(int argc, char* argv[])
                         message_code_hello msg_hello;
                         msg_hello.m_message = "hi from " +
                                 string(option_node_name);
-                        write_message.set(msg_hello);
-                        sk.write(item.second.str_peer_id, write_message);
+                        sk.write(item.second.str_peer_id, msg_hello);
 
                         if (item.second.str_hi_message.empty())
                             cout << "WARNING: never got message from peer "
