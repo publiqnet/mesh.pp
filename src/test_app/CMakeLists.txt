@@ -7,7 +7,8 @@ target_link_libraries(test_app PUBLIC
     mesh.pp
     message
     messagecodes
-    socket)
+    socket
+    PRIVATE json)
 
 # what to do on make install
 install(TARGETS test_app
