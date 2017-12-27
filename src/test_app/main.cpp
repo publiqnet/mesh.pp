@@ -118,7 +118,7 @@ int main()
                                     beltpp::standard_discard_lexers,
                                     std::string>> ptr_expression;
     //std::string test("\'+-\'+0x2 + s{- 0x3}\"str\\\"ing\'\"-\'k\\\'\"l\'");
-    std::string test("{\'192.168.1.1\'+\'13\'}");
+    std::string test("{{{{{{}}}}}+\'192.168.1.1\'+\'13\'}");
     auto it_begin = test.begin();
     auto it_end = test.end();
     auto it_begin_keep = it_begin;
@@ -185,6 +185,8 @@ int main()
             --depth;
         }
     }
+
+    std::cout << "depth is " << ptr_expression->depth() << std::endl;
 
     return 0;
 }
