@@ -1,0 +1,34 @@
+class message_ip_destination
+{
+    port : int;
+    address : string
+};
+class message_ip_address
+{
+    type : int;
+    local : message_ip_destination;
+    remote : message_ip_destination
+};
+class message_code_join
+{
+};
+class message_code_drop
+{
+};
+class message_code_hello
+{
+    message : string
+};
+class message_code_error
+{
+};
+class message_code_timer_out
+{
+};
+class message_code_get_peers
+{
+};
+class message_code_peer_info
+{
+    address : message_ip_address
+}

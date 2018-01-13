@@ -11,7 +11,6 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/mesh.pp")
 # by writing piece of code that should not be here
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/belt.pp")
 
-add_subdirectory(json)
 add_subdirectory(belt.pp)
 add_subdirectory(mesh.pp)
 add_subdirectory(mesh.pp.node)

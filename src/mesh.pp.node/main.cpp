@@ -1,5 +1,6 @@
 #include <belt.pp/message.hpp>
-#include <belt.pp/messagecodes.hpp>
+//#include <belt.pp/messagecodes.hpp>
+#include "message.hpp"
 #include <belt.pp/socket.hpp>
 
 #include <string>
@@ -38,12 +39,16 @@ using beltpp::message_code_timer_out;
 using beltpp::message_code_get_peers;
 using beltpp::message_code_peer_info;
 
-using sf = beltpp::socket_family_t<beltpp::message_code_join::rtt,
+using sf = beltpp::socket_family_t<
+beltpp::message_code_error::rtt,
+beltpp::message_code_join::rtt,
 beltpp::message_code_drop::rtt,
 beltpp::message_code_timer_out::rtt,
-&beltpp::message_code_join::creator,
-&beltpp::message_code_drop::creator,
-&beltpp::message_code_timer_out::creator,
+&beltpp::message_code_creator<beltpp::message_code_error>,
+&beltpp::message_code_creator<beltpp::message_code_join>,
+&beltpp::message_code_creator<beltpp::message_code_drop>,
+&beltpp::message_code_creator<beltpp::message_code_timer_out>,
+&beltpp::message_code_error::saver,
 &beltpp::message_code_join::saver,
 &beltpp::message_code_drop::saver,
 &beltpp::message_code_timer_out::saver,
@@ -176,7 +181,7 @@ int main(int argc, char* argv[])
         if (connect.remote.empty() &&
             bind.local.empty())
         {
-            connect.remote.address = "141.136.71.42";
+            connect.remote.address = "141.136.70.186";
             connect.remote.port = 3450;
         }
 
@@ -312,7 +317,7 @@ int main(int argc, char* argv[])
                             set_to_listen.insert(to_listen);
 
                         message_code_hello msg_hello;
-                        msg_hello.m_message = "hi from " +
+                        msg_hello.message = "hi from " +
                                 string(option_node_name);
                         sk.write(read_peer, msg_hello);
 
@@ -371,7 +376,8 @@ int main(int argc, char* argv[])
                     message_code_peer_info msg_peer_info;
                     msg.get(msg_peer_info);
 
-                    ip_address connect_to = msg_peer_info.address;
+                    ip_address connect_to;
+                    beltpp::assign(connect_to, msg_peer_info.address);
 
                     cout << "got peer info "
                          << connect_to.to_string()
@@ -393,7 +399,7 @@ int main(int argc, char* argv[])
                     message_code_hello msg_hello;
                     msg.get(msg_hello);
 
-                    cout << msg_hello.m_message << endl;
+                    cout << msg_hello.message << endl;
 
                     auto iter_find = map_connected.find(current_connection);
                     if (iter_find == map_connected.end())
@@ -402,9 +408,9 @@ int main(int argc, char* argv[])
                              << current_connection.to_string()
                              << endl;
                     else if (iter_find->second.str_hi_message.empty())
-                        iter_find->second.str_hi_message = msg_hello.m_message;
+                        iter_find->second.str_hi_message = msg_hello.message;
                     else if (iter_find->second.str_hi_message !=
-                             msg_hello.m_message)
+                             msg_hello.message)
                         cout << "WARNING: got unexpected message from peer "
                              << current_connection.to_string()
                              << endl;
@@ -429,7 +435,7 @@ int main(int argc, char* argv[])
                     for (auto const& item : map_connected)
                     {
                         message_code_hello msg_hello;
-                        msg_hello.m_message = "hi from " +
+                        msg_hello.message = "hi from " +
                                 string(option_node_name);
                         sk.write(item.second.str_peer_id, msg_hello);
 

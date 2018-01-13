@@ -1,56 +1,37 @@
-#include <belt.pp/message.hpp>
-#include <belt.pp/messagecodes.hpp>
-#include <json/json.hpp>
+
+#define _VERSION_ 2
+
+#if (_VERSION_ == 1)
 #include <belt.pp/parser.hpp>
-#include <belt.pp/meta.hpp>
 
 #include <iostream>
 #include <string>
 
-using message_list =
-beltpp::typelist::type_list<
-class message_blockchain_issue_block>;
-
-using event_list =
-beltpp::typelist::type_list<
-class event_network_transaction_call,
-int,
-char
->;
-
-class event_network_transaction_call :
-        public beltpp::message_code<event_network_transaction_call, event_list>
-{};
-
-class message_blockchain_issue_block :
-        public beltpp::message_code<message_blockchain_issue_block, message_list>
-{};
-
-size_t a = beltpp::typelist::type_list_index<event_network_transaction_call, event_list>::value;
-
-
-
 using operator_lexers =
 beltpp::typelist::type_list<
 class operator_plus_lexer,
-class operator_minus_lexer
-//class operator_multiply,
-//class operator_divide
->;
-
-using scope_lexers =
-beltpp::typelist::type_list<
-class scope_braces_lexer
-//class scope_parentheses
+class operator_minus_lexer,
+class operator_multiply_lexer,
+class operator_brakets_lexer,
+class value_number_lexer,
+class white_space_lexer
 >;
 
 class operator_plus_lexer :
         public beltpp::operator_lexer_base<operator_plus_lexer,
-                                            operator_lexers,
-                                            beltpp::standard_operator_set>
+                                            operator_lexers>
 {
 public:
+    size_t right = 1;
+    size_t left_max = -1;
+    size_t left_min = 0;
     enum { grow_priority = 1 };
+
+    std::pair<bool, bool> check(char ch)
+    {
+        return beltpp::standard_operator_check<beltpp::standard_operator_set<void>>(ch);
+    }
+
     bool final_check(std::string::iterator it_begin,
                      std::string::iterator it_end) const
     {
@@ -59,24 +40,56 @@ public:
 };
 class operator_minus_lexer :
         public beltpp::operator_lexer_base<operator_minus_lexer,
-                                            operator_lexers,
-                                            beltpp::standard_operator_set>
+                                            operator_lexers>
 {
 public:
-    enum { grow_priority = 0 };
+    size_t right = 3;
+    size_t left_max = -1;
+    size_t left_min = 1;
+    enum { grow_priority = 1 };
+
+    std::pair<bool, bool> check(char ch)
+    {
+        return beltpp::standard_operator_check<beltpp::standard_operator_set<void>>(ch);
+    }
+
     bool final_check(std::string::iterator it_begin,
                      std::string::iterator it_end) const
     {
         return std::string(it_begin, it_end) == "-";
     }
 };
+class operator_multiply_lexer :
+        public beltpp::operator_lexer_base<operator_multiply_lexer,
+                                            operator_lexers>
+{
+public:
+    size_t right = 1;
+    size_t left_max = 1;
+    size_t left_min = 1;
+    enum { grow_priority = 1 };
 
-class scope_braces_lexer :
-        public beltpp::scope_lexer_base<scope_braces_lexer, scope_lexers>
+    std::pair<bool, bool> check(char ch)
+    {
+        return beltpp::standard_operator_check<beltpp::standard_operator_set<void>>(ch);
+    }
+
+    bool final_check(std::string::iterator it_begin,
+                     std::string::iterator it_end) const
+    {
+        return std::string(it_begin, it_end) == "*";
+    }
+};
+class operator_brakets_lexer :
+        public beltpp::operator_lexer_base<operator_brakets_lexer,
+                                            operator_lexers>
 {
     bool state_must_open = false;
 public:
-    bool is_close = false;
+    size_t right = 1;
+    size_t left_max = 1;
+    size_t left_min = 1;
+    enum { grow_priority = 1 };
 
     std::pair<bool, bool> check(char ch)
     {
@@ -90,11 +103,18 @@ public:
             return std::make_pair(false, false);
         if (false == state_must_open && ch == '}')
         {
-            is_close = true;
+            right = 0;
+            left_min = 0;
+            left_max = 1;
             return std::make_pair(true, true);
         }
         if (ch == '{')
+        {
+            right = 1;
+            left_min = 0;
+            left_max = 0;
             return std::make_pair(true, true);
+        }
 
         return std::make_pair(false, false);
     }
@@ -109,16 +129,64 @@ public:
     }
 };
 
+class value_number_lexer :
+        public beltpp::value_lexer_base<value_number_lexer,
+                                        operator_lexers>
+{
+    std::string value;
+private:
+    bool _check(std::string const& v) const
+    {
+        size_t pos = 0;
+        beltpp::stod(v, pos);
+        if (pos != v.length())
+            beltpp::stoll(v, pos);
+
+        if (pos != v.length())
+            return false;
+        return true;
+    }
+public:
+    std::pair<bool, bool> check(char ch)
+    {
+        value += ch;
+        if ("." == value || "-" == value || "-." == value)
+            return std::make_pair(true, false);
+        else if (_check(value))
+            return std::make_pair(true, false);
+        else
+            return std::make_pair(false, false);
+    }
+
+    bool final_check(std::string::iterator it_begin,
+                     std::string::iterator it_end) const
+    {
+        return _check(std::string(it_begin, it_end));
+    }
+
+    bool scan_beyond() const
+    {
+        return false;
+    }
+};
+
+
+class white_space_lexer :
+        public beltpp::discard_lexer_base<white_space_lexer,
+                                            operator_lexers,
+                                            beltpp::standard_white_space_set<void>>
+{};
+
 int main()
 {
     std::unique_ptr<
             beltpp::expression_tree<operator_lexers,
-                                    beltpp::standard_value_lexers,
-                                    scope_lexers,
-                                    beltpp::standard_discard_lexers,
                                     std::string>> ptr_expression;
     //std::string test("\'+-\'+0x2 + s{- 0x3}\"str\\\"ing\'\"-\'k\\\'\"l\'");
-    std::string test("{{{{{{}}}}}+\'192.168.1.1\'+\'13\'}");
+    //std::string test("{{{{{{}}}}}+\'192.168.1.1\'-1 2 3}");
+    std::string test("1*2-3+4 4*1 5+6+7");
+    //std::string test("1+{2}+ + + 3+4+5");
+    //std::string test("+");
     auto it_begin = test.begin();
     auto it_end = test.end();
     auto it_begin_keep = it_begin;
@@ -146,6 +214,7 @@ int main()
     std::vector<size_t> track;
     size_t depth = 0;
 
+    std::cout << "=====\n";
     while (p_iterator)
     {
         if (track.size() == depth)
@@ -154,8 +223,11 @@ int main()
         if (track.size() == depth + 1)
         {
             for (size_t index = 0; index != depth; ++index)
-                std::cout << ' ';
-            std::cout << p_iterator->lexem.value << std::endl;
+                std::cout << '.';
+            std::cout << p_iterator->lexem.value;
+            if (p_iterator->lexem.right > 0)
+                std::cout << " !!!! ";
+            std::cout << std::endl;
         }
 
         size_t next_child_index = -1;
@@ -190,3 +262,60 @@ int main()
 
     return 0;
 }
+
+#elif (_VERSION_ == 2)
+
+#include <belt.pp/json.hpp>
+
+#include <string>
+#include <iostream>
+
+using std::string;
+using std::cout;
+using std::endl;
+
+int main()
+{
+    size_t const limit = 1000;
+    beltpp::json::ptr_expression_tree pexp;
+    beltpp::json::expression_tree* proot = nullptr;
+    {
+    string test1 = "{\"rtt\":4,\"message\":\"hi from node1\"}{\"\" :1";
+    auto it_begin = test1.begin();
+    auto it_end = test1.end();
+
+    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, 2, proot);
+
+    cout << *it_begin << endl;
+    if (beltpp::e_three_state_result::error == code)
+        cout << "test1 error" << endl;
+    else
+    {
+        cout << beltpp::dump(proot) << endl;
+        if (beltpp::e_three_state_result::success == code)
+            return 0;
+    }
+    }
+
+    {
+    string test1 = "21}";
+    auto it_begin = test1.begin();
+    auto it_end = test1.end();
+
+    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, limit, proot);
+
+    cout << *it_begin << endl;
+    if (beltpp::e_three_state_result::error == code)
+        cout << "test2 error" << endl;
+    else
+    {
+        cout << beltpp::dump(proot) << endl;
+        if (beltpp::e_three_state_result::success == code)
+            return 0;
+    }
+    }
+
+    return 0;
+}
+
+#endif

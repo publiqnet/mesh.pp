@@ -1,6 +1,8 @@
 # define the executable
 add_executable(mesh.pp.node
-    main.cpp)
+    main.cpp
+    message.hpp)
+#    message.gen.hpp)
 
 # libraries this module links to
 target_link_libraries(mesh.pp.node PUBLIC
