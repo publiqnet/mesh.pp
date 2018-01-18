@@ -603,22 +603,22 @@ bool analyze_json_object(beltpp::json::expression_tree* pexp,
     case message_ip_destination::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_ip_destination::rtt,
+                                            message_code_creator<message_ip_destination>(),
+                                            &message_ip_destination::saver);
+        message_ip_destination* pmsgcode =
+                static_cast<message_ip_destination*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
     case message_ip_address::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_ip_address::rtt,
+                                            message_code_creator<message_ip_address>(),
+                                            &message_ip_address::saver);
+        message_ip_address* pmsgcode =
+                static_cast<message_ip_address*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
@@ -636,66 +636,66 @@ bool analyze_json_object(beltpp::json::expression_tree* pexp,
     case message_code_drop::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_code_drop::rtt,
+                                            message_code_creator<message_code_drop>(),
+                                            &message_code_drop::saver);
+        message_code_drop* pmsgcode =
+                static_cast<message_code_drop*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
     case message_code_hello::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_code_hello::rtt,
+                                            message_code_creator<message_code_hello>(),
+                                            &message_code_hello::saver);
+        message_code_hello* pmsgcode =
+                static_cast<message_code_hello*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
     case message_code_error::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_code_error::rtt,
+                                            message_code_creator<message_code_error>(),
+                                            &message_code_error::saver);
+        message_code_error* pmsgcode =
+                static_cast<message_code_error*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
     case message_code_timer_out::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_code_timer_out::rtt,
+                                            message_code_creator<message_code_timer_out>(),
+                                            &message_code_timer_out::saver);
+        message_code_timer_out* pmsgcode =
+                static_cast<message_code_timer_out*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
     case message_code_get_peers::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_code_get_peers::rtt,
+                                            message_code_creator<message_code_get_peers>(),
+                                            &message_code_get_peers::saver);
+        message_code_get_peers* pmsgcode =
+                static_cast<message_code_get_peers*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
     case message_code_peer_info::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_code_peer_info::rtt,
+                                            message_code_creator<message_code_peer_info>(),
+                                            &message_code_peer_info::saver);
+        message_code_peer_info* pmsgcode =
+                static_cast<message_code_peer_info*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
