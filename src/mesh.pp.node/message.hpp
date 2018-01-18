@@ -74,9 +74,9 @@ beltpp::detail::pmsg_all message_list_load(
         //  in future may implement persistent state, so rescan will not
         //  be needed
         iter_scan_begin = it_backup;
-        beltpp::detail::pmsg_all return_value (size_t(-1),
-                                               detail::ptr_msg(nullptr, [](void*&){}),
-                                               nullptr);
+        return_value = beltpp::detail::pmsg_all(size_t(-1),
+                                                detail::ptr_msg(nullptr, [](void*&){}),
+                                                nullptr);
     }
 
     return return_value;
