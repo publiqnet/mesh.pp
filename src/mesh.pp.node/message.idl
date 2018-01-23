@@ -15,20 +15,26 @@ class message_code_join
 class message_code_drop
 {
 };
-class message_code_hello
+class message_code_ping
 {
-    message : string
+nodeid : string
+};
+class message_code_pong
+{
+nodeid : string
 };
 class message_code_error
 {
 };
-class message_code_timer_out
+class message_code_time_out
 {
 };
 class message_code_get_peers
 {
+nodeid : string
 };
 class message_code_peer_info
 {
+nodeid : string;
     address : message_ip_address
 }

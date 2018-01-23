@@ -11,9 +11,8 @@
 #include <memory>
 #include <ctime>
 
-class address_map_value
+struct address_map_value
 {
-public:
     std::string str_peer_id;
     std::string str_hi_message;
 };
@@ -33,26 +32,27 @@ using std::hash;
 
 using beltpp::message_code_join;
 using beltpp::message_code_drop;
-using beltpp::message_code_hello;
+using beltpp::message_code_ping;
+using beltpp::message_code_pong;
 using beltpp::message_code_error;
-using beltpp::message_code_timer_out;
-using beltpp::message_code_get_peers;
-using beltpp::message_code_peer_info;
+using beltpp::message_code_time_out;
+//using beltpp::message_code_get_peers;
+//using beltpp::message_code_peer_info;
 
 using sf = beltpp::socket_family_t<
-beltpp::message_code_error::rtt,
-beltpp::message_code_join::rtt,
-beltpp::message_code_drop::rtt,
-beltpp::message_code_timer_out::rtt,
-&beltpp::message_code_creator<beltpp::message_code_error>,
-&beltpp::message_code_creator<beltpp::message_code_join>,
-&beltpp::message_code_creator<beltpp::message_code_drop>,
-&beltpp::message_code_creator<beltpp::message_code_timer_out>,
-&beltpp::message_code_error::saver,
-&beltpp::message_code_join::saver,
-&beltpp::message_code_drop::saver,
-&beltpp::message_code_timer_out::saver,
-&beltpp::message_list_load
+    beltpp::message_code_error::rtt,
+    beltpp::message_code_join::rtt,
+    beltpp::message_code_drop::rtt,
+    beltpp::message_code_time_out::rtt,
+    &beltpp::message_code_creator<beltpp::message_code_error>,
+    &beltpp::message_code_creator<beltpp::message_code_join>,
+    &beltpp::message_code_creator<beltpp::message_code_drop>,
+    &beltpp::message_code_creator<beltpp::message_code_time_out>,
+    &beltpp::message_code_error::saver,
+    &beltpp::message_code_join::saver,
+    &beltpp::message_code_drop::saver,
+    &beltpp::message_code_time_out::saver,
+    &beltpp::message_list_load
 >;
 
 bool split_address_port(string const& address_port,
@@ -134,11 +134,65 @@ bool operator == (ip_address const& l, ip_address const& r) noexcept
 }
 }
 
+#include "kontact.hpp"
+#include "kbucket.cpp"
+#include "cryptopp/integer.h"
+#include "cryptopp/eccrypto.h"
+#include "cryptopp/osrng.h"
+#include "cryptopp/oids.h"
+#include <sstream>
+
+template <class distance_type_ = CryptoPP::Integer, class  age_type_ = std::time_t>
+struct Konnection: public ip_address, address_map_value, std::enable_shared_from_this<Konnection<distance_type_, age_type_>>
+{
+    using distance_type = distance_type_;
+    using age_type = age_type_;
+
+    static distance_type distance(const distance_type& a, const distance_type& b) { return a^b; }
+    static std::string distance_to_string(const distance_type& n)
+    {
+        std::ostringstream os;
+        os << std::hex << n;
+        return os.str();
+    }
+
+    Konnection(distance_type_ const &d = {}, ip_address const & c = {}, address_map_value const &p = {}, age_type age = {}):
+        ip_address{c}, address_map_value{distance_to_string(d), ""}, value{ d }, age_{age} {}
+
+    Konnection(string &d, ip_address const & c = {}, address_map_value const &p = {}, age_type age = {}):
+        ip_address{c}, address_map_value{p}, value{ d.c_str() }, age_{age} {}
+
+    distance_type distance_from (const Konnection &r) const { return distance(value, r.value); }
+    bool is_same(const Konnection &r) const { return distance_from(r) == distance_type{}; }
+    age_type age() const   { return age_; }
+
+    std::shared_ptr<const Konnection<distance_type_, age_type_>> get_ptr() const { return this->shared_from_this(); }
+
+    distance_type_ get_id() const { return value; }
+    void set_id(const distance_type_ & v) { value = v; }
+    void set_id(const string &v ) { value = distance_type_{v.c_str()}; }
+
+private:
+    distance_type value;
+    age_type age_;
+};
+
 int main(int argc, char* argv[])
 {
+    CryptoPP::AutoSeededRandomPool prng;
+    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PrivateKey privateKey;
+
+    privateKey.Initialize( prng, CryptoPP::ASN1::secp256k1() );
+    bool NodeID = privateKey.Validate( prng, 3 );
+    std::cout<<privateKey.GetPrivateExponent()<<"  "<<NodeID<<std::endl;
+
     try
     {
-        string option_bind, option_connect, option_node_name;
+        string option_bind, option_connect;
+
+        string NodeIDstr = Konnection<>::distance_to_string(NodeID);
+        unsigned short fixed_local_port = 0;
+
         //  better to use something from boost at least
         for (size_t arg_index = 1; arg_index < (size_t)argc; ++arg_index)
         {
@@ -149,7 +203,7 @@ int main(int argc, char* argv[])
             else if (argname == "--connect")
                 option_connect = argvalue;
             else if (argname == "--name")
-                option_node_name = argvalue;
+                NodeIDstr = argvalue;
         }
 
         ip_address bind, connect;
@@ -162,6 +216,9 @@ int main(int argc, char* argv[])
             cout << "example: --bind 8.8.8.8:8888" << endl;
             return -1;
         }
+        if (bind.local.port)
+            fixed_local_port = bind.local.port;
+
 
         if (false == option_connect.empty() &&
             false == split_address_port(option_connect,
@@ -172,18 +229,22 @@ int main(int argc, char* argv[])
             return -1;
         }
 
-        if (option_node_name.empty())
+        if (NodeIDstr.empty())
         {
             cout << "example: --name @node1" << endl;
             return -1;
         }
 
-        if (connect.remote.empty() &&
-            bind.local.empty())
+        if (connect.remote.empty() && bind.local.empty())
         {
             connect.remote.address = "141.136.70.186";
             connect.remote.port = 3450;
+            cout << "Using default remote address " << connect.remote.address << " and port " << connect.remote.port << endl;
         }
+
+
+        Konnection<> self {NodeID};
+        KBucket<Konnection<>> kbucket{self};
 
         beltpp::socket sk = beltpp::getsocket<sf>();
         sk.set_timer(std::chrono::seconds(10));
@@ -199,7 +260,7 @@ int main(int argc, char* argv[])
         //  so below infinite loop will need to consider
         //  strong exception safety guarantees while working
         //  with these
-        std::unique_ptr<unsigned short> fixed_local_port;
+//        std::unique_ptr<unsigned short> fixed_local_port;
         address_set set_to_listen, set_to_connect;
         address_map map_listening, map_connected;
         //
@@ -224,7 +285,7 @@ int main(int argc, char* argv[])
             {
                 auto item = *iter_listen;
                 if (fixed_local_port)
-                    item.local.port = *fixed_local_port;
+                    item.local.port = fixed_local_port;
 
                 cout << "start to listen on " << item.to_string() << endl;
                 peer_ids peers = sk.listen(item);
@@ -239,11 +300,10 @@ int main(int argc, char* argv[])
 
                     if (fixed_local_port)
                     {
-                        assert(*fixed_local_port == conn_item.local.port);
+                        assert(fixed_local_port == conn_item.local.port);
                     }
                     else
-                        fixed_local_port.reset(
-                                    new unsigned short(conn_item.local.port));
+                        fixed_local_port = conn_item.local.port;
                 }
             }
 
@@ -262,7 +322,7 @@ int main(int argc, char* argv[])
             }
 
             if (0 == read_attempt_count)
-                cout << option_node_name << " reading...";
+                cout << NodeIDstr << " reading...";
             else
                 cout << " " << read_attempt_count << "...";
 
@@ -285,48 +345,45 @@ int main(int argc, char* argv[])
             else
                 ++read_attempt_count;
 
+            auto t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
             for (auto const& msg : read_messages)
             {
                 switch (msg.type())
                 {
                 case message_code_join::rtt:
                 {
-                    if (nullptr == fixed_local_port ||
-                        current_connection.local.port == *fixed_local_port)
+                    if (0 == fixed_local_port ||
+                        current_connection.local.port == fixed_local_port)
                     {
                         auto find_iter = map_connected.find(current_connection);
                         if (find_iter != map_connected.end())
-                            cout << "WARNING: new connection already exists"
-                                 << endl
-                                 << " existing " << find_iter->second.str_peer_id
-                                 << endl
-                                 << " new " << read_peer
-                                 << endl;
+                            cout << "WARNING: new connection already exists" << endl
+                                 << " existing " << find_iter->second.str_peer_id << endl
+                                 << " new " << read_peer << endl;
 
                         map_connected.insert(
                                     std::make_pair(current_connection,
-                                    address_map_value{read_peer, string()}));
+                                    address_map_value{read_peer, string()})
+                                    );
 
-                        fixed_local_port.reset(
-                            new unsigned short(current_connection.local.port));
+                        fixed_local_port = current_connection.local.port;
 
-                        ip_address to_listen(current_connection.local,
-                                             current_connection.type);
-                        if (map_listening.find(to_listen) ==
-                            map_listening.end())
+                        ip_address to_listen(current_connection.local, current_connection.type);
+
+                        if (map_listening.find(to_listen) == map_listening.end())
                             set_to_listen.insert(to_listen);
 
-                        message_code_hello msg_hello;
-                        msg_hello.message = "hi from " +
-                                string(option_node_name);
-                        sk.write(read_peer, msg_hello);
+                        message_code_ping msg_ping;
+                        msg_ping.nodeid = NodeIDstr;
+                        sk.write(read_peer, msg_ping);
 
-                        sk.write(read_peer, message_code_get_peers());
+//                        sk.write(read_peer, message_code_get_peers());
                     }
                     else
                     {
                         sk.write(read_peer, message_code_drop());
-                        current_connection.local.port = *fixed_local_port;
+                        current_connection.local.port = fixed_local_port;
                         sk.open(current_connection);
                     }
                 }
@@ -346,7 +403,42 @@ int main(int argc, char* argv[])
                     }
                 }
                     break;
-                case message_code_get_peers::rtt:
+                case message_code_ping::rtt:
+                {
+                    message_code_ping msg_;
+                    msg.get<message_code_ping>(msg_);
+
+                    if (NodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
+                        break; // discard ping from self
+
+                    Konnection<> k{msg_.nodeid, current_connection, {read_peer, "ping"}, {}};
+                    if (kbucket.insert(k))
+                    {
+                        message_code_pong msg_pong;
+                        msg_pong.nodeid = NodeIDstr;
+                        sk.write(read_peer, msg_pong);
+                    }
+                    else
+                    {
+                        message_code_drop msg_drop;
+                        sk.write(read_peer, msg_drop);
+                    }
+                    break;
+                }
+                case message_code_pong::rtt:
+                {
+                    message_code_pong msg_;
+                    msg.get<message_code_pong>(msg_);
+
+                    if (NodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
+                        break;
+
+                    Konnection<> k{msg_.nodeid, current_connection, {read_peer, msg_.nodeid }, t_now};
+                    kbucket.replace(k);
+                    break;
+                }
+                    /*
+                case message_code_get_peers::rtt: // R find node
                 {
                     for (auto const& item : map_connected)
                     {
@@ -371,7 +463,7 @@ int main(int argc, char* argv[])
                     }
                 }
                     break;
-                case message_code_peer_info::rtt:
+                case message_code_peer_info::rtt: // C find node
                 {
                     message_code_peer_info msg_peer_info;
                     msg.get(msg_peer_info);
@@ -394,28 +486,7 @@ int main(int argc, char* argv[])
                     }
                 }
                     break;
-                case message_code_hello::rtt:
-                {
-                    message_code_hello msg_hello;
-                    msg.get(msg_hello);
-
-                    cout << msg_hello.message << endl;
-
-                    auto iter_find = map_connected.find(current_connection);
-                    if (iter_find == map_connected.end())
-                        cout << "WARNING: hi message from non registered"
-                                " connection "
-                             << current_connection.to_string()
-                             << endl;
-                    else if (iter_find->second.str_hi_message.empty())
-                        iter_find->second.str_hi_message = msg_hello.message;
-                    else if (iter_find->second.str_hi_message !=
-                             msg_hello.message)
-                        cout << "WARNING: got unexpected message from peer "
-                             << current_connection.to_string()
-                             << endl;
-                }
-                    break;
+                    */
                 case message_code_error::rtt:
                 {
                     cout << "got error from bad guy "
@@ -431,17 +502,17 @@ int main(int argc, char* argv[])
                         map_connected.erase(iter_find);
                 }
                     break;
-                case message_code_timer_out::rtt:
+                case message_code_time_out::rtt:
                     for (auto const& item : map_connected)
                     {
-                        message_code_hello msg_hello;
-                        msg_hello.message = "hi from " +
-                                string(option_node_name);
-                        sk.write(item.second.str_peer_id, msg_hello);
+                        message_code_ping msg_ping;
+                        msg_ping.nodeid = NodeIDstr;
+                        sk.write(item.second.str_peer_id, msg_ping);
 
                         if (item.second.str_hi_message.empty())
-                            cout << "WARNING: never got message from peer "
-                                 << item.first.to_string() << endl;
+                        {
+                            cout << "WARNING: never got message from peer " << item.first.to_string() << endl;
+                        }
                     }
                     break;
                 }
@@ -470,6 +541,9 @@ int main(int argc, char* argv[])
                     cout << "status summary - listening" << endl;
                 for (auto const& item : map_listening)
                     cout << "\t" << item.first.to_string() << endl;
+
+                cout<<"KBucket list\n--------\n";
+                kbucket.list();
             }
         }}
         catch(std::exception const& ex)
