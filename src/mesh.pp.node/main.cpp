@@ -208,21 +208,25 @@ private:
 
 int main(int argc, char* argv[])
 {
-    CryptoPP::AutoSeededRandomPool prng;
-    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PrivateKey privateKey;
-
-    privateKey.Initialize( prng, CryptoPP::ASN1::secp256k1() );
-    if( not privateKey.Validate( prng, 3 ) )
-        return -1;
-
-    auto NodeID = privateKey.GetPrivateExponent();
-
     try
     {
+        CryptoPP::AutoSeededRandomPool prng;
+        CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PrivateKey privateKey;
+
+        privateKey.Initialize( prng, CryptoPP::ASN1::secp256k1() );
+        if( not privateKey.Validate( prng, 3 ) )
+            throw std::runtime_error("invalid private key");
+
+        auto iNodeID = privateKey.GetPrivateExponent();
+
         string option_bind, option_connect;
 
-        const string NodeIDstr{Konnection<>::distance_to_string(NodeID)};
-        std::cout<<NodeIDstr<<std::endl;
+        const string NodeID(Konnection<>::distance_to_string(iNodeID));
+
+        if (NodeID.empty())
+            throw std::runtime_error("something wrong with nodeid");
+
+        cout << NodeID << endl;
 
         unsigned short fixed_local_port = 0;
 
@@ -235,16 +239,14 @@ int main(int argc, char* argv[])
                 option_bind = argvalue;
             else if (argname == "--connect")
                 option_connect = argvalue;
-//            else if (argname == "--name")
-//                NodeIDstr = argvalue;
         }
 
         ip_address bind, connect;
 
         if (false == option_bind.empty() &&
             false == split_address_port(option_bind,
-                               bind.local.address,
-                               bind.local.port))
+                                        bind.local.address,
+                                        bind.local.port))
         {
             cout << "example: --bind 8.8.8.8:8888" << endl;
             return -1;
@@ -252,19 +254,12 @@ int main(int argc, char* argv[])
         if (bind.local.port)
             fixed_local_port = bind.local.port;
 
-
         if (false == option_connect.empty() &&
             false == split_address_port(option_connect,
-                               connect.remote.address,
-                               connect.remote.port))
+                                        connect.remote.address,
+                                        connect.remote.port))
         {
             cout << "example: --connect 8.8.8.8:8888" << endl;
-            return -1;
-        }
-
-        if (NodeIDstr.empty())
-        {
-            cout << "example: --name @node1" << endl;
             return -1;
         }
 
@@ -275,8 +270,7 @@ int main(int argc, char* argv[])
             cout << "Using default remote address " << connect.remote.address << " and port " << connect.remote.port << endl;
         }
 
-
-        Konnection<> self {NodeID};
+        Konnection<> self {iNodeID};
         KBucket<Konnection<>> kbucket{self};
 
         beltpp::socket sk = beltpp::getsocket<sf>();
@@ -293,7 +287,6 @@ int main(int argc, char* argv[])
         //  so below infinite loop will need to consider
         //  strong exception safety guarantees while working
         //  with these
-//        std::unique_ptr<unsigned short> fixed_local_port;
         address_set set_to_listen, set_to_connect;
         address_map map_listening, map_connected;
         //
@@ -355,7 +348,7 @@ int main(int argc, char* argv[])
             }
 
             if (0 == read_attempt_count)
-                cout << NodeIDstr << " reading...";
+                cout << NodeID << " reading...";
             else
                 cout << " " << read_attempt_count << "...";
 
@@ -408,10 +401,8 @@ int main(int argc, char* argv[])
                             set_to_listen.insert(to_listen);
 
                         message_ping msg_ping;
-                        msg_ping.nodeid = NodeIDstr;
+                        msg_ping.nodeid = NodeID;
                         sk.send(read_peer, msg_ping);
-
-//                        sk.send(read_peer, message_get_peers());
                     }
                     else
                     {
@@ -441,14 +432,14 @@ int main(int argc, char* argv[])
                     message_ping msg_;
                     msg.get<message_ping>(msg_);
 
-                    if (NodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
+                    if (iNodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
                         break; // discard ping from self
 
                     Konnection<> k{msg_.nodeid, current_connection, {read_peer, "ping"}, {}};
                     if (kbucket.insert(k))
                     {
                         message_pong msg_pong;
-                        msg_pong.nodeid = NodeIDstr;
+                        msg_pong.nodeid = NodeID;
                         sk.send(read_peer, msg_pong);
                     }
                     else
@@ -463,7 +454,7 @@ int main(int argc, char* argv[])
                     message_pong msg_;
                     msg.get<message_pong>(msg_);
 
-                    if (NodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
+                    if (iNodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
                         break;
 
                     Konnection<> k{msg_.nodeid, current_connection, {read_peer, msg_.nodeid }, t_now};
@@ -539,7 +530,7 @@ int main(int argc, char* argv[])
                     for (auto const& item : map_connected)
                     {
                         message_ping msg_ping;
-                        msg_ping.nodeid = NodeIDstr;
+                        msg_ping.nodeid = NodeID;
                         sk.send(item.second.str_peer_id, msg_ping);
 
                         if (item.second.str_hi_message.empty())
@@ -592,10 +583,12 @@ int main(int argc, char* argv[])
     catch(std::exception const& ex)
     {
         std::cout << "exception: " << ex.what() << std::endl;
+        return -1;
     }
     catch(...)
     {
         std::cout << "too well done ...\nthat was an exception\n";
+        return -1;
     }
     return 0;
 }
