@@ -34,12 +34,6 @@ find_package(Boost 1.58 REQUIRED
                system
                filesystem
                program_options
-               signals
-               serialization
-               chrono
-               unit_test_framework
-               context
-               coroutine
                locale)
 
 add_library(boost INTERFACE IMPORTED)
