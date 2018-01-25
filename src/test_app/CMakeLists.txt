@@ -5,8 +5,8 @@ add_executable(test_app
 # libraries this module links to
 target_link_libraries(test_app PUBLIC
     mesh.pp
-    message
-    messagecodes
+    packet
+    messages
     socket)
 
 # what to do on make install

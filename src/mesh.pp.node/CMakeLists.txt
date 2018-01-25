@@ -7,8 +7,7 @@ add_executable(mesh.pp.node
 # libraries this module links to
 target_link_libraries(mesh.pp.node PUBLIC
     mesh.pp
-    message
-    messagecodes
+    packet
     socket
     kbucket
     )

@@ -205,18 +205,18 @@ std::string saver(message_ip_address const& self)
 }
 
 
-class message_code_join;
+class message_join;
 namespace detail
 {
-std::string saver(message_code_join const& self);
+std::string saver(message_join const& self);
 }
-class message_code_join
+class message_join
 {
 public:
     enum {rtt = 2};
     static std::vector<char> saver(void* p)
     {
-        message_code_join* pmc = static_cast<message_code_join*>(p);
+        message_join* pmc = static_cast<message_join*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -225,43 +225,43 @@ public:
 };
 namespace detail
 {
-bool analyze_json(message_code_join& msgcode,
+bool analyze_json(message_join& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_join::rtt)
+        rtt != message_join::rtt)
         code = false;
     else
     {
     }
     return code;
 }
-std::string saver(message_code_join const& self)
+std::string saver(message_join const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_join::rtt);
+    result += "\"rtt\" : " + saver(message_join::rtt);
     result += "}";
     return result;
 }
 }
 
 
-class message_code_drop;
+class message_drop;
 namespace detail
 {
-std::string saver(message_code_drop const& self);
+std::string saver(message_drop const& self);
 }
-class message_code_drop
+class message_drop
 {
 public:
     enum {rtt = 3};
     static std::vector<char> saver(void* p)
     {
-        message_code_drop* pmc = static_cast<message_code_drop*>(p);
+        message_drop* pmc = static_cast<message_drop*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -270,58 +270,58 @@ public:
 };
 namespace detail
 {
-bool analyze_json(message_code_drop& msgcode,
+bool analyze_json(message_drop& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_drop::rtt)
+        rtt != message_drop::rtt)
         code = false;
     else
     {
     }
     return code;
 }
-std::string saver(message_code_drop const& self)
+std::string saver(message_drop const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_drop::rtt);
+    result += "\"rtt\" : " + saver(message_drop::rtt);
     result += "}";
     return result;
 }
 }
 
 
-class message_code_ping;
+class message_ping;
 namespace detail
 {
-std::string saver(message_code_ping const& self);
+std::string saver(message_ping const& self);
 }
-class message_code_ping
+class message_ping
 {
 public:
     enum {rtt = 4};
     string nodeid;
-    message_code_ping()
+    message_ping()
       : nodeid()
     {}
     template <typename T>
-    explicit message_code_ping(T const& other)
+    explicit message_ping(T const& other)
     {
         assign(*this, other);
     }
     template <typename T>
-    message_code_ping& operator = (T const& other)
+    message_ping& operator = (T const& other)
     {
         assign(*this, other);
         return *this;
     }
     static std::vector<char> saver(void* p)
     {
-        message_code_ping* pmc = static_cast<message_code_ping*>(p);
+        message_ping* pmc = static_cast<message_ping*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -329,25 +329,25 @@ public:
     }
 };
 template <typename T>
-void assign(message_code_ping& self, T const& other)
+void assign(message_ping& self, T const& other)
 {
     assign(self.nodeid, other.nodeid);
 }
 template <typename T>
-void assign(T& self, message_code_ping const& other)
+void assign(T& self, message_ping const& other)
 {
     assign(self.nodeid, other.nodeid);
 }
 namespace detail
 {
-bool analyze_json(message_code_ping& msgcode,
+bool analyze_json(message_ping& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_ping::rtt)
+        rtt != message_ping::rtt)
         code = false;
     else
     {
@@ -364,11 +364,11 @@ bool analyze_json(message_code_ping& msgcode,
     }
     return code;
 }
-std::string saver(message_code_ping const& self)
+std::string saver(message_ping const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_ping::rtt);
+    result += "\"rtt\" : " + saver(message_ping::rtt);
     result += ",\"nodeid\" : " + saver(self.nodeid);
     result += "}";
     return result;
@@ -376,33 +376,33 @@ std::string saver(message_code_ping const& self)
 }
 
 
-class message_code_pong;
+class message_pong;
 namespace detail
 {
-std::string saver(message_code_pong const& self);
+std::string saver(message_pong const& self);
 }
-class message_code_pong
+class message_pong
 {
 public:
     enum {rtt = 5};
     string nodeid;
-    message_code_pong()
+    message_pong()
       : nodeid()
     {}
     template <typename T>
-    explicit message_code_pong(T const& other)
+    explicit message_pong(T const& other)
     {
         assign(*this, other);
     }
     template <typename T>
-    message_code_pong& operator = (T const& other)
+    message_pong& operator = (T const& other)
     {
         assign(*this, other);
         return *this;
     }
     static std::vector<char> saver(void* p)
     {
-        message_code_pong* pmc = static_cast<message_code_pong*>(p);
+        message_pong* pmc = static_cast<message_pong*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -410,25 +410,25 @@ public:
     }
 };
 template <typename T>
-void assign(message_code_pong& self, T const& other)
+void assign(message_pong& self, T const& other)
 {
     assign(self.nodeid, other.nodeid);
 }
 template <typename T>
-void assign(T& self, message_code_pong const& other)
+void assign(T& self, message_pong const& other)
 {
     assign(self.nodeid, other.nodeid);
 }
 namespace detail
 {
-bool analyze_json(message_code_pong& msgcode,
+bool analyze_json(message_pong& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_pong::rtt)
+        rtt != message_pong::rtt)
         code = false;
     else
     {
@@ -445,11 +445,11 @@ bool analyze_json(message_code_pong& msgcode,
     }
     return code;
 }
-std::string saver(message_code_pong const& self)
+std::string saver(message_pong const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_pong::rtt);
+    result += "\"rtt\" : " + saver(message_pong::rtt);
     result += ",\"nodeid\" : " + saver(self.nodeid);
     result += "}";
     return result;
@@ -457,18 +457,18 @@ std::string saver(message_code_pong const& self)
 }
 
 
-class message_code_error;
+class message_error;
 namespace detail
 {
-std::string saver(message_code_error const& self);
+std::string saver(message_error const& self);
 }
-class message_code_error
+class message_error
 {
 public:
     enum {rtt = 6};
     static std::vector<char> saver(void* p)
     {
-        message_code_error* pmc = static_cast<message_code_error*>(p);
+        message_error* pmc = static_cast<message_error*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -477,43 +477,43 @@ public:
 };
 namespace detail
 {
-bool analyze_json(message_code_error& msgcode,
+bool analyze_json(message_error& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_error::rtt)
+        rtt != message_error::rtt)
         code = false;
     else
     {
     }
     return code;
 }
-std::string saver(message_code_error const& self)
+std::string saver(message_error const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_error::rtt);
+    result += "\"rtt\" : " + saver(message_error::rtt);
     result += "}";
     return result;
 }
 }
 
 
-class message_code_time_out;
+class message_time_out;
 namespace detail
 {
-std::string saver(message_code_time_out const& self);
+std::string saver(message_time_out const& self);
 }
-class message_code_time_out
+class message_time_out
 {
 public:
     enum {rtt = 7};
     static std::vector<char> saver(void* p)
     {
-        message_code_time_out* pmc = static_cast<message_code_time_out*>(p);
+        message_time_out* pmc = static_cast<message_time_out*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -522,58 +522,58 @@ public:
 };
 namespace detail
 {
-bool analyze_json(message_code_time_out& msgcode,
+bool analyze_json(message_time_out& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_time_out::rtt)
+        rtt != message_time_out::rtt)
         code = false;
     else
     {
     }
     return code;
 }
-std::string saver(message_code_time_out const& self)
+std::string saver(message_time_out const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_time_out::rtt);
+    result += "\"rtt\" : " + saver(message_time_out::rtt);
     result += "}";
     return result;
 }
 }
 
 
-class message_code_get_peers;
+class message_get_peers;
 namespace detail
 {
-std::string saver(message_code_get_peers const& self);
+std::string saver(message_get_peers const& self);
 }
-class message_code_get_peers
+class message_get_peers
 {
 public:
     enum {rtt = 8};
     string nodeid;
-    message_code_get_peers()
+    message_get_peers()
       : nodeid()
     {}
     template <typename T>
-    explicit message_code_get_peers(T const& other)
+    explicit message_get_peers(T const& other)
     {
         assign(*this, other);
     }
     template <typename T>
-    message_code_get_peers& operator = (T const& other)
+    message_get_peers& operator = (T const& other)
     {
         assign(*this, other);
         return *this;
     }
     static std::vector<char> saver(void* p)
     {
-        message_code_get_peers* pmc = static_cast<message_code_get_peers*>(p);
+        message_get_peers* pmc = static_cast<message_get_peers*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -581,25 +581,25 @@ public:
     }
 };
 template <typename T>
-void assign(message_code_get_peers& self, T const& other)
+void assign(message_get_peers& self, T const& other)
 {
     assign(self.nodeid, other.nodeid);
 }
 template <typename T>
-void assign(T& self, message_code_get_peers const& other)
+void assign(T& self, message_get_peers const& other)
 {
     assign(self.nodeid, other.nodeid);
 }
 namespace detail
 {
-bool analyze_json(message_code_get_peers& msgcode,
+bool analyze_json(message_get_peers& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_get_peers::rtt)
+        rtt != message_get_peers::rtt)
         code = false;
     else
     {
@@ -616,11 +616,11 @@ bool analyze_json(message_code_get_peers& msgcode,
     }
     return code;
 }
-std::string saver(message_code_get_peers const& self)
+std::string saver(message_get_peers const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_get_peers::rtt);
+    result += "\"rtt\" : " + saver(message_get_peers::rtt);
     result += ",\"nodeid\" : " + saver(self.nodeid);
     result += "}";
     return result;
@@ -628,35 +628,35 @@ std::string saver(message_code_get_peers const& self)
 }
 
 
-class message_code_peer_info;
+class message_peer_info;
 namespace detail
 {
-std::string saver(message_code_peer_info const& self);
+std::string saver(message_peer_info const& self);
 }
-class message_code_peer_info
+class message_peer_info
 {
 public:
     enum {rtt = 9};
     string nodeid;
     message_ip_address address;
-    message_code_peer_info()
+    message_peer_info()
       : nodeid()
       , address()
     {}
     template <typename T>
-    explicit message_code_peer_info(T const& other)
+    explicit message_peer_info(T const& other)
     {
         assign(*this, other);
     }
     template <typename T>
-    message_code_peer_info& operator = (T const& other)
+    message_peer_info& operator = (T const& other)
     {
         assign(*this, other);
         return *this;
     }
     static std::vector<char> saver(void* p)
     {
-        message_code_peer_info* pmc = static_cast<message_code_peer_info*>(p);
+        message_peer_info* pmc = static_cast<message_peer_info*>(p);
         std::vector<char> result;
         std::string str_value = detail::saver(*pmc);
         std::copy(str_value.begin(), str_value.end(), std::back_inserter(result));
@@ -664,27 +664,27 @@ public:
     }
 };
 template <typename T>
-void assign(message_code_peer_info& self, T const& other)
+void assign(message_peer_info& self, T const& other)
 {
     assign(self.nodeid, other.nodeid);
     assign(self.address, other.address);
 }
 template <typename T>
-void assign(T& self, message_code_peer_info const& other)
+void assign(T& self, message_peer_info const& other)
 {
     assign(self.nodeid, other.nodeid);
     assign(self.address, other.address);
 }
 namespace detail
 {
-bool analyze_json(message_code_peer_info& msgcode,
+bool analyze_json(message_peer_info& msgcode,
                   beltpp::json::expression_tree* pexp)
 {
     bool code = true;
     std::unordered_map<std::string, beltpp::json::expression_tree*> members;
     size_t rtt = -1;
     if (false == analyze_json_common(rtt, pexp, members) ||
-        rtt != message_code_peer_info::rtt)
+        rtt != message_peer_info::rtt)
         code = false;
     else
     {
@@ -711,11 +711,11 @@ bool analyze_json(message_code_peer_info& msgcode,
     }
     return code;
 }
-std::string saver(message_code_peer_info const& self)
+std::string saver(message_peer_info const& self)
 {
     std::string result;
     result += "{";
-    result += "\"rtt\" : " + saver(message_code_peer_info::rtt);
+    result += "\"rtt\" : " + saver(message_peer_info::rtt);
     result += ",\"nodeid\" : " + saver(self.nodeid);
     result += ",\"address\" : " + saver(self.address);
     result += "}";
@@ -736,7 +736,7 @@ bool analyze_json_object(beltpp::json::expression_tree* pexp,
     {
         return_value =
                 beltpp::detail::pmsg_all(   message_ip_destination::rtt,
-                                            message_code_creator<message_ip_destination>(),
+                                            make_void_unique_ptr<message_ip_destination>(),
                                             &message_ip_destination::saver);
         message_ip_destination* pmsgcode =
                 static_cast<message_ip_destination*>(return_value.pmsg.get());
@@ -747,98 +747,98 @@ bool analyze_json_object(beltpp::json::expression_tree* pexp,
     {
         return_value =
                 beltpp::detail::pmsg_all(   message_ip_address::rtt,
-                                            message_code_creator<message_ip_address>(),
+                                            make_void_unique_ptr<message_ip_address>(),
                                             &message_ip_address::saver);
         message_ip_address* pmsgcode =
                 static_cast<message_ip_address*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_join::rtt:
+    case message_join::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_join::rtt,
-                                            message_code_creator<message_code_join>(),
-                                            &message_code_join::saver);
-        message_code_join* pmsgcode =
-                static_cast<message_code_join*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_join::rtt,
+                                            make_void_unique_ptr<message_join>(),
+                                            &message_join::saver);
+        message_join* pmsgcode =
+                static_cast<message_join*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_drop::rtt:
+    case message_drop::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_drop::rtt,
-                                            message_code_creator<message_code_drop>(),
-                                            &message_code_drop::saver);
-        message_code_drop* pmsgcode =
-                static_cast<message_code_drop*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_drop::rtt,
+                                            make_void_unique_ptr<message_drop>(),
+                                            &message_drop::saver);
+        message_drop* pmsgcode =
+                static_cast<message_drop*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_ping::rtt:
+    case message_ping::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_ping::rtt,
-                                            message_code_creator<message_code_ping>(),
-                                            &message_code_ping::saver);
-        message_code_ping* pmsgcode =
-                static_cast<message_code_ping*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_ping::rtt,
+                                            make_void_unique_ptr<message_ping>(),
+                                            &message_ping::saver);
+        message_ping* pmsgcode =
+                static_cast<message_ping*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_pong::rtt:
+    case message_pong::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_pong::rtt,
-                                            message_code_creator<message_code_pong>(),
-                                            &message_code_pong::saver);
-        message_code_pong* pmsgcode =
-                static_cast<message_code_pong*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_pong::rtt,
+                                            make_void_unique_ptr<message_pong>(),
+                                            &message_pong::saver);
+        message_pong* pmsgcode =
+                static_cast<message_pong*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_error::rtt:
+    case message_error::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_error::rtt,
-                                            message_code_creator<message_code_error>(),
-                                            &message_code_error::saver);
-        message_code_error* pmsgcode =
-                static_cast<message_code_error*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_error::rtt,
+                                            make_void_unique_ptr<message_error>(),
+                                            &message_error::saver);
+        message_error* pmsgcode =
+                static_cast<message_error*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_time_out::rtt:
+    case message_time_out::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_time_out::rtt,
-                                            message_code_creator<message_code_time_out>(),
-                                            &message_code_time_out::saver);
-        message_code_time_out* pmsgcode =
-                static_cast<message_code_time_out*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_time_out::rtt,
+                                            make_void_unique_ptr<message_time_out>(),
+                                            &message_time_out::saver);
+        message_time_out* pmsgcode =
+                static_cast<message_time_out*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_get_peers::rtt:
+    case message_get_peers::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_get_peers::rtt,
-                                            message_code_creator<message_code_get_peers>(),
-                                            &message_code_get_peers::saver);
-        message_code_get_peers* pmsgcode =
-                static_cast<message_code_get_peers*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_get_peers::rtt,
+                                            make_void_unique_ptr<message_get_peers>(),
+                                            &message_get_peers::saver);
+        message_get_peers* pmsgcode =
+                static_cast<message_get_peers*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;
-    case message_code_peer_info::rtt:
+    case message_peer_info::rtt:
     {
         return_value =
-                beltpp::detail::pmsg_all(   message_code_peer_info::rtt,
-                                            message_code_creator<message_code_peer_info>(),
-                                            &message_code_peer_info::saver);
-        message_code_peer_info* pmsgcode =
-                static_cast<message_code_peer_info*>(return_value.pmsg.get());
+                beltpp::detail::pmsg_all(   message_peer_info::rtt,
+                                            make_void_unique_ptr<message_peer_info>(),
+                                            &message_peer_info::saver);
+        message_peer_info* pmsgcode =
+                static_cast<message_peer_info*>(return_value.pmsg.get());
         code = analyze_json(*pmsgcode, pexp);
     }
         break;

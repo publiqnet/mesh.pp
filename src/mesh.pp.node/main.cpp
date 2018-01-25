@@ -7,7 +7,7 @@
 #include <cryptopp/osrng.h>
 #include <cryptopp/oids.h>
 
-#include <belt.pp/message.hpp>
+#include <belt.pp/packet.hpp>
 #include <belt.pp/socket.hpp>
 
 #include <string>
@@ -27,8 +27,8 @@ struct address_map_value
 
 using std::string;
 using beltpp::ip_address;
-using beltpp::message;
-using messages = beltpp::socket::messages;
+using beltpp::packet;
+using packets = beltpp::socket::packets;
 using peer_id = beltpp::socket::peer_id;
 using peer_ids = beltpp::socket::peer_ids;
 using std::cout;
@@ -38,28 +38,28 @@ using address_map = std::unordered_map<ip_address, address_map_value, class ip_a
 using std::unordered_map;
 using std::hash;
 
-using beltpp::message_code_join;
-using beltpp::message_code_drop;
-using beltpp::message_code_ping;
-using beltpp::message_code_pong;
-using beltpp::message_code_error;
-using beltpp::message_code_time_out;
-//using beltpp::message_code_get_peers;
-//using beltpp::message_code_peer_info;
+using beltpp::message_join;
+using beltpp::message_drop;
+using beltpp::message_ping;
+using beltpp::message_pong;
+using beltpp::message_error;
+using beltpp::message_time_out;
+//using beltpp::message_get_peers;
+//using beltpp::message_peer_info;
 
 using sf = beltpp::socket_family_t<
-    beltpp::message_code_error::rtt,
-    beltpp::message_code_join::rtt,
-    beltpp::message_code_drop::rtt,
-    beltpp::message_code_time_out::rtt,
-    &beltpp::message_code_creator<beltpp::message_code_error>,
-    &beltpp::message_code_creator<beltpp::message_code_join>,
-    &beltpp::message_code_creator<beltpp::message_code_drop>,
-    &beltpp::message_code_creator<beltpp::message_code_time_out>,
-    &beltpp::message_code_error::saver,
-    &beltpp::message_code_join::saver,
-    &beltpp::message_code_drop::saver,
-    &beltpp::message_code_time_out::saver,
+    beltpp::message_error::rtt,
+    beltpp::message_join::rtt,
+    beltpp::message_drop::rtt,
+    beltpp::message_time_out::rtt,
+    &beltpp::make_void_unique_ptr<beltpp::message_error>,
+    &beltpp::make_void_unique_ptr<beltpp::message_join>,
+    &beltpp::make_void_unique_ptr<beltpp::message_drop>,
+    &beltpp::make_void_unique_ptr<beltpp::message_time_out>,
+    &beltpp::message_error::saver,
+    &beltpp::message_join::saver,
+    &beltpp::message_drop::saver,
+    &beltpp::message_time_out::saver,
     &beltpp::message_list_load
 >;
 
@@ -302,7 +302,7 @@ int main(int argc, char* argv[])
 
         //  these do not represent any state, just being used temporarily
         peer_id read_peer;
-        messages read_messages;
+        packets read_messages;
 
         size_t read_attempt_count = 0;
 
@@ -355,7 +355,7 @@ int main(int argc, char* argv[])
             else
                 cout << " " << read_attempt_count << "...";
 
-            read_messages = sk.read(read_peer);
+            read_messages = sk.recieve(read_peer);
             ip_address current_connection;
 
             if (false == read_messages.empty())
@@ -380,7 +380,7 @@ int main(int argc, char* argv[])
             {
                 switch (msg.type())
                 {
-                case message_code_join::rtt:
+                case message_join::rtt:
                 {
                     if (0 == fixed_local_port ||
                         current_connection.local.port == fixed_local_port)
@@ -403,21 +403,21 @@ int main(int argc, char* argv[])
                         if (map_listening.find(to_listen) == map_listening.end())
                             set_to_listen.insert(to_listen);
 
-                        message_code_ping msg_ping;
+                        message_ping msg_ping;
                         msg_ping.nodeid = NodeIDstr;
-                        sk.write(read_peer, msg_ping);
+                        sk.send(read_peer, msg_ping);
 
-//                        sk.write(read_peer, message_code_get_peers());
+//                        sk.send(read_peer, message_get_peers());
                     }
                     else
                     {
-                        sk.write(read_peer, message_code_drop());
+                        sk.send(read_peer, message_drop());
                         current_connection.local.port = fixed_local_port;
                         sk.open(current_connection);
                     }
                 }
                     break;
-                case message_code_drop::rtt:
+                case message_drop::rtt:
                 {
                     //  this is something quick for now
                     auto iter = map_connected.begin();
@@ -432,10 +432,10 @@ int main(int argc, char* argv[])
                     }
                 }
                     break;
-                case message_code_ping::rtt:
+                case message_ping::rtt:
                 {
-                    message_code_ping msg_;
-                    msg.get<message_code_ping>(msg_);
+                    message_ping msg_;
+                    msg.get<message_ping>(msg_);
 
                     if (NodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
                         break; // discard ping from self
@@ -443,21 +443,21 @@ int main(int argc, char* argv[])
                     Konnection<> k{msg_.nodeid, current_connection, {read_peer, "ping"}, {}};
                     if (kbucket.insert(k))
                     {
-                        message_code_pong msg_pong;
+                        message_pong msg_pong;
                         msg_pong.nodeid = NodeIDstr;
-                        sk.write(read_peer, msg_pong);
+                        sk.send(read_peer, msg_pong);
                     }
                     else
                     {
-                        message_code_drop msg_drop;
-                        sk.write(read_peer, msg_drop);
+                        message_drop msg_drop;
+                        sk.send(read_peer, msg_drop);
                     }
                     break;
                 }
-                case message_code_pong::rtt:
+                case message_pong::rtt:
                 {
-                    message_code_pong msg_;
-                    msg.get<message_code_pong>(msg_);
+                    message_pong msg_;
+                    msg.get<message_pong>(msg_);
 
                     if (NodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
                         break;
@@ -467,13 +467,13 @@ int main(int argc, char* argv[])
                     break;
                 }
                     /*
-                case message_code_get_peers::rtt: // R find node
+                case message_get_peers::rtt: // R find node
                 {
                     for (auto const& item : map_connected)
                     {
                         if (item.first == current_connection)
                             continue;
-                        message_code_peer_info msg_peer_info;
+                        message_peer_info msg_peer_info;
                         msg_peer_info.address = item.first;
                         sk.write(read_peer, msg_peer_info);
 
@@ -492,9 +492,9 @@ int main(int argc, char* argv[])
                     }
                 }
                     break;
-                case message_code_peer_info::rtt: // C find node
+                case message_peer_info::rtt: // C find node
                 {
-                    message_code_peer_info msg_peer_info;
+                    message_peer_info msg_peer_info;
                     msg.get(msg_peer_info);
 
                     ip_address connect_to;
@@ -516,12 +516,12 @@ int main(int argc, char* argv[])
                 }
                     break;
                     */
-                case message_code_error::rtt:
+                case message_error::rtt:
                 {
                     cout << "got error from bad guy "
                          << current_connection.to_string()
                          << endl;
-                    sk.write(read_peer, message_code_drop());
+                    sk.send(read_peer, message_drop());
 
                     auto iter_find = map_connected.find(current_connection);
                     if (iter_find == map_connected.end())
@@ -531,12 +531,12 @@ int main(int argc, char* argv[])
                         map_connected.erase(iter_find);
                 }
                     break;
-                case message_code_time_out::rtt:
+                case message_time_out::rtt:
                     for (auto const& item : map_connected)
                     {
-                        message_code_ping msg_ping;
+                        message_ping msg_ping;
                         msg_ping.nodeid = NodeIDstr;
-                        sk.write(item.second.str_peer_id, msg_ping);
+                        sk.send(item.second.str_peer_id, msg_ping);
 
                         if (item.second.str_hi_message.empty())
                         {

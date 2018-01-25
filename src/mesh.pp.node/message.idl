@@ -9,32 +9,32 @@ class message_ip_address
     local : message_ip_destination;
     remote : message_ip_destination
 };
-class message_code_join
+class message_join
 {
 };
-class message_code_drop
+class message_drop
 {
 };
-class message_code_ping
+class message_ping
 {
-nodeid : string
+    nodeid : string
 };
-class message_code_pong
+class message_pong
 {
-nodeid : string
+    nodeid : string
 };
-class message_code_error
-{
-};
-class message_code_time_out
+class message_error
 {
 };
-class message_code_get_peers
+class message_time_out
 {
-nodeid : string
 };
-class message_code_peer_info
+class message_get_peers
 {
-nodeid : string;
+    nodeid : string
+};
+class message_peer_info
+{
+    nodeid : string;
     address : message_ip_address
 }
