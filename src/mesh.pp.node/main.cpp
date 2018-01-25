@@ -181,7 +181,7 @@ struct Konnection: public ip_address, address_map_value, std::enable_shared_from
     static std::string distance_to_string(const distance_type& n)
     {
         std::ostringstream os;
-        os << std::hex << n;
+        os << /*std::hex <<*/ n;
         return os.str();
     }
 
@@ -212,14 +212,18 @@ int main(int argc, char* argv[])
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PrivateKey privateKey;
 
     privateKey.Initialize( prng, CryptoPP::ASN1::secp256k1() );
-    bool NodeID = privateKey.Validate( prng, 3 );
-    std::cout<<privateKey.GetPrivateExponent()<<"  "<<NodeID<<std::endl;
+    if( not privateKey.Validate( prng, 3 ) )
+        return -1;
+
+    auto NodeID = privateKey.GetPrivateExponent();
 
     try
     {
         string option_bind, option_connect;
 
-        string NodeIDstr = Konnection<>::distance_to_string(NodeID);
+        const string NodeIDstr{Konnection<>::distance_to_string(NodeID)};
+        std::cout<<NodeIDstr<<std::endl;
+
         unsigned short fixed_local_port = 0;
 
         //  better to use something from boost at least
@@ -231,8 +235,8 @@ int main(int argc, char* argv[])
                 option_bind = argvalue;
             else if (argname == "--connect")
                 option_connect = argvalue;
-            else if (argname == "--name")
-                NodeIDstr = argvalue;
+//            else if (argname == "--name")
+//                NodeIDstr = argvalue;
         }
 
         ip_address bind, connect;
@@ -572,7 +576,8 @@ int main(int argc, char* argv[])
                     cout << "\t" << item.first.to_string() << endl;
 
                 cout<<"KBucket list\n--------\n";
-                kbucket.list();
+                kbucket.print_list();
+                cout<<"========\n";
             }
         }}
         catch(std::exception const& ex)

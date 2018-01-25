@@ -90,7 +90,7 @@ public:
     iterator erase(const Contact &contact);
     bool replace(const Contact& contact);
 
-    void list();
+    void print_list();
     iterator find(const Contact& contact);
     std::vector<Contact> find_nearest(const Contact &contact, bool prefer_same_index = false);
     std::vector<Contact> find_closest();
@@ -212,12 +212,12 @@ std::vector<Contact> KBucket<Contact, K>::find_closest()
 }
 
 template <class Contact, int K>
-void KBucket<Contact, K>::list()
+void KBucket<Contact, K>::print_list()
 {
     auto & contacts_by_distance = contacts.template get<by_distance>();
     for(auto &it : contacts_by_distance)
     {
-        std::cout<<it.value()<<" dist: "<<it.distance()<<" index:"<<it.index()<<"\n";
+        std::cout<<"index: "<<it.index()<<", id: "<<it.value()<<", dist: "<<it.distance()<<"\n";
     };
 }
 
