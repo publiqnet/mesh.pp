@@ -74,9 +74,9 @@ beltpp::detail::pmsg_all message_list_load(
         //  in future may implement persistent state, so rescan will not
         //  be needed
         iter_scan_begin = it_backup;
-        beltpp::detail::pmsg_all return_value (size_t(-1),
-                                               detail::ptr_msg(nullptr, [](void*&){}),
-                                               nullptr);
+        return_value = beltpp::detail::pmsg_all(size_t(-1),
+                                                detail::ptr_msg(nullptr, [](void*&){}),
+                                                nullptr);
     }
 
     return return_value;
@@ -172,12 +172,16 @@ bool analyze_json_common(size_t& rtt,
         auto pcomma = pexp->children.front();
         for (auto item : pcomma->children)
         {
-            if (false == analyze_colon(item, rtt) &&
+            size_t rtt_temp = -1;
+            if (false == analyze_colon(item, rtt_temp) &&
                 false == analyze_colon(item, members))
                 break;
+
+            if (size_t(-1) != rtt_temp)
+                rtt = rtt_temp;
         }
 
-        if (members.size() + 1 == pexp->children.size())
+        if (members.size() + 1 == pcomma->children.size())
             code = true;
     }
 

@@ -1,6 +1,13 @@
-#include <belt.pp/message.hpp>
-//#include <belt.pp/messagecodes.hpp>
 #include "message.hpp"
+
+#include <kbucket/kbucket.hpp>
+
+#include <cryptopp/integer.h>
+#include <cryptopp/eccrypto.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/oids.h>
+
+#include <belt.pp/message.hpp>
 #include <belt.pp/socket.hpp>
 
 #include <string>
@@ -10,6 +17,7 @@
 #include <functional>
 #include <memory>
 #include <ctime>
+#include <sstream>
 
 struct address_map_value
 {
@@ -134,21 +142,42 @@ bool operator == (ip_address const& l, ip_address const& r) noexcept
 }
 }
 
-#include "kontact.hpp"
-#include "kbucket.cpp"
-#include "cryptopp/integer.h"
-#include "cryptopp/eccrypto.h"
-#include "cryptopp/osrng.h"
-#include "cryptopp/oids.h"
-#include <sstream>
-
 template <class distance_type_ = CryptoPP::Integer, class  age_type_ = std::time_t>
 struct Konnection: public ip_address, address_map_value, std::enable_shared_from_this<Konnection<distance_type_, age_type_>>
 {
     using distance_type = distance_type_;
     using age_type = age_type_;
 
-    static distance_type distance(const distance_type& a, const distance_type& b) { return a^b; }
+    static distance_type distance(const distance_type& a, const distance_type& b)
+    {
+        //  hopefully temporary
+        if (&a == &b)
+        {
+            return CryptoPP::Integer::Zero();
+        }
+        else
+        {
+            auto abs_a = a.AbsoluteValue(), abs_b = b.AbsoluteValue();
+            CryptoPP::Integer result(abs_a);
+            if (abs_b > abs_a)
+                result = abs_b;
+            size_t size_a = abs_a.ByteCount();
+            size_t size_b = abs_b.ByteCount();
+            size_t size = std::max(size_a, size_b);
+            for (size_t index = 0; index < size; ++index)
+            {
+                unsigned char byte_a = 0, byte_b = 0;
+                if (index <= size_a)
+                    byte_a = abs_a.GetByte(index);
+                if (index <= size_b)
+                    byte_b = abs_b.GetByte(index);
+
+                result.SetByte(index, byte_a ^ byte_b);
+            }
+
+            return result;
+        }
+    }
     static std::string distance_to_string(const distance_type& n)
     {
         std::ostringstream os;
