@@ -9,7 +9,9 @@ target_link_libraries(mesh.pp.node PUBLIC
     mesh.pp
     message
     messagecodes
-    socket)
+    socket
+    kbucket
+    )
 
 # what to do on make install
 install(TARGETS mesh.pp.node
