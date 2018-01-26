@@ -2,22 +2,26 @@
 
 #include <kbucket/kbucket.hpp>
 
+#include <belt.pp/packet.hpp>
+#include <belt.pp/socket.hpp>
+
+#include <boost/optional.hpp>
+
 #include <cryptopp/integer.h>
 #include <cryptopp/eccrypto.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/oids.h>
 
-#include <belt.pp/packet.hpp>
-#include <belt.pp/socket.hpp>
-
 #include <string>
 #include <iostream>
-#include <unordered_set>
+#include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <memory>
 #include <ctime>
 #include <sstream>
+#include <chrono>
 
 struct address_map_value
 {
@@ -26,6 +30,7 @@ struct address_map_value
 };
 
 using std::string;
+using std::vector;
 using beltpp::ip_address;
 using beltpp::packet;
 using packets = beltpp::socket::packets;
@@ -33,10 +38,13 @@ using peer_id = beltpp::socket::peer_id;
 using peer_ids = beltpp::socket::peer_ids;
 using std::cout;
 using std::endl;
-using address_set = std::unordered_set<ip_address, class ip_address_hash>;
-using address_map = std::unordered_map<ip_address, address_map_value, class ip_address_hash>;
 using std::unordered_map;
+using std::unordered_set;
 using std::hash;
+namespace chrono = std::chrono;
+using chrono::steady_clock;
+
+using boost::optional;
 
 using beltpp::message_join;
 using beltpp::message_drop;
@@ -132,12 +140,15 @@ public:
 
 namespace beltpp
 {
+bool operator == (ip_destination const& l, ip_destination const& r) noexcept
+{
+    return (l.address == r.address &&
+            l.port == r.port);
+}
 bool operator == (ip_address const& l, ip_address const& r) noexcept
 {
-    return (l.local.address == r.local.address &&
-            l.local.port == r.local.port &&
-            l.remote.address == r.remote.address &&
-            l.remote.port == r.remote.port &&
+    return (l.local == r.local &&
+            l.remote == r.remote &&
             l.type == r.type);
 }
 }
@@ -204,6 +215,280 @@ struct Konnection: public ip_address, address_map_value, std::enable_shared_from
 private:
     distance_type value;
     age_type age_;
+};
+
+class peer_state
+{
+public:
+    enum class e_state {passive, active};
+    enum class e_type {connect, listen};
+
+    peer_state(ip_address const& addr)
+        : peer()
+        , address(addr)
+        , updated(steady_clock::now())
+    {}
+
+    e_state state() const noexcept
+    {
+        if (peer)
+            return e_state::active;
+        return e_state::passive;
+    }
+
+    e_type type() const noexcept
+    {
+        if (address.remote.empty())
+            return e_type::listen;
+        else
+            return e_type::connect;
+    }
+
+    void set_peer_id(ip_address const& addr, peer_id const& p)
+    {
+        //  state will become active
+        peer = p;
+        address = addr;
+        updated = steady_clock::now();
+    }
+
+    peer_id get_peer() const noexcept
+    {
+        //  using noexcept means before calling this validity
+        //  of peer optional is checked by using state() function
+        return *peer;
+        //  otherwise we will terminate
+    }
+
+    ip_address get_address() const noexcept
+    {
+        return address;
+    }
+
+public:
+    string value;
+private:
+    optional<peer_id> peer;
+    ip_address address;
+    steady_clock::time_point updated;
+};
+
+class communication_state
+{
+private:
+    static void remove_from_set(size_t index, unordered_set<size_t>& set)
+    {
+        unordered_set<size_t> set_temp;
+        for (size_t item : set)
+        {
+            if (item > index)
+                set_temp.insert(item - 1);
+            else if (item < index)
+                set_temp.insert(item);
+        }
+
+        set = set_temp;
+    }
+
+    template <typename T_map>
+    static void remove_from_map(size_t index, T_map& map)
+    {
+        auto it = map.begin();
+        while (it != map.end())
+        {
+            size_t& item = it->second;
+            if (item == index)
+                it = map.erase(it);
+            else
+            {
+                if (item > index)
+                    --item;
+                ++it;
+            }
+        }
+    }
+public:
+    enum class insert_code {old, fresh};
+    enum class update_code {updated, added};
+
+    insert_code add_passive(ip_address const& addr)
+    {
+        auto it_find = map_by_address.find(addr);
+        if (it_find == map_by_address.end())
+        {
+            peer_state state(addr);
+
+            peers.emplace_back(state);
+            size_t index = peers.size() - 1;
+            map_by_address.insert(std::make_pair(addr, index));
+
+            if (state.type() == peer_state::e_type::connect)
+                set_to_connect.insert(index);
+            else
+                set_to_listen.insert(index);
+
+            return insert_code::fresh;
+        }
+
+        return insert_code::old;
+    }
+
+    update_code add_active(ip_address const& addr, peer_id const& p)
+    {
+        insert_code add_passive_code = add_passive(addr);
+
+        auto it_find_addr = map_by_address.find(addr);
+        assert(it_find_addr != map_by_address.end());
+
+        size_t index = it_find_addr->second;
+        auto& state = peers[index];
+
+        if (state.state() == peer_state::e_state::active &&
+            p != state.get_peer())
+        {
+            auto it_find_peer = map_by_peer_id.find(state.get_peer());
+            assert(it_find_peer != map_by_peer_id.end());
+
+            map_by_peer_id.erase(it_find_peer);
+        }
+
+        state.set_peer_id(addr, p);
+
+        auto it_find_connect = set_to_connect.find(index);
+        if (it_find_connect != set_to_connect.end())
+            set_to_connect.erase(it_find_connect);
+        auto it_find_listen = set_to_listen.find(index);
+        if (it_find_listen != set_to_listen.end())
+            set_to_listen.erase(it_find_listen);
+
+        map_by_peer_id.insert(std::make_pair(p, index));
+
+        if (add_passive_code == insert_code::old)
+            return update_code::updated;
+        return update_code::added;
+    }
+
+    void set_active_value(peer_id const& p, string const& value)
+    {
+        auto it_find_peer_id = map_by_peer_id.find(p);
+        if (it_find_peer_id != map_by_peer_id.end())
+        {
+            size_t index = it_find_peer_id->second;
+            auto& state = peers[index];
+
+            state.value = value;
+        }
+    }
+
+    bool get_active_value(peer_id const& p, string& value) const
+    {
+        auto it_find_peer_id = map_by_peer_id.find(p);
+        if (it_find_peer_id != map_by_peer_id.end())
+        {
+            size_t index = it_find_peer_id->second;
+            auto& state = peers[index];
+
+            value = state.value;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    void remove(ip_address const& addr)
+    {
+        auto it_find_addr = map_by_address.find(addr);
+        if (it_find_addr != map_by_address.end())
+        {
+            size_t index = it_find_addr->second;
+
+            peers.erase(peers.begin() + index);
+
+            remove_from_set(index, set_to_connect);
+            remove_from_set(index, set_to_listen);
+
+            remove_from_map(index, map_by_address);
+            remove_from_map(index, map_by_peer_id);
+        }
+    }
+
+    void remove(peer_id const& p)
+    {
+        auto it_find_peer_id = map_by_peer_id.find(p);
+        if (it_find_peer_id != map_by_peer_id.end())
+        {
+            size_t index = it_find_peer_id->second;
+
+            peers.erase(peers.begin() + index);
+
+            remove_from_set(index, set_to_connect);
+            remove_from_set(index, set_to_listen);
+
+            remove_from_map(index, map_by_address);
+            remove_from_map(index, map_by_peer_id);
+        }
+    }
+
+    vector<ip_address> get_to_listen() const
+    {
+        vector<ip_address> result;
+
+        for (size_t index : set_to_listen)
+        {
+            peer_state const& state = peers[index];
+            result.push_back(state.get_address());
+        }
+
+        return result;
+    }
+
+    vector<ip_address> get_to_connect() const
+    {
+        vector<ip_address> result;
+
+        for (size_t index : set_to_connect)
+        {
+            peer_state const& state = peers[index];
+            result.push_back(state.get_address());
+        }
+
+        return result;
+    }
+
+    vector<peer_state> get_connected() const
+    {
+        vector<peer_state> result;
+
+        for (auto const& item : peers)
+        {
+            if (item.state() == peer_state::e_state::active &&
+                item.type() == peer_state::e_type::connect)
+                result.push_back(item);
+        }
+
+        return result;
+    }
+
+    vector<peer_state> get_listening() const
+    {
+        vector<peer_state> result;
+
+        for (auto const& item : peers)
+        {
+            if (item.state() == peer_state::e_state::active &&
+                item.type() == peer_state::e_type::listen)
+                result.push_back(item);
+        }
+
+        return result;
+    }
+
+    vector<peer_state> peers;
+    unordered_map<ip_address, size_t, class ip_address_hash> map_by_address;
+    unordered_map<peer_id, size_t> map_by_peer_id;
+    unordered_set<size_t> set_to_listen;
+    unordered_set<size_t> set_to_connect;
 };
 
 int main(int argc, char* argv[])
@@ -287,15 +572,13 @@ int main(int argc, char* argv[])
         //  so below infinite loop will need to consider
         //  strong exception safety guarantees while working
         //  with these
-        address_set set_to_listen, set_to_connect;
-        address_map map_listening, map_connected;
-        //
+        communication_state program_state;
 
         if (false == connect.remote.empty())
-            set_to_connect.insert(connect);
+            program_state.add_passive(connect);
 
         if (false == bind.local.empty())
-            set_to_listen.insert(bind);
+            program_state.add_passive(bind);
 
         //  these do not represent any state, just being used temporarily
         peer_id read_peer;
@@ -306,8 +589,9 @@ int main(int argc, char* argv[])
         while (true) { try {
         while (true)
         {
-            auto iter_listen = set_to_listen.begin();
-            while (iter_listen != set_to_listen.end())
+            auto to_listen = program_state.get_to_listen();
+            auto iter_listen = to_listen.begin();
+            for (; iter_listen != to_listen.end(); ++iter_listen)
             {
                 auto item = *iter_listen;
                 if (fixed_local_port)
@@ -315,14 +599,16 @@ int main(int argc, char* argv[])
 
                 cout << "start to listen on " << item.to_string() << endl;
                 peer_ids peers = sk.listen(item);
-                iter_listen = set_to_listen.erase(iter_listen);
+
+                if (false == peers.empty())
+                    program_state.remove(item);
 
                 for (auto const& peer_item : peers)
                 {
                     auto conn_item = sk.info(peer_item);
                     cout << "listening on " << conn_item.to_string() << endl;
-                    map_listening.insert(std::make_pair(conn_item,
-                                    address_map_value{peer_item, string()}));
+
+                    program_state.add_active(conn_item, peer_item);
 
                     if (fixed_local_port)
                     {
@@ -333,8 +619,9 @@ int main(int argc, char* argv[])
                 }
             }
 
-            auto iter_connect = set_to_connect.begin();
-            while (iter_connect != set_to_connect.end())
+            auto to_connect = program_state.get_to_connect();
+            auto iter_connect = to_connect.begin();
+            for (; iter_connect != to_connect.end(); ++iter_connect)
             {
                 //  don't know which interface to bind to
                 //  so will not specify local fixed port here
@@ -343,8 +630,6 @@ int main(int argc, char* argv[])
                 auto const& item = *iter_connect;
                 cout << "connect to " << item.to_string() << endl;
                 sk.open(item);
-
-                iter_connect = set_to_connect.erase(iter_connect);
             }
 
             if (0 == read_attempt_count)
@@ -352,7 +637,7 @@ int main(int argc, char* argv[])
             else
                 cout << " " << read_attempt_count << "...";
 
-            read_messages = sk.recieve(read_peer);
+            read_messages = sk.receive(read_peer);
             ip_address current_connection;
 
             if (false == read_messages.empty())
@@ -379,26 +664,31 @@ int main(int argc, char* argv[])
                 {
                 case message_join::rtt:
                 {
+                    auto to_connect = program_state.get_to_connect();
+                    auto iter_connect = to_connect.begin();
+                    for (; iter_connect != to_connect.end(); ++iter_connect)
+                    {
+                        auto const& item = *iter_connect;
+                        if (item.remote == current_connection.remote)
+                            program_state.remove(item);
+                    }
+
                     if (0 == fixed_local_port ||
                         current_connection.local.port == fixed_local_port)
                     {
-                        auto find_iter = map_connected.find(current_connection);
+                        /*auto find_iter = map_connected.find(current_connection);
                         if (find_iter != map_connected.end())
                             cout << "WARNING: new connection already exists" << endl
                                  << " existing " << find_iter->second.str_peer_id << endl
-                                 << " new " << read_peer << endl;
+                                 << " new " << read_peer << endl;*/
 
-                        map_connected.insert(
-                                    std::make_pair(current_connection,
-                                    address_map_value{read_peer, string()})
-                                    );
+                        program_state.add_active(current_connection, read_peer);
 
                         fixed_local_port = current_connection.local.port;
 
-                        ip_address to_listen(current_connection.local, current_connection.type);
-
-                        if (map_listening.find(to_listen) == map_listening.end())
-                            set_to_listen.insert(to_listen);
+                        ip_address to_listen(current_connection.local,
+                                             current_connection.type);
+                        program_state.add_passive(to_listen);
 
                         message_ping msg_ping;
                         msg_ping.nodeid = NodeID;
@@ -406,26 +696,25 @@ int main(int argc, char* argv[])
                     }
                     else
                     {
+                        program_state.remove(read_peer);
                         sk.send(read_peer, message_drop());
                         current_connection.local.port = fixed_local_port;
-                        sk.open(current_connection);
+                        program_state.add_passive(current_connection);
                     }
                 }
                     break;
+
+                case message_error::rtt:
+                    cout << "got error from bad guy "
+                         << current_connection.to_string()
+                         << endl;
+                    cout << "dropping " << read_peer << endl;
+                    program_state.remove(read_peer);
+                    sk.send(read_peer, message_drop());
+                    break;
                 case message_drop::rtt:
-                {
-                    //  this is something quick for now
-                    auto iter = map_connected.begin();
-                    for (; iter != map_connected.end(); ++iter)
-                    {
-                        if (iter->second.str_peer_id == read_peer)
-                        {
-                            map_connected.erase(iter);
-                            cout << "dropped " << iter->first.to_string() << endl;
-                            break;
-                        }
-                    }
-                }
+                    cout << "dropped " << read_peer << endl;
+                    program_state.remove(read_peer);
                     break;
                 case message_ping::rtt:
                 {
@@ -511,32 +800,18 @@ int main(int argc, char* argv[])
                 }
                     break;
                     */
-                case message_error::rtt:
-                {
-                    cout << "got error from bad guy "
-                         << current_connection.to_string()
-                         << endl;
-                    sk.send(read_peer, message_drop());
-
-                    auto iter_find = map_connected.find(current_connection);
-                    if (iter_find == map_connected.end())
-                        cout << "WARNING: this was a non registered"
-                                " connection";
-                    else
-                        map_connected.erase(iter_find);
-                }
-                    break;
                 case message_time_out::rtt:
-                    for (auto const& item : map_connected)
+                    auto connected = program_state.get_connected();
+                    for (auto const& item : connected)
                     {
                         message_ping msg_ping;
                         msg_ping.nodeid = NodeID;
-                        sk.send(item.second.str_peer_id, msg_ping);
+                        sk.send(item.get_peer(), msg_ping);
 
-                        if (item.second.str_hi_message.empty())
+                        /*if (item.second.str_hi_message.empty())
                         {
                             cout << "WARNING: never got message from peer " << item.first.to_string() << endl;
-                        }
+                        }*/
                     }
                     break;
                 }
@@ -557,14 +832,17 @@ int main(int argc, char* argv[])
                 auto tp_now = std::chrono::system_clock::now();
                 std::time_t t_now = std::chrono::system_clock::to_time_t(tp_now);
                 std::cout << std::ctime(&t_now) << std::endl;
-                if (false == map_connected.empty())
+                auto connected = program_state.get_connected();
+                auto listening = program_state.get_listening();
+
+                if (false == connected.empty())
                     cout << "status summary - connected" << endl;
-                for (auto const& item : map_connected)
-                    cout << "\t" << item.first.to_string() << endl;
-                if (false == map_listening.empty())
+                for (auto const& item : connected)
+                    cout << "\t" << item.get_address().to_string() << endl;
+                if (false == listening.empty())
                     cout << "status summary - listening" << endl;
-                for (auto const& item : map_listening)
-                    cout << "\t" << item.first.to_string() << endl;
+                for (auto const& item : listening)
+                    cout << "\t" << item.get_address().to_string() << endl;
 
                 cout<<"KBucket list\n--------\n";
                 kbucket.print_list();
