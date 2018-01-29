@@ -31,10 +31,8 @@ class message_time_out
 };
 class message_get_peers
 {
-    nodeid : string
 };
 class message_peer_info
 {
-    nodeid : string;
     address : message_ip_address
 }

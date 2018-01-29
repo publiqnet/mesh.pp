@@ -556,21 +556,6 @@ class message_get_peers
 {
 public:
     enum {rtt = 8};
-    string nodeid;
-    message_get_peers()
-      : nodeid()
-    {}
-    template <typename T>
-    explicit message_get_peers(T const& other)
-    {
-        assign(*this, other);
-    }
-    template <typename T>
-    message_get_peers& operator = (T const& other)
-    {
-        assign(*this, other);
-        return *this;
-    }
     static std::vector<char> saver(void* p)
     {
         message_get_peers* pmc = static_cast<message_get_peers*>(p);
@@ -580,16 +565,6 @@ public:
         return result;
     }
 };
-template <typename T>
-void assign(message_get_peers& self, T const& other)
-{
-    assign(self.nodeid, other.nodeid);
-}
-template <typename T>
-void assign(T& self, message_get_peers const& other)
-{
-    assign(self.nodeid, other.nodeid);
-}
 namespace detail
 {
 bool analyze_json(message_get_peers& msgcode,
@@ -603,16 +578,6 @@ bool analyze_json(message_get_peers& msgcode,
         code = false;
     else
     {
-        if (code)
-        {
-            auto it_find = members.find("\"nodeid\"");
-            if (it_find != members.end())
-            {
-                beltpp::json::expression_tree* item = it_find->second;
-                assert(item);
-                code = analyze_json(msgcode.nodeid, item);
-            }
-        }
     }
     return code;
 }
@@ -621,7 +586,6 @@ std::string saver(message_get_peers const& self)
     std::string result;
     result += "{";
     result += "\"rtt\" : " + saver(message_get_peers::rtt);
-    result += ",\"nodeid\" : " + saver(self.nodeid);
     result += "}";
     return result;
 }
@@ -637,11 +601,9 @@ class message_peer_info
 {
 public:
     enum {rtt = 9};
-    string nodeid;
     message_ip_address address;
     message_peer_info()
-      : nodeid()
-      , address()
+      : address()
     {}
     template <typename T>
     explicit message_peer_info(T const& other)
@@ -666,13 +628,11 @@ public:
 template <typename T>
 void assign(message_peer_info& self, T const& other)
 {
-    assign(self.nodeid, other.nodeid);
     assign(self.address, other.address);
 }
 template <typename T>
 void assign(T& self, message_peer_info const& other)
 {
-    assign(self.nodeid, other.nodeid);
     assign(self.address, other.address);
 }
 namespace detail
@@ -688,16 +648,6 @@ bool analyze_json(message_peer_info& msgcode,
         code = false;
     else
     {
-        if (code)
-        {
-            auto it_find = members.find("\"nodeid\"");
-            if (it_find != members.end())
-            {
-                beltpp::json::expression_tree* item = it_find->second;
-                assert(item);
-                code = analyze_json(msgcode.nodeid, item);
-            }
-        }
         if (code)
         {
             auto it_find = members.find("\"address\"");
@@ -716,7 +666,6 @@ std::string saver(message_peer_info const& self)
     std::string result;
     result += "{";
     result += "\"rtt\" : " + saver(message_peer_info::rtt);
-    result += ",\"nodeid\" : " + saver(self.nodeid);
     result += ",\"address\" : " + saver(self.address);
     result += "}";
     return result;

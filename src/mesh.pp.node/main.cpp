@@ -220,61 +220,82 @@ private:
 class peer_state
 {
 public:
-    enum class e_state {passive, active};
-    enum class e_type {connect, listen};
-
-    peer_state(ip_address const& addr)
-        : peer()
-        , address(addr)
+    peer_state()
+        : initiated_connection(false)
+        , requested(-1)
+        , node_id()
         , updated(steady_clock::now())
     {}
 
-    e_state state() const noexcept
+    void update()
     {
-        if (peer)
-            return e_state::active;
-        return e_state::passive;
-    }
-
-    e_type type() const noexcept
-    {
-        if (address.remote.empty())
-            return e_type::listen;
-        else
-            return e_type::connect;
-    }
-
-    void set_peer_id(ip_address const& addr, peer_id const& p)
-    {
-        //  state will become active
-        peer = p;
-        address = addr;
         updated = steady_clock::now();
     }
 
-    peer_id get_peer() const noexcept
-    {
-        //  using noexcept means before calling this validity
-        //  of peer optional is checked by using state() function
-        return *peer;
-        //  otherwise we will terminate
-    }
-
-    ip_address get_address() const noexcept
-    {
-        return address;
-    }
-
-public:
-    string value;
+    bool initiated_connection;
+    size_t requested;
+    string node_id;
 private:
-    optional<peer_id> peer;
-    ip_address address;
     steady_clock::time_point updated;
 };
 
+template <typename T_value>
 class communication_state
 {
+    class state_item
+    {
+    public:
+        enum class e_state {passive, active};
+        enum class e_type {connect, listen};
+
+        state_item(ip_address const& addr)
+            : peer()
+            , address(addr)
+        {}
+
+        e_state state() const noexcept
+        {
+            if (peer)
+                return e_state::active;
+            return e_state::passive;
+        }
+
+        e_type type() const noexcept
+        {
+            if (address.remote.empty())
+                return e_type::listen;
+            else
+                return e_type::connect;
+        }
+
+        void set_peer_id(ip_address const& addr, peer_id const& p)
+        {
+            //  state will become active
+            peer = p;
+            address = addr;
+            value.update();
+        }
+
+        peer_id get_peer() const noexcept
+        {
+            //  using noexcept means before calling this validity
+            //  of peer optional is checked by using state() function
+            return *peer;
+            //  otherwise we will terminate
+        }
+
+        ip_address get_address() const noexcept
+        {
+            return address;
+        }
+
+    public:
+        T_value value;
+    private:
+        optional<peer_id> peer;
+        ip_address address;
+    };
+    //  end state item
 private:
     static void remove_from_set(size_t index, unordered_set<size_t>& set)
     {
@@ -316,13 +337,13 @@ public:
         auto it_find = map_by_address.find(addr);
         if (it_find == map_by_address.end())
         {
-            peer_state state(addr);
+            state_item item(addr);
 
-            peers.emplace_back(state);
+            peers.emplace_back(item);
             size_t index = peers.size() - 1;
             map_by_address.insert(std::make_pair(addr, index));
 
-            if (state.type() == peer_state::e_type::connect)
+            if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
             else
                 set_to_listen.insert(index);
@@ -341,18 +362,18 @@ public:
         assert(it_find_addr != map_by_address.end());
 
         size_t index = it_find_addr->second;
-        auto& state = peers[index];
+        auto& item = peers[index];
 
-        if (state.state() == peer_state::e_state::active &&
-            p != state.get_peer())
+        if (item.state() == state_item::e_state::active &&
+            p != item.get_peer())
         {
-            auto it_find_peer = map_by_peer_id.find(state.get_peer());
+            auto it_find_peer = map_by_peer_id.find(item.get_peer());
             assert(it_find_peer != map_by_peer_id.end());
 
             map_by_peer_id.erase(it_find_peer);
         }
 
-        state.set_peer_id(addr, p);
+        item.set_peer_id(addr, p);
 
         auto it_find_connect = set_to_connect.find(index);
         if (it_find_connect != set_to_connect.end())
@@ -368,27 +389,57 @@ public:
         return update_code::added;
     }
 
-    void set_active_value(peer_id const& p, string const& value)
+    void set_active_value(peer_id const& p, T_value const& value)
     {
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
         {
             size_t index = it_find_peer_id->second;
-            auto& state = peers[index];
+            auto& item = peers[index];
 
-            state.value = value;
+            item.value = value;
+            item.value.update();
         }
     }
 
-    bool get_active_value(peer_id const& p, string& value) const
+    void set_value(ip_address const& addr, T_value const& value)
+    {
+        auto it_find_addr = map_by_address.find(addr);
+        if (it_find_addr != map_by_address.end())
+        {
+            size_t index = it_find_addr->second;
+            auto& item = peers[index];
+
+            item.value = value;
+            item.value.update();
+        }
+    }
+
+    bool get_active_value(peer_id const& p, T_value& value) const
     {
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
         {
             size_t index = it_find_peer_id->second;
-            auto& state = peers[index];
+            auto& item = peers[index];
 
-            value = state.value;
+            value = item.value;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    bool get_value(ip_address const& addr, T_value& value) const
+    {
+        auto it_find_addr = map_by_address.find(addr);
+        if (it_find_addr != map_by_address.end())
+        {
+            size_t index = it_find_addr->second;
+            auto& item = peers[index];
+
+            value = item.value;
 
             return true;
         }
@@ -436,7 +487,7 @@ public:
 
         for (size_t index : set_to_listen)
         {
-            peer_state const& state = peers[index];
+            state_item const& state = peers[index];
             result.push_back(state.get_address());
         }
 
@@ -449,42 +500,42 @@ public:
 
         for (size_t index : set_to_connect)
         {
-            peer_state const& state = peers[index];
+            state_item const& state = peers[index];
             result.push_back(state.get_address());
         }
 
         return result;
     }
 
-    vector<peer_state> get_connected() const
+    vector<state_item> get_connected() const
     {
-        vector<peer_state> result;
+        vector<state_item> result;
 
         for (auto const& item : peers)
         {
-            if (item.state() == peer_state::e_state::active &&
-                item.type() == peer_state::e_type::connect)
+            if (item.state() == state_item::e_state::active &&
+                item.type() == state_item::e_type::connect)
                 result.push_back(item);
         }
 
         return result;
     }
 
-    vector<peer_state> get_listening() const
+    vector<state_item> get_listening() const
     {
-        vector<peer_state> result;
+        vector<state_item> result;
 
         for (auto const& item : peers)
         {
-            if (item.state() == peer_state::e_state::active &&
-                item.type() == peer_state::e_type::listen)
+            if (item.state() == state_item::e_state::active &&
+                item.type() == state_item::e_type::listen)
                 result.push_back(item);
         }
 
         return result;
     }
 
-    vector<peer_state> peers;
+    vector<state_item> peers;
     unordered_map<ip_address, size_t, class ip_address_hash> map_by_address;
     unordered_map<peer_id, size_t> map_by_peer_id;
     unordered_set<size_t> set_to_listen;
@@ -572,10 +623,17 @@ int main(int argc, char* argv[])
         //  so below infinite loop will need to consider
         //  strong exception safety guarantees while working
         //  with these
-        communication_state program_state;
+        communication_state<peer_state> program_state;
 
         if (false == connect.remote.empty())
+        {
             program_state.add_passive(connect);
+
+            peer_state state;
+            state.initiated_connection = true;
+
+            program_state.set_value(connect, state);
+        }
 
         if (false == bind.local.empty())
             program_state.add_passive(bind);
@@ -664,13 +722,24 @@ int main(int argc, char* argv[])
                 {
                 case message_join::rtt:
                 {
+                    bool initiated_connection = false;
+
                     auto to_connect = program_state.get_to_connect();
                     auto iter_connect = to_connect.begin();
                     for (; iter_connect != to_connect.end(); ++iter_connect)
                     {
                         auto const& item = *iter_connect;
                         if (item.remote == current_connection.remote)
+                        {
+                            peer_state state;
+                            if (program_state.get_value(item, state) &&
+                                state.initiated_connection)
+                            {
+                                initiated_connection = true;
+                            }
+
                             program_state.remove(item);
+                        }
                     }
 
                     if (0 == fixed_local_port ||
@@ -690,16 +759,31 @@ int main(int argc, char* argv[])
                                              current_connection.type);
                         program_state.add_passive(to_listen);
 
-                        message_ping msg_ping;
-                        msg_ping.nodeid = NodeID;
-                        sk.send(read_peer, msg_ping);
+                        if (initiated_connection)
+                        {
+                            peer_state state;
+                            if (program_state.get_active_value(read_peer, state))
+                            {
+                                //  can set a state, to know what to do next time
+                                state.requested = message_ping::rtt;
+                                state.initiated_connection = initiated_connection;
+                                program_state.set_active_value(read_peer, state);
+                            }
+
+                            message_ping msg_ping;
+                            msg_ping.nodeid = NodeID;
+                            sk.send(read_peer, msg_ping);
+                        }
                     }
                     else
                     {
-                        program_state.remove(read_peer);
                         sk.send(read_peer, message_drop());
                         current_connection.local.port = fixed_local_port;
                         program_state.add_passive(current_connection);
+
+                        peer_state state;
+                        state.initiated_connection = initiated_connection;
+                        program_state.set_value(current_connection, state);
                     }
                 }
                     break;
@@ -718,6 +802,7 @@ int main(int argc, char* argv[])
                     break;
                 case message_ping::rtt:
                 {
+                    cout << "ping received" << endl;
                     message_ping msg_;
                     msg.get<message_ping>(msg_);
 
@@ -733,13 +818,13 @@ int main(int argc, char* argv[])
                     }
                     else
                     {
-                        message_drop msg_drop;
-                        sk.send(read_peer, msg_drop);
+                        sk.send(read_peer, message_drop());
                     }
                     break;
                 }
                 case message_pong::rtt:
                 {
+                    cout << "pong received" << endl;
                     message_pong msg_;
                     msg.get<message_pong>(msg_);
 
