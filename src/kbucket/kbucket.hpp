@@ -78,12 +78,19 @@ class KBucket
 public:
     using iterator = typename ContactIndex::iterator;
     using const_iterator = typename ContactIndex::const_iterator;
+    enum class probe_result { IS_NEW, IS_ORIGIN, IS_FULL, IS_OUTDATED };
 
     iterator end() { return contacts.end(); }
     iterator begin() { return contacts.begin(); }
 
+    const_iterator cend() const { return contacts.end(); }
+    const_iterator cbegin() const { return contacts.begin(); }
+
     KBucket(const Contact &origin_) : origin{origin_} {}
     KBucket(Contact &&origin_) : origin{std::move(origin_)} {}
+
+    probe_result probe(const Contact &) const;
+
     bool insert(const std::shared_ptr<const Contact>& contact);
     bool insert(Contact contact);
 
@@ -92,9 +99,11 @@ public:
 
     void print_list();
     iterator find(const Contact& contact);
-    std::vector<Contact> find_nearest(const Contact &contact, bool prefer_same_index = false);
+    std::vector<Contact> find_nearest_to(const Contact &contact, bool prefer_same_index = false);
     std::vector<Contact> find_closest();
     const Contact& operator[](const distance_type& key) const;
+
+
 private:
     ContactIndex contacts;
     const Contact origin;
@@ -126,9 +135,47 @@ private:
 
 };
 
+
+
+template <class Contact, int K>
+typename KBucket<Contact, K>::probe_result KBucket<Contact, K>::probe(const Contact& contact) const
+{
+    auto distance = actions::distance(origin, contact);
+    if ( distance == actions::zero())
+        return probe_result::IS_ORIGIN;
+
+    auto index = actions::index_from_distance(distance);
+
+    auto eq_index = [&index](const ContactHandle& c) { return c.index() == index; };
+
+    auto index_count = std::count_if(cbegin(), cend(), eq_index);
+    if (index_count >= K)
+        return probe_result::IS_FULL;
+
+    auto it = std::find_if(cbegin(), cend(), eq_index);
+
+    if (actions::age(*it) == actions::not_accessible())
+        return probe_result::IS_OUTDATED;
+
+    return probe_result::IS_NEW;
+}
+
 template <class Contact, int K>
 bool KBucket<Contact, K>::insert(const std::shared_ptr<const Contact>& contact)
 {
+    switch (probe(*contact))
+    {
+    case probe_result::IS_ORIGIN:
+        throw(std::logic_error{"Trying to insert contact with 0 distance from the origin, i.e. self"});
+        return false;
+    case probe_result::IS_FULL:
+        return false;
+    case probe_result::IS_OUTDATED:
+        return replace(ContactHandle{this, contact->get_ptr()});
+    case probe_result::IS_NEW:
+        return contacts.insert(ContactHandle{this, contact->get_ptr()}).second;
+    }
+    /*
     auto distance = actions::distance(origin, *contact);
     if ( distance == actions::zero())
         throw(std::logic_error{"Trying to insert contact with 0 distance from the origin, i.e. self"});
@@ -156,6 +203,7 @@ bool KBucket<Contact, K>::insert(const std::shared_ptr<const Contact>& contact)
     }
 
     return false;
+    */
 }
 
 template <class Contact, int K>
@@ -185,7 +233,7 @@ DstIt copy_cycle( SrcIt pivot, SrcIt first, SrcIt last, DstIt d_first, DstIt d_l
 }
 
 template <class Contact, int K>
-std::vector<Contact> KBucket<Contact, K>::find_nearest(const Contact& contact, bool prefer_same_index)
+std::vector<Contact> KBucket<Contact, K>::find_nearest_to(const Contact& contact, bool prefer_same_index)
 {
     auto & contacts_by_distance = contacts.template get<by_distance>();
 
@@ -198,17 +246,17 @@ std::vector<Contact> KBucket<Contact, K>::find_nearest(const Contact& contact, b
         it = std::find_if(std::begin(contacts_by_distance), std::end(contacts_by_distance),
                          [&index_](const ContactHandle &a){ return index_ == a.index(); } );
     }
-    it = copy_cycle(it, std::begin(contacts_by_distance), std::end(contacts_by_distance),
+    auto result_end = copy_cycle(it, std::begin(contacts_by_distance), std::end(contacts_by_distance),
                    std::begin(result), std::end(result));
 
-    result.erase(it, std::end(result));
+    result.erase(result_end, std::end(result));
     return result;
 }
 
 template <class Contact, int K>
 std::vector<Contact> KBucket<Contact, K>::find_closest()
 {
-    return find_nearest(origin, false);
+    return find_nearest_to(origin, false);
 }
 
 template <class Contact, int K>

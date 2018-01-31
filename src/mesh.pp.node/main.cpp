@@ -50,6 +50,10 @@ using beltpp::message_join;
 using beltpp::message_drop;
 using beltpp::message_ping;
 using beltpp::message_pong;
+using beltpp::message_C_find_node;
+using beltpp::message_R_find_node;
+using beltpp::message_C_intro_node;
+using beltpp::message_R_intro_node;
 using beltpp::message_error;
 using beltpp::message_time_out;
 //using beltpp::message_get_peers;
@@ -195,6 +199,8 @@ struct Konnection: public ip_address, address_map_value, std::enable_shared_from
         os << /*std::hex <<*/ n;
         return os.str();
     }
+
+    operator string() const { return distance_to_string(get_id()); }
 
     Konnection(distance_type_ const &d = {}, ip_address const & c = {}, address_map_value const &p = {}, age_type age = {}):
         ip_address{c}, address_map_value{distance_to_string(d), ""}, value{ d }, age_{age} {}
@@ -548,12 +554,17 @@ int main(int argc, char* argv[])
     {
         CryptoPP::AutoSeededRandomPool prng;
         CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PrivateKey privateKey;
+        CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PublicKey publicKey;
 
         privateKey.Initialize( prng, CryptoPP::ASN1::secp256k1() );
         if( not privateKey.Validate( prng, 3 ) )
             throw std::runtime_error("invalid private key");
 
-        auto iNodeID = privateKey.GetPrivateExponent();
+        privateKey.MakePublicKey( publicKey );
+        if( not publicKey.Validate( prng, 3 ) )
+            throw std::runtime_error("invalid public key");
+
+        auto iNodeID = publicKey.GetPublicElement().x;
 
         string option_bind, option_connect;
 
@@ -608,6 +619,7 @@ int main(int argc, char* argv[])
 
         Konnection<> self {iNodeID};
         KBucket<Konnection<>> kbucket{self};
+        std::weak_ptr<KBucket<Konnection<>>> short_list {};
 
         beltpp::socket sk = beltpp::getsocket<sf>();
         sk.set_timer(std::chrono::seconds(10));
@@ -785,10 +797,11 @@ int main(int argc, char* argv[])
                         state.initiated_connection = initiated_connection;
                         program_state.set_value(current_connection, state);
                     }
-                }
-                    break;
 
+                    break;
+                }
                 case message_error::rtt:
+                {
                     cout << "got error from bad guy "
                          << current_connection.to_string()
                          << endl;
@@ -796,10 +809,13 @@ int main(int argc, char* argv[])
                     program_state.remove(read_peer);
                     sk.send(read_peer, message_drop());
                     break;
+                }
                 case message_drop::rtt:
+                {
                     cout << "dropped " << read_peer << endl;
                     program_state.remove(read_peer);
                     break;
+                }
                 case message_ping::rtt:
                 {
                     cout << "ping received" << endl;
@@ -835,57 +851,55 @@ int main(int argc, char* argv[])
                     kbucket.replace(k);
                     break;
                 }
-                    /*
-                case message_get_peers::rtt: // R find node
+                case message_C_find_node::rtt:
                 {
-                    for (auto const& item : map_connected)
+                    message_C_find_node msg_;
+                    msg.get<message_C_find_node>(msg_);
+
+                    Konnection<> k{msg_.nodeid};
+//                    kbucket.insert(k);
+                    auto nodes = kbucket.find_nearest_to(k, false);
+
+                    for (auto const &node : nodes)
                     {
-                        if (item.first == current_connection)
-                            continue;
-                        message_peer_info msg_peer_info;
-                        msg_peer_info.address = item.first;
-                        sk.write(read_peer, msg_peer_info);
-
-                        cout << "sent peer info "
-                             << item.first.to_string()
-                             << " to peer "
-                             << current_connection.to_string() << endl;
-
-                        msg_peer_info.address = current_connection;
-                        sk.write(item.second.str_peer_id, msg_peer_info);
-
-                        cout << "sent peer info "
-                             << current_connection.to_string()
-                             << " to peer "
-                             << item.first.to_string() << endl;
+                        message_R_find_node response;
+                        response.mediator_nodeid = NodeID;
+                        response.discovered_nodeid = node;
+                        sk.send(read_peer, response);
                     }
-                }
                     break;
-                case message_peer_info::rtt: // C find node
+                }
+                case message_R_find_node::rtt:
                 {
-                    message_peer_info msg_peer_info;
-                    msg.get(msg_peer_info);
+                    message_R_find_node msg_;
+                    msg.get<message_R_find_node>(msg_);
 
-                    ip_address connect_to;
-                    beltpp::assign(connect_to, msg_peer_info.address);
-
-                    cout << "got peer info "
-                         << connect_to.to_string()
-                         << " from peer "
-                         << current_connection.to_string() << endl;
-
-                    if (map_connected.end() ==
-                        map_connected.find(connect_to))
+                    if(auto short_list_ = short_list.lock())
                     {
-                        connect_to.local = current_connection.local;
-                        cout << "connecting to peer's peer " <<
-                                connect_to.to_string() << endl;
-                        sk.open(connect_to, 100);
+                        auto k = Konnection<>(msg_.discovered_nodeid, {}, {read_peer, "message_R_find_node"}, t_now);
+                        if (short_list_->probe(k) == KBucket<Konnection<>>::probe_result::IS_NEW)
+                        {
+                            message_C_intro_node c_intro;
+                            c_intro.nodeid = msg_.discovered_nodeid;
+                            sk.send(read_peer, c_intro);
+                        };
                     }
-                }
                     break;
-                    */
+                }
+                case message_R_intro_node::rtt:
+                {
+                    message_R_intro_node msg_;
+                    msg.get<message_R_intro_node>(msg_);
+
+                    if(auto short_list_ = short_list.lock())
+                    {
+                        auto k = Konnection<>(msg_.nodeid, {}, {read_peer, "message_R_intro_node"}, t_now);
+                        short_list_->insert(k);
+                    }
+                    break;
+                }
                 case message_time_out::rtt:
+                {
                     auto connected = program_state.get_connected();
                     for (auto const& item : connected)
                     {
@@ -899,6 +913,7 @@ int main(int argc, char* argv[])
                         }*/
                     }
                     break;
+                }
                 }
             }
 
@@ -933,6 +948,19 @@ int main(int argc, char* argv[])
                 kbucket.print_list();
                 cout<<"========\n";
             }
+
+#if ITERATIVE_FIND_NODE
+            iterative_find_node (Konnection<> node_to_search)
+            {
+                short_list = std::make_shared<KBucket<>>(node_to_search);
+                short_list->fill(kbucket);
+
+                for( auto n = short_list->begin(), p = short_list->end(); n != short_list->end() && p != n; p = n, n = short_list->begin())
+                {
+
+                }
+            }
+#endif
         }}
         catch(std::exception const& ex)
         {

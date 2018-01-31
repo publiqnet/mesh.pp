@@ -29,10 +29,21 @@ class message_error
 class message_time_out
 {
 };
-class message_get_peers
+class message_R_find_node
 {
+    mediator_nodeid : string;
+    discovered_nodeid : string;
+    discovered_connection : message_ip_address
 };
-class message_peer_info
+class message_C_find_node
 {
-    address : message_ip_address
+    nodeid : string
+};
+class message_C_intro_node
+{
+    nodeid : string
+};
+class message_R_intro_node
+{
+    nodeid : string
 }
