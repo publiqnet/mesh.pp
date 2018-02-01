@@ -651,10 +651,10 @@ int main(int argc, char* argv[])
             program_state.add_passive(bind);
 
         //  these do not represent any state, just being used temporarily
-        peer_id read_peer;
-        packets read_messages;
+        peer_id current_peer;
+        packets received_packets;
 
-        size_t read_attempt_count = 0;
+        size_t receive_attempt_count = 0;
 
         while (true) { try {
         while (true)
@@ -702,35 +702,38 @@ int main(int argc, char* argv[])
                 sk.open(item);
             }
 
-            if (0 == read_attempt_count)
+            if (0 == receive_attempt_count)
                 cout << NodeID << " reading...";
             else
-                cout << " " << read_attempt_count << "...";
+                cout << " " << receive_attempt_count << "...";
 
-            read_messages = sk.receive(read_peer);
+            received_packets = sk.receive(current_peer);
             ip_address current_connection;
 
-            if (false == read_messages.empty())
+            if (false == received_packets.empty())
             {
-                read_attempt_count = 0;
-                if (false == read_peer.empty())
+                receive_attempt_count = 0;
+                //
+                //  for "timer_out" message current_peer is empty
+                if (false == current_peer.empty())
                 {
                     try //  this is something quick for now
                     {
-                        current_connection = sk.info(read_peer);
+                        //  for "drop" message this will throw
+                        current_connection = sk.info(current_peer);
                     }
                     catch(...){}
                 }
                 cout << " done" << endl;
             }
             else
-                ++read_attempt_count;
+                ++receive_attempt_count;
 
             auto t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-            for (auto const& msg : read_messages)
+            for (auto const& packet : received_packets)
             {
-                switch (msg.type())
+                switch (packet.type())
                 {
                 case message_join::rtt:
                 {
@@ -761,9 +764,9 @@ int main(int argc, char* argv[])
                         if (find_iter != map_connected.end())
                             cout << "WARNING: new connection already exists" << endl
                                  << " existing " << find_iter->second.str_peer_id << endl
-                                 << " new " << read_peer << endl;*/
+                                 << " new " << current_peer << endl;*/
 
-                        program_state.add_active(current_connection, read_peer);
+                        program_state.add_active(current_connection, current_peer);
 
                         fixed_local_port = current_connection.local.port;
 
@@ -774,22 +777,22 @@ int main(int argc, char* argv[])
                         if (initiated_connection)
                         {
                             peer_state state;
-                            if (program_state.get_active_value(read_peer, state))
+                            if (program_state.get_active_value(current_peer, state))
                             {
                                 //  can set a state, to know what to do next time
                                 state.requested = message_ping::rtt;
                                 state.initiated_connection = initiated_connection;
-                                program_state.set_active_value(read_peer, state);
+                                program_state.set_active_value(current_peer, state);
                             }
 
                             message_ping msg_ping;
                             msg_ping.nodeid = NodeID;
-                            sk.send(read_peer, msg_ping);
+                            sk.send(current_peer, msg_ping);
                         }
                     }
                     else
                     {
-                        sk.send(read_peer, message_drop());
+                        sk.send(current_peer, message_drop());
                         current_connection.local.port = fixed_local_port;
                         program_state.add_passive(current_connection);
 
@@ -805,58 +808,60 @@ int main(int argc, char* argv[])
                     cout << "got error from bad guy "
                          << current_connection.to_string()
                          << endl;
-                    cout << "dropping " << read_peer << endl;
-                    program_state.remove(read_peer);
-                    sk.send(read_peer, message_drop());
+                    cout << "dropping " << current_peer << endl;
+                    program_state.remove(current_peer);
+                    sk.send(current_peer, message_drop());
                     break;
                 }
                 case message_drop::rtt:
                 {
-                    cout << "dropped " << read_peer << endl;
-                    program_state.remove(read_peer);
+                    cout << "dropped " << current_peer << endl;
+                    program_state.remove(current_peer);
                     break;
                 }
                 case message_ping::rtt:
                 {
                     cout << "ping received" << endl;
-                    message_ping msg_;
-                    msg.get<message_ping>(msg_);
+                    message_ping msg;
+                    packet.get<message_ping>(msg);
 
-                    if (iNodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
+                    if (iNodeID == typename Konnection<>::distance_type{msg.nodeid.c_str()})
                         break; // discard ping from self
 
-                    Konnection<> k{msg_.nodeid, current_connection, {read_peer, "ping"}, {}};
+                    Konnection<> k{msg.nodeid, current_connection, {current_peer, "ping"}, {}};
                     if (kbucket.insert(k))
                     {
                         message_pong msg_pong;
                         msg_pong.nodeid = NodeID;
-                        sk.send(read_peer, msg_pong);
+                        sk.send(current_peer, msg_pong);
                     }
                     else
                     {
-                        sk.send(read_peer, message_drop());
+                        sk.send(current_peer, message_drop());
                     }
                     break;
                 }
                 case message_pong::rtt:
                 {
                     cout << "pong received" << endl;
-                    message_pong msg_;
-                    msg.get<message_pong>(msg_);
+                    message_pong msg;
+                    packet.get<message_pong>(msg);
 
-                    if (iNodeID == typename Konnection<>::distance_type{msg_.nodeid.c_str()})
+                    if (iNodeID == typename Konnection<>::distance_type{msg.nodeid.c_str()})
                         break;
 
-                    Konnection<> k{msg_.nodeid, current_connection, {read_peer, msg_.nodeid }, t_now};
+                    Konnection<> k(msg.nodeid,
+                                   current_connection,
+                                    {current_peer, msg.nodeid }, t_now);
                     kbucket.replace(k);
                     break;
                 }
                 case message_C_find_node::rtt:
                 {
-                    message_C_find_node msg_;
-                    msg.get<message_C_find_node>(msg_);
+                    message_C_find_node msg;
+                    packet.get<message_C_find_node>(msg);
 
-                    Konnection<> k{msg_.nodeid};
+                    Konnection<> k{msg.nodeid};
 //                    kbucket.insert(k);
                     auto nodes = kbucket.find_nearest_to(k, false);
 
@@ -865,35 +870,35 @@ int main(int argc, char* argv[])
                         message_R_find_node response;
                         response.mediator_nodeid = NodeID;
                         response.discovered_nodeid = node;
-                        sk.send(read_peer, response);
+                        sk.send(current_peer, response);
                     }
                     break;
                 }
                 case message_R_find_node::rtt:
                 {
-                    message_R_find_node msg_;
-                    msg.get<message_R_find_node>(msg_);
+                    message_R_find_node msg;
+                    packet.get<message_R_find_node>(msg);
 
                     if(auto short_list_ = short_list.lock())
                     {
-                        auto k = Konnection<>(msg_.discovered_nodeid, {}, {read_peer, "message_R_find_node"}, t_now);
+                        auto k = Konnection<>(msg.discovered_nodeid, {}, {current_peer, "message_R_find_node"}, t_now);
                         if (short_list_->probe(k) == KBucket<Konnection<>>::probe_result::IS_NEW)
                         {
                             message_C_intro_node c_intro;
-                            c_intro.nodeid = msg_.discovered_nodeid;
-                            sk.send(read_peer, c_intro);
+                            c_intro.nodeid = msg.discovered_nodeid;
+                            sk.send(current_peer, c_intro);
                         };
                     }
                     break;
                 }
                 case message_R_intro_node::rtt:
                 {
-                    message_R_intro_node msg_;
-                    msg.get<message_R_intro_node>(msg_);
+                    message_R_intro_node msg;
+                    packet.get<message_R_intro_node>(msg);
 
                     if(auto short_list_ = short_list.lock())
                     {
-                        auto k = Konnection<>(msg_.nodeid, {}, {read_peer, "message_R_intro_node"}, t_now);
+                        auto k = Konnection<>(msg.nodeid, {}, {current_peer, "message_R_intro_node"}, t_now);
                         short_list_->insert(k);
                     }
                     break;
@@ -917,7 +922,7 @@ int main(int argc, char* argv[])
                 }
             }
 
-            /*if (read_messages.empty())
+            /*if (read_packets.empty())
             {
                 cout << "   reading returned, but there are"
                         " no messages. either internal \n"
@@ -927,7 +932,7 @@ int main(int argc, char* argv[])
                         " indicate an internal silent error\n"
                         "   such as not able to connect\n";
             }*/
-            if (false == read_messages.empty())
+            if (false == received_packets.empty())
             {
                 auto tp_now = std::chrono::system_clock::now();
                 std::time_t t_now = std::chrono::system_clock::to_time_t(tp_now);
