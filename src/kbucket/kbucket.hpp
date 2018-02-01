@@ -173,6 +173,7 @@ bool KBucket<Contact, K>::insert(const std::shared_ptr<const Contact>& contact)
     case probe_result::IS_OUTDATED:
         return replace(ContactHandle{this, contact->get_ptr()});
     case probe_result::IS_NEW:
+    default:
         return contacts.insert(ContactHandle{this, contact->get_ptr()}).second;
     }
     /*
