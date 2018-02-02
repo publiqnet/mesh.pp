@@ -26,24 +26,22 @@ class message_pong
 class message_error
 {
 };
-class message_time_out
+class message_timer_out
 {
 };
-class message_R_find_node
-{
-    mediator_nodeid : string;
-    discovered_nodeid : string;
-    discovered_connection : message_ip_address
-};
-class message_C_find_node
+class message_find_node
 {
     nodeid : string
 };
-class message_C_intro_node
+class message_node_details
 {
     nodeid : string
 };
-class message_R_intro_node
+class message_introduce_to
 {
     nodeid : string
+};
+class message_open_connection_with
+{
+    addr : message_ip_address
 }

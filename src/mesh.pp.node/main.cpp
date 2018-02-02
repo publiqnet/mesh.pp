@@ -23,12 +23,6 @@
 #include <sstream>
 #include <chrono>
 
-struct address_map_value
-{
-    std::string str_peer_id;
-    std::string str_hi_message;
-};
-
 using std::string;
 using std::vector;
 using beltpp::ip_address;
@@ -50,12 +44,12 @@ using beltpp::message_join;
 using beltpp::message_drop;
 using beltpp::message_ping;
 using beltpp::message_pong;
-using beltpp::message_C_find_node;
-using beltpp::message_R_find_node;
-using beltpp::message_C_intro_node;
-using beltpp::message_R_intro_node;
+using beltpp::message_find_node;
+using beltpp::message_node_details;
+using beltpp::message_introduce_to;
+using beltpp::message_open_connection_with;
 using beltpp::message_error;
-using beltpp::message_time_out;
+using beltpp::message_timer_out;
 //using beltpp::message_get_peers;
 //using beltpp::message_peer_info;
 
@@ -63,15 +57,15 @@ using sf = beltpp::socket_family_t<
     beltpp::message_error::rtt,
     beltpp::message_join::rtt,
     beltpp::message_drop::rtt,
-    beltpp::message_time_out::rtt,
+    beltpp::message_timer_out::rtt,
     &beltpp::make_void_unique_ptr<beltpp::message_error>,
     &beltpp::make_void_unique_ptr<beltpp::message_join>,
     &beltpp::make_void_unique_ptr<beltpp::message_drop>,
-    &beltpp::make_void_unique_ptr<beltpp::message_time_out>,
+    &beltpp::make_void_unique_ptr<beltpp::message_timer_out>,
     &beltpp::message_error::saver,
     &beltpp::message_join::saver,
     &beltpp::message_drop::saver,
-    &beltpp::message_time_out::saver,
+    &beltpp::message_timer_out::saver,
     &beltpp::message_list_load
 >;
 
@@ -158,7 +152,7 @@ bool operator == (ip_address const& l, ip_address const& r) noexcept
 }
 
 template <class distance_type_ = CryptoPP::Integer, class  age_type_ = std::time_t>
-struct Konnection: public ip_address, address_map_value, std::enable_shared_from_this<Konnection<distance_type_, age_type_>>
+struct Konnection: public ip_address, std::enable_shared_from_this<Konnection<distance_type_, age_type_>>
 {
     using distance_type = distance_type_;
     using age_type = age_type_;
@@ -202,11 +196,11 @@ struct Konnection: public ip_address, address_map_value, std::enable_shared_from
 
     operator string() const { return distance_to_string(get_id()); }
 
-    Konnection(distance_type_ const &d = {}, ip_address const & c = {}, address_map_value const &p = {}, age_type age = {}):
-        ip_address{c}, address_map_value{distance_to_string(d), ""}, value{ d }, age_{age} {}
+    Konnection(distance_type_ const &d = {}, ip_address const & c = {}, age_type age = {}):
+        ip_address{c}, value{ d }, age_{age} {}
 
-    Konnection(string &d, ip_address const & c = {}, address_map_value const &p = {}, age_type age = {}):
-        ip_address{c}, address_map_value{p}, value{ d.c_str() }, age_{age} {}
+    Konnection(string &d, ip_address const & c = {}, age_type age = {}):
+        ip_address{c}, value{ d.c_str() }, age_{age} {}
 
     distance_type distance_from (const Konnection &r) const { return distance(value, r.value); }
     bool is_same(const Konnection &r) const { return distance_from(r) == distance_type{}; }
@@ -226,8 +220,9 @@ private:
 class peer_state
 {
 public:
+    using key_type = string;
     peer_state()
-        : initiated_connection(false)
+        : open_attempts(-1)
         , requested(-1)
         , node_id()
         , updated(steady_clock::now())
@@ -238,9 +233,14 @@ public:
         updated = steady_clock::now();
     }
 
-    bool initiated_connection;
+    key_type key() const noexcept
+    {
+        return node_id;
+    }
+
+    size_t open_attempts;
     size_t requested;
-    string node_id;
+    key_type node_id;
 private:
     steady_clock::time_point updated;
 };
@@ -338,16 +338,28 @@ public:
     enum class insert_code {old, fresh};
     enum class update_code {updated, added};
 
-    insert_code add_passive(ip_address const& addr)
+    insert_code add_passive(ip_address const& addr,
+                            T_value const& value = T_value())
     {
+        //  assume that value does not have key here
         auto it_find = map_by_address.find(addr);
         if (it_find == map_by_address.end())
         {
             state_item item(addr);
 
+            if (value.key() != item.value.key())
+            {
+                auto it_find_key = map_by_key.find(item.value.key());
+                if (it_find_key != map_by_key.end())
+                    map_by_key.erase(it_find_key);
+            }
+
+            item.value = value;
+
             peers.emplace_back(item);
             size_t index = peers.size() - 1;
             map_by_address.insert(std::make_pair(addr, index));
+            map_by_key.insert(std::make_pair(item.value.key(), index));
 
             if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
@@ -356,11 +368,19 @@ public:
 
             return insert_code::fresh;
         }
+        else
+        {
+            auto iter_remove = set_to_remove.find(it_find->second);
+            if (iter_remove != set_to_remove.end())
+                set_to_remove.erase(iter_remove);
+        }
 
         return insert_code::old;
     }
 
-    update_code add_active(ip_address const& addr, peer_id const& p)
+    update_code add_active(ip_address const& addr,
+                           peer_id const& p,
+                           T_value const& value = T_value())
     {
         insert_code add_passive_code = add_passive(addr);
 
@@ -379,7 +399,16 @@ public:
             map_by_peer_id.erase(it_find_peer);
         }
 
+        if (value.key() != item.value.key())
+        {
+            auto it_find_key = map_by_key.find(item.value.key());
+            if (it_find_key != map_by_key.end())
+                map_by_key.erase(it_find_key);
+        }
+
         item.set_peer_id(addr, p);
+        item.value = value;
+        item.value.update();
 
         auto it_find_connect = set_to_connect.find(index);
         if (it_find_connect != set_to_connect.end())
@@ -389,6 +418,7 @@ public:
             set_to_listen.erase(it_find_listen);
 
         map_by_peer_id.insert(std::make_pair(p, index));
+        map_by_key.insert(std::make_pair(item.value.key(), index));
 
         if (add_passive_code == insert_code::old)
             return update_code::updated;
@@ -403,8 +433,17 @@ public:
             size_t index = it_find_peer_id->second;
             auto& item = peers[index];
 
+            if (value.key() != item.value.key())
+            {
+                auto it_find_key = map_by_key.find(item.value.key());
+                if (it_find_key != map_by_key.end())
+                    map_by_key.erase(it_find_key);
+            }
+
             item.value = value;
             item.value.update();
+
+            map_by_key.insert(std::make_pair(item.value.key(), index));
         }
     }
 
@@ -453,30 +492,44 @@ public:
         return false;
     }
 
-    void remove(ip_address const& addr)
+    void remove_later(ip_address const& addr)
     {
         auto it_find_addr = map_by_address.find(addr);
         if (it_find_addr != map_by_address.end())
         {
-            size_t index = it_find_addr->second;
-
-            peers.erase(peers.begin() + index);
-
-            remove_from_set(index, set_to_connect);
-            remove_from_set(index, set_to_listen);
-
-            remove_from_map(index, map_by_address);
-            remove_from_map(index, map_by_peer_id);
+            set_to_remove.insert(it_find_addr->second);
         }
     }
 
-    void remove(peer_id const& p)
+    void remove_later(peer_id const& p)
     {
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
         {
-            size_t index = it_find_peer_id->second;
+            set_to_remove.insert(it_find_peer_id->second);
+        }
+    }
 
+    vector<typename T_value::key_type> remove_pending()
+    {
+        vector<typename T_value::key_type> result;
+        vector<size_t> indices;
+
+        for (size_t index : set_to_remove)
+        {
+            auto const& item = peers[index];
+
+            if (item.value.key() != typename T_value::key_type())
+                result.push_back(item.value.key());
+
+            indices.push_back(index);
+        }
+
+        std::sort(indices.begin(), indices.end());
+        for (size_t index = indices.size() - 1;
+             index >= 0 && index < indices.size();
+             --index)
+        {
             peers.erase(peers.begin() + index);
 
             remove_from_set(index, set_to_connect);
@@ -484,7 +537,12 @@ public:
 
             remove_from_map(index, map_by_address);
             remove_from_map(index, map_by_peer_id);
+            remove_from_map(index, map_by_key);
         }
+
+        set_to_remove.clear();
+
+        return result;
     }
 
     vector<ip_address> get_to_listen() const
@@ -493,8 +551,11 @@ public:
 
         for (size_t index : set_to_listen)
         {
-            state_item const& state = peers[index];
-            result.push_back(state.get_address());
+            if (set_to_remove.find(index) != set_to_remove.end())
+                continue;
+
+            state_item const& item = peers[index];
+            result.push_back(item.get_address());
         }
 
         return result;
@@ -506,8 +567,11 @@ public:
 
         for (size_t index : set_to_connect)
         {
-            state_item const& state = peers[index];
-            result.push_back(state.get_address());
+            if (set_to_remove.find(index) != set_to_remove.end())
+                continue;
+
+            state_item const& item = peers[index];
+            result.push_back(item.get_address());
         }
 
         return result;
@@ -517,8 +581,13 @@ public:
     {
         vector<state_item> result;
 
-        for (auto const& item : peers)
+        for (size_t index = 0; index < peers.size(); ++index)
         {
+            auto const& item = peers[index];
+
+            if (set_to_remove.find(index) != set_to_remove.end())
+                continue;
+
             if (item.state() == state_item::e_state::active &&
                 item.type() == state_item::e_type::connect)
                 result.push_back(item);
@@ -531,8 +600,13 @@ public:
     {
         vector<state_item> result;
 
-        for (auto const& item : peers)
+        for (size_t index = 0; index < peers.size(); ++index)
         {
+            auto const& item = peers[index];
+
+            if (set_to_remove.find(index) != set_to_remove.end())
+                continue;
+
             if (item.state() == state_item::e_state::active &&
                 item.type() == state_item::e_type::listen)
                 result.push_back(item);
@@ -541,11 +615,39 @@ public:
         return result;
     }
 
+    bool get_peer_id(ip_address const& addr, peer_id& p)
+    {
+        auto it_find_addr = map_by_address.find(addr);
+        if (it_find_addr != map_by_address.end())
+        {
+            size_t index = it_find_addr->second;
+
+            p = peers[index].get_peer();
+            return true;
+        }
+        return false;
+    }
+
+    bool get_address(peer_id const& p, ip_address& addr)
+    {
+        auto it_find_peer_id = map_by_peer_id.find(p);
+        if (it_find_peer_id != map_by_peer_id.end())
+        {
+            size_t index = it_find_peer_id->second;
+
+            addr = peers[index].get_address();
+            return true;
+        }
+        return false;
+    }
+
     vector<state_item> peers;
     unordered_map<ip_address, size_t, class ip_address_hash> map_by_address;
     unordered_map<peer_id, size_t> map_by_peer_id;
+    unordered_map<typename T_value::key_type, size_t> map_by_key;
     unordered_set<size_t> set_to_listen;
     unordered_set<size_t> set_to_connect;
+    unordered_set<size_t> set_to_remove;
 };
 
 int main(int argc, char* argv[])
@@ -619,7 +721,6 @@ int main(int argc, char* argv[])
 
         Konnection<> self {iNodeID};
         KBucket<Konnection<>> kbucket{self};
-        std::weak_ptr<KBucket<Konnection<>>> short_list {};
 
         beltpp::socket sk = beltpp::getsocket<sf>();
         sk.set_timer(std::chrono::seconds(10));
@@ -638,14 +739,7 @@ int main(int argc, char* argv[])
         communication_state<peer_state> program_state;
 
         if (false == connect.remote.empty())
-        {
             program_state.add_passive(connect);
-
-            peer_state state;
-            state.initiated_connection = true;
-
-            program_state.set_value(connect, state);
-        }
 
         if (false == bind.local.empty())
             program_state.add_passive(bind);
@@ -659,19 +753,26 @@ int main(int argc, char* argv[])
         while (true) { try {
         while (true)
         {
+            auto to_remove = program_state.remove_pending();
+            auto iter_remove = to_remove.begin();
+            for (; iter_remove != to_remove.end(); ++iter_remove)
+            {
+                kbucket.erase(Konnection<>(*iter_remove));
+            }
+
             auto to_listen = program_state.get_to_listen();
             auto iter_listen = to_listen.begin();
             for (; iter_listen != to_listen.end(); ++iter_listen)
             {
                 auto item = *iter_listen;
+
+                program_state.remove_later(item);
+
                 if (fixed_local_port)
                     item.local.port = fixed_local_port;
 
                 cout << "start to listen on " << item.to_string() << endl;
                 peer_ids peers = sk.listen(item);
-
-                if (false == peers.empty())
-                    program_state.remove(item);
 
                 for (auto const& peer_item : peers)
                 {
@@ -680,11 +781,10 @@ int main(int argc, char* argv[])
 
                     program_state.add_active(conn_item, peer_item);
 
-                    if (fixed_local_port)
-                    {
-                        assert(fixed_local_port == conn_item.local.port);
-                    }
-                    else
+                    assert(0 == fixed_local_port ||
+                           fixed_local_port == conn_item.local.port);
+
+                    if (0 == fixed_local_port)
                         fixed_local_port = conn_item.local.port;
                 }
             }
@@ -698,8 +798,17 @@ int main(int argc, char* argv[])
                 //  but will drop the connection and create a new one
                 //  if needed
                 auto const& item = *iter_connect;
+
+                program_state.remove_later(item);
+
+                size_t attempts = 0;
+                peer_state value;
+                if (program_state.get_value(item, value) &&
+                    value.open_attempts != size_t(-1))
+                    attempts = value.open_attempts;
+
                 cout << "connect to " << item.to_string() << endl;
-                sk.open(item);
+                sk.open(item, attempts);
             }
 
             if (0 == receive_attempt_count)
@@ -737,68 +846,27 @@ int main(int argc, char* argv[])
                 {
                 case message_join::rtt:
                 {
-                    bool initiated_connection = false;
-
-                    auto to_connect = program_state.get_to_connect();
-                    auto iter_connect = to_connect.begin();
-                    for (; iter_connect != to_connect.end(); ++iter_connect)
-                    {
-                        auto const& item = *iter_connect;
-                        if (item.remote == current_connection.remote)
-                        {
-                            peer_state state;
-                            if (program_state.get_value(item, state) &&
-                                state.initiated_connection)
-                            {
-                                initiated_connection = true;
-                            }
-
-                            program_state.remove(item);
-                        }
-                    }
-
                     if (0 == fixed_local_port ||
                         current_connection.local.port == fixed_local_port)
                     {
-                        /*auto find_iter = map_connected.find(current_connection);
-                        if (find_iter != map_connected.end())
-                            cout << "WARNING: new connection already exists" << endl
-                                 << " existing " << find_iter->second.str_peer_id << endl
-                                 << " new " << current_peer << endl;*/
+                        program_state.add_active(current_connection,
+                                                 current_peer);
 
-                        program_state.add_active(current_connection, current_peer);
+                        message_ping msg_ping;
+                        msg_ping.nodeid = NodeID;
+                        sk.send(current_peer, msg_ping);
 
                         fixed_local_port = current_connection.local.port;
 
                         ip_address to_listen(current_connection.local,
                                              current_connection.type);
                         program_state.add_passive(to_listen);
-
-                        if (initiated_connection)
-                        {
-                            peer_state state;
-                            if (program_state.get_active_value(current_peer, state))
-                            {
-                                //  can set a state, to know what to do next time
-                                state.requested = message_ping::rtt;
-                                state.initiated_connection = initiated_connection;
-                                program_state.set_active_value(current_peer, state);
-                            }
-
-                            message_ping msg_ping;
-                            msg_ping.nodeid = NodeID;
-                            sk.send(current_peer, msg_ping);
-                        }
                     }
                     else
                     {
                         sk.send(current_peer, message_drop());
                         current_connection.local.port = fixed_local_port;
                         program_state.add_passive(current_connection);
-
-                        peer_state state;
-                        state.initiated_connection = initiated_connection;
-                        program_state.set_value(current_connection, state);
                     }
 
                     break;
@@ -809,28 +877,30 @@ int main(int argc, char* argv[])
                          << current_connection.to_string()
                          << endl;
                     cout << "dropping " << current_peer << endl;
-                    program_state.remove(current_peer);
+                    program_state.remove_later(current_peer);
                     sk.send(current_peer, message_drop());
                     break;
                 }
                 case message_drop::rtt:
                 {
                     cout << "dropped " << current_peer << endl;
-                    program_state.remove(current_peer);
+                    program_state.remove_later(current_peer);
                     break;
                 }
                 case message_ping::rtt:
                 {
                     cout << "ping received" << endl;
                     message_ping msg;
-                    packet.get<message_ping>(msg);
+                    packet.get(msg);
 
-                    if (iNodeID == typename Konnection<>::distance_type{msg.nodeid.c_str()})
-                        break; // discard ping from self
-
-                    Konnection<> k{msg.nodeid, current_connection, {current_peer, "ping"}, {}};
-                    if (kbucket.insert(k))
+                    Konnection<> k{msg.nodeid, current_connection, {}};
+                    if (kbucket.find(k) != kbucket.end() ||
+                        kbucket.insert(k))
                     {
+                        peer_state value;
+                        value.node_id = msg.nodeid;
+                        program_state.set_active_value(current_peer, value);
+
                         message_pong msg_pong;
                         msg_pong.nodeid = NodeID;
                         sk.send(current_peer, msg_pong);
@@ -838,6 +908,7 @@ int main(int argc, char* argv[])
                     else
                     {
                         sk.send(current_peer, message_drop());
+                        program_state.remove_later(current_peer);
                     }
                     break;
                 }
@@ -845,65 +916,97 @@ int main(int argc, char* argv[])
                 {
                     cout << "pong received" << endl;
                     message_pong msg;
-                    packet.get<message_pong>(msg);
+                    packet.get(msg);
 
                     if (iNodeID == typename Konnection<>::distance_type{msg.nodeid.c_str()})
                         break;
 
                     Konnection<> k(msg.nodeid,
                                    current_connection,
-                                    {current_peer, msg.nodeid }, t_now);
+                                   t_now);
                     kbucket.replace(k);
+
+                    message_find_node msg_fn;
+                    msg_fn.nodeid = NodeID;
+                    sk.send(current_peer, msg_fn);
+
                     break;
                 }
-                case message_C_find_node::rtt:
+                case message_find_node::rtt:
                 {
-                    message_C_find_node msg;
-                    packet.get<message_C_find_node>(msg);
+                    message_find_node msg;
+                    packet.get(msg);
 
-                    Konnection<> k{msg.nodeid};
-//                    kbucket.insert(k);
-                    auto nodes = kbucket.find_nearest_to(k, false);
+                    Konnection<> k(msg.nodeid);
+                    auto konnections = kbucket.find_nearest_to(k, false);
 
-                    for (auto const &node : nodes)
+                    for (Konnection<> const& konnection_item : konnections)
                     {
-                        message_R_find_node response;
-                        response.mediator_nodeid = NodeID;
-                        response.discovered_nodeid = node;
+                        if (static_cast<ip_address>(konnection_item) ==
+                            current_connection)
+                            continue;
+
+                        message_node_details response;
+                        response.nodeid = string(konnection_item);
                         sk.send(current_peer, response);
                     }
                     break;
                 }
-                case message_R_find_node::rtt:
+                case message_node_details::rtt:
                 {
-                    message_R_find_node msg;
-                    packet.get<message_R_find_node>(msg);
+                    message_node_details msg;
+                    packet.get(msg);
 
-                    if(auto short_list_ = short_list.lock())
+                    Konnection<> msg_konnection(msg.nodeid);
+                    if (kbucket.end() == kbucket.find(msg_konnection))
                     {
-                        auto k = Konnection<>(msg.discovered_nodeid, {}, {current_peer, "message_R_find_node"}, t_now);
-                        if (short_list_->probe(k) == KBucket<Konnection<>>::probe_result::IS_NEW)
+                        // ask the current_peer to introduce me with msg.nodeid
+                        message_introduce_to msg_intro;
+                        msg_intro.nodeid = msg.nodeid;
+                        sk.send(current_peer, msg_intro);
+                    }
+                    break;
+                }
+                case message_introduce_to::rtt:
+                {
+                    message_introduce_to msg;
+                    packet.get(msg);
+
+                    Konnection<> msg_konnection(msg.nodeid);
+                    auto it_find = kbucket.find(msg_konnection);
+                    if (it_find != kbucket.end())
+                    {
+                        ip_address msg_konnection_addr =
+                                static_cast<ip_address>(*it_find);
+                        message_open_connection_with msg_open;
+
+                        assign(msg_open.addr, msg_konnection_addr);
+
+                        sk.send(current_peer, msg_open);
+
+                        peer_id msg_peer_id;
+                        if (program_state.get_peer_id(msg_konnection_addr, msg_peer_id))
                         {
-                            message_C_intro_node c_intro;
-                            c_intro.nodeid = msg.discovered_nodeid;
-                            sk.send(current_peer, c_intro);
-                        };
+                            msg_open.addr = current_connection;
+                            sk.send(msg_peer_id, msg_open);
+                        }
                     }
                     break;
                 }
-                case message_R_intro_node::rtt:
+                case message_open_connection_with::rtt:
                 {
-                    message_R_intro_node msg;
-                    packet.get<message_R_intro_node>(msg);
+                    message_open_connection_with msg;
+                    packet.get(msg);
 
-                    if(auto short_list_ = short_list.lock())
-                    {
-                        auto k = Konnection<>(msg.nodeid, {}, {current_peer, "message_R_intro_node"}, t_now);
-                        short_list_->insert(k);
-                    }
+                    ip_address connect_to;
+                    assign(connect_to, msg.addr);
+                    connect_to.local = current_connection.local;
+                    peer_state state;
+                    state.open_attempts = 100;
+                    program_state.add_passive(connect_to, state);
                     break;
                 }
-                case message_time_out::rtt:
+                case message_timer_out::rtt:
                 {
                     auto connected = program_state.get_connected();
                     for (auto const& item : connected)
@@ -912,10 +1015,10 @@ int main(int argc, char* argv[])
                         msg_ping.nodeid = NodeID;
                         sk.send(item.get_peer(), msg_ping);
 
-                        /*if (item.second.str_hi_message.empty())
-                        {
-                            cout << "WARNING: never got message from peer " << item.first.to_string() << endl;
-                        }*/
+                        //if (item.second.str_hi_message.empty())
+                        //{
+                        //    cout << "WARNING: never got message from peer " << item.first.to_string() << endl;
+                        //}
                     }
                     break;
                 }
