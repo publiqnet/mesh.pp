@@ -287,7 +287,7 @@ void KBucket<Contact, K>::print_list()
     auto & contacts_by_distance = contacts.template get<by_distance>();
     for(auto &it : contacts_by_distance)
     {
-        std::cout<<"index: "<<it.index()<<", id: "<<it.value()<<", dist: "<<it.distance()<<"\n";
+        std::cout<<"index: "<<it.index()<<", id: "<<Contact::to_string(it.value()).substr(0, 5) << std::endl;//<<", dist: "<<it.distance()<<"\n";
     };
 }
 

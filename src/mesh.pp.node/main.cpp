@@ -461,10 +461,11 @@ public:
         }
 
         std::sort(indices.begin(), indices.end());
-        for (size_t index = indices.size() - 1;
-             index >= 0 && index < indices.size();
-             --index)
+        for (size_t indices_index = indices.size() - 1;
+             indices_index >= 0 && indices_index < indices.size();
+             --indices_index)
         {
+            size_t index = indices[indices_index];
             peers.erase(peers.begin() + index);
 
             remove_from_set(index, set_to_connect);
@@ -747,7 +748,7 @@ int main(int argc, char* argv[])
             }
 
             if (0 == receive_attempt_count)
-                cout << NodeID << " reading...";
+                cout << NodeID.substr(0, 5) << " reading...";
             else
                 cout << " " << receive_attempt_count << "...";
 
@@ -789,6 +790,7 @@ int main(int argc, char* argv[])
 
                         message_ping msg_ping;
                         msg_ping.nodeid = NodeID;
+                        cout << "sending ping" << endl;
                         sk.send(current_peer, msg_ping);
 
                         fixed_local_port = current_connection.local.port;
@@ -842,8 +844,9 @@ int main(int argc, char* argv[])
                     }
                     else
                     {
-                        sk.send(current_peer, message_drop());
+                        cout << "kbucket insert gave false" << endl;
                         program_state.remove_later(current_peer);
+                        sk.send(current_peer, message_drop());
                     }
                     break;
                 }
@@ -861,6 +864,7 @@ int main(int argc, char* argv[])
                                    t_now);
                     kbucket.replace(k);
 
+                    cout << "sending find node" << endl;
                     message_find_node msg_fn;
                     msg_fn.nodeid = NodeID;
                     sk.send(current_peer, msg_fn);
@@ -869,6 +873,7 @@ int main(int argc, char* argv[])
                 }
                 case message_find_node::rtt:
                 {
+                    cout << "find node received" << endl;
                     message_find_node msg;
                     packet.get(msg);
 
@@ -883,12 +888,16 @@ int main(int argc, char* argv[])
 
                         message_node_details response;
                         response.nodeid = string(konnection_item);
+
+                        cout << "sending node details " <<
+                                response.nodeid.substr(0, 5) << "..." << endl;
                         sk.send(current_peer, response);
                     }
                     break;
                 }
                 case message_node_details::rtt:
                 {
+                    cout << "node details received" << endl;
                     message_node_details msg;
                     packet.get(msg);
 
@@ -896,6 +905,7 @@ int main(int argc, char* argv[])
                     if (kbucket.end() == kbucket.find(msg_konnection))
                     {
                         // ask the current_peer to introduce me with msg.nodeid
+                        cout << "sending introduction request" << endl;
                         message_introduce_to msg_intro;
                         msg_intro.nodeid = msg.nodeid;
                         sk.send(current_peer, msg_intro);
@@ -904,6 +914,7 @@ int main(int argc, char* argv[])
                 }
                 case message_introduce_to::rtt:
                 {
+                    cout << "introduce request received" << endl;
                     message_introduce_to msg;
                     packet.get(msg);
 
@@ -914,6 +925,9 @@ int main(int argc, char* argv[])
                         msg_konnection = Konnection<>(*it_find);
                         ip_address msg_konnection_addr = msg_konnection.get_ip_address();
                         message_open_connection_with msg_open;
+
+                        cout << "sending connect info " <<
+                                msg_konnection_addr.to_string() << endl;
 
                         assign(msg_open.addr, msg_konnection_addr);
 
@@ -930,6 +944,8 @@ int main(int argc, char* argv[])
                 }
                 case message_open_connection_with::rtt:
                 {
+                    cout << "connect info received" << endl;
+
                     message_open_connection_with msg;
                     packet.get(msg);
 
@@ -991,19 +1007,6 @@ int main(int argc, char* argv[])
                 kbucket.print_list();
                 cout<<"========\n";
             }
-
-#if ITERATIVE_FIND_NODE
-            iterative_find_node (Konnection<> node_to_search)
-            {
-                short_list = std::make_shared<KBucket<>>(node_to_search);
-                short_list->fill(kbucket);
-
-                for( auto n = short_list->begin(), p = short_list->end(); n != short_list->end() && p != n; p = n, n = short_list->begin())
-                {
-
-                }
-            }
-#endif
         }}
         catch(std::exception const& ex)
         {
