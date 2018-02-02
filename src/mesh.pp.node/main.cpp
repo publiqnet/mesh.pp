@@ -462,7 +462,7 @@ public:
 
         std::sort(indices.begin(), indices.end());
         for (size_t indices_index = indices.size() - 1;
-             indices_index >= 0 && indices_index < indices.size();
+             indices_index < indices.size();
              --indices_index)
         {
             size_t index = indices[indices_index];
