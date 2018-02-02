@@ -1,6 +1,7 @@
 #include "message.hpp"
-#include "konnection.hpp"
 
+#include "nodelookup.hpp"
+#include "konnection.hpp"
 #include <kbucket/kbucket.hpp>
 
 #include <belt.pp/packet.hpp>
@@ -44,6 +45,24 @@ using chrono::steady_clock;
 using boost::optional;
 
 using namespace meshpp_message;
+
+template< typename T1, typename T2, template<typename, typename...> class C1, template<typename, typename...> class C2,
+          class Cr = C1<std::pair<T1, T2>>>
+Cr zip (C1<T1> const & c1, C2<T2> const & c2)
+{
+//    static_assert(std::is_same<C1<std::pair<T1, T2>>, C2<std::pair<T1, T2>>>::value, "containers should be the same");
+    Cr result {};
+
+    auto _begin1 = std::begin(c1);
+    auto const & _end1 = std::end(c1);
+    auto _begin2 = std::begin(c2);
+    auto const & _end2 = std::end(c2);
+    for ( ; _begin1 != _end1 && _begin2 != _end2; ++_begin1, ++_begin2)
+    {
+        result.emplace_back(*_begin1, *_begin2);
+    }
+    return result;
+}
 
 using sf = beltpp::socket_family_t<
     message_error::rtt,
@@ -294,8 +313,7 @@ public:
 
             peers.emplace_back(item);
             size_t index = peers.size() - 1;
-            auto by_addr_res =
-                    map_by_address.insert(std::make_pair(addr, index));
+//            auto by_addr_res = map_by_address.insert(std::make_pair(addr, index));
             insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
 
             assert(by_addr_res.second);
@@ -637,6 +655,8 @@ public:
     unordered_map<size_t, pair<size_t, bool>> map_to_remove;
 };
 
+
+
 int main(int argc, char* argv[])
 {
     /*message_string mstr;
@@ -754,6 +774,9 @@ int main(int argc, char* argv[])
         Konnection<> self {iNodeID};
         KBucket<Konnection<>> kbucket{self};
 
+
+        NodeLookup node_lookup{kbucket};
+
         beltpp::socket sk = beltpp::getsocket<sf>();
         sk.set_timer(std::chrono::seconds(10));
 
@@ -799,7 +822,7 @@ int main(int argc, char* argv[])
 
             auto to_listen = program_state.get_to_listen();
             auto iter_listen = to_listen.begin();
-            for (; iter_listen != to_listen.end(); ++iter_listen)
+            for ( ; iter_listen != to_listen.end(); ++iter_listen)
             {
                 auto item = *iter_listen;
 
@@ -875,7 +898,7 @@ int main(int argc, char* argv[])
             else
                 ++receive_attempt_count;
 
-            auto t_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            auto t_now = std::chrono::system_clock::now();
 
             for (auto const& packet : received_packets)
             {
@@ -931,7 +954,7 @@ int main(int argc, char* argv[])
                     message_ping msg;
                     packet.get(msg);
 
-                    Konnection<> k{msg.nodeid, current_connection, {}};
+                    Konnection<> k{msg.nodeid, current_peer, {}};
                     if (kbucket.find(k) != kbucket.end() ||
                         kbucket.insert(k))
                     {
@@ -957,13 +980,12 @@ int main(int argc, char* argv[])
                     message_pong msg;
                     packet.get(msg);
 
-                    if (iNodeID == typename Konnection<>::distance_type{msg.nodeid.c_str()})
+                    if (SelfID == msg.nodeid)
                         break;
 
-                    Konnection<> k(msg.nodeid,
-                                   current_connection,
-                                   t_now);
+                    Konnection<> k(msg.nodeid, current_peer, t_now);
                     kbucket.replace(k);
+                    node_lookup.update_peer(k);
 
                     cout << "sending find node" << endl;
                     message_find_node msg_fn;
@@ -979,21 +1001,15 @@ int main(int argc, char* argv[])
                     packet.get(msg);
 
                     Konnection<> k(msg.nodeid);
-                    auto konnections = kbucket.find_nearest_to(k, false);
-
+                    auto konnections = kbucket.list_nearests_to(k, false);
+                    message_node_details response;
+                    response.origin = SelfID;
                     for (Konnection<> const& konnection_item : konnections)
-                    {
-                        if (konnection_item.get_ip_address() ==
-                            current_connection)
-                            continue;
+                        response.nodeid.push_back(string(konnection_item));
 
-                        message_node_details response;
-                        response.nodeid = string(konnection_item);
 
-                        cout << "sending node details " <<
-                                response.nodeid.substr(0, 5) << "..." << endl;
-                        sk.send(current_peer, response);
-                    }
+                    //cout << "sending node details " << response.nodeid.substr(0, 5) << "..." << endl;
+                    sk.send(current_peer, response);
                     break;
                 }
                 case message_node_details::rtt:
@@ -1002,15 +1018,34 @@ int main(int argc, char* argv[])
                     message_node_details msg;
                     packet.get(msg);
 
-                    Konnection<> msg_konnection(msg.nodeid);
-                    if (kbucket.end() == kbucket.find(msg_konnection))
+                    Konnection<> from{msg.origin, current_peer, t_now};
+                    std::vector<Konnection<> const> _konnections;
+                    for (auto const & nodeid : msg.nodeid)
                     {
-                        // ask the current_peer to introduce me with msg.nodeid
-                        cout << "sending introduction request" << endl;
+                        if (nodeid == SelfID)   // skip ourself if it happens the we are one of the closest nodes
+                            continue;
+                        Konnection<> _konnection{nodeid};
+                        if (KBucket<Konnection<>>::probe_result::IS_NEW == kbucket.probe(_konnection))
+                        {
+                            message_introduce_to msg_intro;
+                            msg_intro.nodeid = static_cast<std::string>(_konnection);
+                            sk.send(current_peer, msg_intro);
+                        }
+
+                        _konnections.push_back(_konnection);
+                    }
+
+                    node_lookup.add_konnections(from, _konnections);
+
+                    /* NODE LOOKUP MAINTENANCE */
+                    auto const & orphans = node_lookup.orphan_list();
+                    for (auto const & li : orphans)
+                    {
                         message_introduce_to msg_intro;
-                        msg_intro.nodeid = msg.nodeid;
+                        msg_intro.nodeid = static_cast<std::string>(li);
                         sk.send(current_peer, msg_intro);
                     }
+
                     break;
                 }
                 case message_introduce_to::rtt:
@@ -1024,7 +1059,9 @@ int main(int argc, char* argv[])
                     if (it_find != kbucket.end())
                     {
                         msg_konnection = Konnection<>(*it_find);
-                        ip_address msg_konnection_addr = msg_konnection.get_ip_address();
+                        auto msg_peer_id = msg_konnection.get_peer();
+
+                        ip_address msg_konnection_addr = sk.info(msg_peer_id);
                         message_open_connection_with msg_open;
 
                         cout << "sending connect info " <<
@@ -1034,12 +1071,8 @@ int main(int argc, char* argv[])
 
                         sk.send(current_peer, msg_open);
 
-                        peer_id msg_peer_id;
-                        if (program_state.get_peer_id(msg_konnection_addr, msg_peer_id))
-                        {
-                            msg_open.addr = current_connection;
-                            sk.send(msg_peer_id, msg_open);
-                        }
+                        msg_open.addr = current_connection;
+                        sk.send(msg_peer_id, msg_open);
                     }
                     break;
                 }
@@ -1077,6 +1110,59 @@ int main(int argc, char* argv[])
                     break;
                 }
                 }
+
+            }
+
+            if(true) // command to find some node)
+            {
+                std::string q_node = {};
+
+                if ( node_lookup.list().empty() and
+                     node_lookup.get_konnections().empty() and
+                     not q_node.empty() and
+                     not node_lookup
+                     )
+                {
+                    Konnection<> konnection {q_node};
+                    node_lookup.init(konnection);
+                    for (auto const & _konnection : node_lookup.list())
+                    {
+                        message_find_node msg;
+                        msg.nodeid = static_cast<std::string>(_konnection);
+                        sk.send(_konnection.get_peer(), msg);
+                    }
+                    q_node = {};
+                }
+                else if ( not node_lookup.get_konnections().empty() and
+                          not node_lookup.list().empty() and
+                          node_lookup
+                          )
+                {
+                    /* NOOP */ ;
+                }
+                else if ( not node_lookup.get_konnections().empty() and
+                          not node_lookup.list().empty() and
+                          not node_lookup
+                          )
+                {
+                    std::cout << "final list";
+                    for (auto const & _konnection : node_lookup.list())
+                    {
+                        message_ping msg;
+                        msg.nodeid = static_cast<std::string>(_konnection);
+                        sk.send(_konnection.get_peer(), msg);
+                    }
+
+                    for (auto const & _konnection : node_lookup.drop_list())
+                    {
+                        message_drop msg;
+                        //                        msg.nodeid = static_cast<std::string>(_konnection);
+                        sk.send(_konnection.get_peer(), msg);
+                    }
+
+                    node_lookup.reset();
+                }
+
             }
 
             /*if (read_packets.empty())
@@ -1109,7 +1195,9 @@ int main(int argc, char* argv[])
                 cout<<"KBucket list\n--------\n";
                 kbucket.print_list();
                 cout<<"========\n";
+
             }
+
         }}
         catch(std::exception const& ex)
         {

@@ -9,11 +9,11 @@
 #include <sstream>
 #include <string>
 
-using beltpp::ip_address;
-
+using peer_id = beltpp::socket::peer_id;
+using ip_address = beltpp::ip_address;
 using std::string;
 
-template <class T_node_id_type = CryptoPP::Integer, class  age_type_ = std::time_t>
+template <class T_node_id_type = CryptoPP::Integer, class  age_type_ = std::chrono::time_point<std::chrono::system_clock>>
 struct Konnection: public std::enable_shared_from_this<Konnection<T_node_id_type, age_type_>>
 {
     using node_id_type = T_node_id_type;
@@ -23,50 +23,56 @@ struct Konnection: public std::enable_shared_from_this<Konnection<T_node_id_type
     static node_id_type distance(const node_id_type& a, const node_id_type& b);
     static std::string to_string(const node_id_type& n);
 
-    Konnection(node_id_type const& nd_id = {},
-               ip_address const& addr = {},
+    Konnection(node_id_type const& node_id = {},
+               peer_id const& peer = {},
                age_type age = {})
-        : node_id(nd_id)
-        , age_(age)
-        , address(addr)
+        : _node_id(node_id)
+        , _peer(peer)
+        , _age(age)
     {}
 
-    Konnection(string const &nd_id,
-               ip_address const & addr = {},
+    explicit Konnection(std::string const &nd_id,
+               peer_id const& peer = {},
                age_type age = {})
-        : node_id(nd_id.c_str())
-        , age_(age)
-        , address(addr)
+        : Konnection {node_id_type{nd_id.c_str()}, peer, age}
     {}
 
-    node_id_type distance_from (const Konnection &r) const { return distance(node_id, r.node_id); }
+    node_id_type distance_from (const Konnection &r) const { return distance(_node_id, r._node_id); }
     bool is_same(const Konnection &r) const { return distance_from(r) == node_id_type(); }
-    age_type age() const   { return age_; }
 
     std::shared_ptr<const Konnection<node_id_type, age_type>> get_ptr() const { return this->shared_from_this(); }
 
-    node_id_type get_id() const { return node_id; }
-    void set_id(const node_id_type& nd_id) { node_id = nd_id; }
-    void set_id(const string &nd_id) { node_id = node_id_type(nd_id.c_str()); }
-
-    bool operator == (const Konnection &r) const { return is_same(r); }
-    operator string() const { return to_string(get_id()); }
-
 public:
-    ip_address get_ip_address() const;
+    //GET
+    node_id_type get_id() const { return _node_id; }
+    peer_id get_peer() const { return _peer; }
+    age_type age() const { return _age; }
+    //SET
+    void set_access_time(age_type const & age) { _age = age; }
+    void set_id(const node_id_type& nd_id) { _node_id = nd_id; }
+    void set_id(const string &nd_id) { _node_id = node_id_type(nd_id.c_str()); }
+    //CONV
+    operator std::string() const { return to_string(get_id()); }
+    operator bool() const { return get_id() != node_id_type{}; }
 
 private:
-    node_id_type node_id;
-    age_type age_;
-    ip_address address;
+    node_id_type _node_id;
+    peer_id _peer;
+    ip_address _address;
+    age_type _age;
 };
 
+template<typename... T>
+bool operator <(const Konnection<T...> &l, const Konnection<T...> &r) { return l.get_id() < r.get_id(); }
 
-template <class T_node_id_type, class  age_type_>
-ip_address Konnection<T_node_id_type, age_type_>::get_ip_address() const
-{
-    return address;
-}
+template<typename... T>
+bool operator ==(const Konnection<T...> &l, const Konnection<T...> &r) { return not (l < r and r < l); }
+
+template<typename... T>
+bool operator ==(const Konnection<T...> &l, const std::string &r) { return l == Konnection<T...>{r}; }
+
+template<typename... T>
+bool operator ==(const std::string &l, const Konnection<T...> &r) { return r == l; }
 
 template <class T_node_id_type, class  age_type_>
 std::string Konnection<T_node_id_type, age_type_>::to_string(const T_node_id_type& n)

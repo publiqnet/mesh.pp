@@ -30,7 +30,8 @@ type message_find_node struct
 }
 type message_node_details struct
 {
-    nodeid string
+    origin string
+    nodeid []string
 }
 type message_introduce_to struct
 {
@@ -61,4 +62,8 @@ type message_stamp struct
 {
     obj meshpp_message
     stamp time
+}
+type message_lookup_node struct
+{
+    nodeid string
 }

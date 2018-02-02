@@ -1,3 +1,5 @@
+#pragma once
+
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/member.hpp>
@@ -65,13 +67,13 @@ class KBucket
     struct by_age {};
 
     using ContactIndex = bmi::multi_index_container<ContactHandle, bmi::indexed_by<
-        bmi::ordered_non_unique<bmi::tag<by_age>, bmi::composite_key<ContactHandle,
-            bmi::const_mem_fun<ContactHandle, index_type, &ContactHandle::index>,
-            bmi::const_mem_fun<ContactHandle, age_type, &ContactHandle::age>
-        >>,
         bmi::ordered_unique<bmi::tag<by_distance>, bmi::composite_key<ContactHandle,
             bmi::const_mem_fun<ContactHandle, index_type, &ContactHandle::index>,
             bmi::const_mem_fun<ContactHandle, distance_type, &ContactHandle::distance>
+        >>,
+        bmi::ordered_non_unique<bmi::tag<by_age>, bmi::composite_key<ContactHandle,
+            bmi::const_mem_fun<ContactHandle, index_type, &ContactHandle::index>,
+            bmi::const_mem_fun<ContactHandle, age_type, &ContactHandle::age>
         >>
     >>;
 
@@ -82,12 +84,13 @@ public:
     enum { LEVELS = K };
     enum class probe_result { IS_NEW, IS_ORIGIN, IS_FULL, IS_EXPIRED };
 
-    iterator end() { return contacts.end(); }
-    iterator begin() { return contacts.begin(); }
+    iterator end() const { return contacts.end(); }
+    iterator begin() const { return contacts.begin(); }
 
     const_iterator cend() const { return contacts.cend(); }
     const_iterator cbegin() const { return contacts.cbegin(); }
 
+    KBucket() : origin{} {}
     KBucket(const Contact &origin_) : origin{origin_} {}
     KBucket(Contact &&origin_) : origin{std::move(origin_)} {}
     KBucket<Contact, K> rebase(const Contact &new_origin, bool include_origin = true) const;
@@ -97,18 +100,23 @@ public:
     bool insert(const std::shared_ptr<const Contact>& contact);
     bool insert(Contact contact);
 
+    iterator erase(const iterator& pos);
+    iterator erase(const iterator& first, const iterator &last);
     iterator erase(const Contact &contact);
+
+    void clear() { ContactIndex{}.swap(contacts); }
+
     bool replace(const Contact& contact);
 
     void print_list();
     iterator find(const Contact& contact);
-    std::vector<Contact> find_nearest_to(const Contact &contact, bool prefer_same_index = false);
-    std::vector<Contact> find_closest();
+    std::vector<Contact> list_nearests_to(const Contact &contact, bool prefer_same_index = false) const;
+    std::vector<Contact> list_closests() const;
     const Contact& operator[](const distance_type& key) const;
 
 private:
     ContactIndex contacts;
-    const Contact origin;
+    Contact origin;
 
     class ContactHandle
     {
@@ -236,16 +244,28 @@ bool KBucket<Contact, K>::insert(Contact contact)
 }
 
 template <class Contact, int K>
+typename KBucket<Contact, K>::iterator KBucket<Contact, K>::erase(const iterator& pos)
+{
+    return contacts.erase(pos);
+}
+
+template <class Contact, int K>
+typename KBucket<Contact, K>::iterator KBucket<Contact, K>::erase(const iterator& first, const iterator& last)
+{
+    return contacts.erase(first, last);
+}
+
+template <class Contact, int K>
 typename KBucket<Contact, K>::iterator KBucket<Contact, K>::erase(const Contact& contact)
 {
     auto it = find(contact);
     if (it != end())
-        return contacts.erase(it);
+        return erase(it);
     return it;
 }
 
 template< class SrcIt, class DstIt >
-DstIt copy_cycle( SrcIt pivot, SrcIt first, SrcIt last, DstIt d_first, DstIt d_last )
+DstIt loop_copy(SrcIt pivot, SrcIt first, SrcIt last, DstIt d_first, DstIt d_last)
 {
     for (auto it = pivot; it != last && d_first != d_last; ++it)
         *d_first++ = *it;
@@ -256,7 +276,7 @@ DstIt copy_cycle( SrcIt pivot, SrcIt first, SrcIt last, DstIt d_first, DstIt d_l
 }
 
 template <class Contact, int K>
-std::vector<Contact> KBucket<Contact, K>::find_nearest_to(const Contact& contact, bool prefer_same_index)
+std::vector<Contact> KBucket<Contact, K>::list_nearests_to(const Contact& contact, bool prefer_same_index) const
 {
     auto & contacts_by_distance = contacts.template get<by_distance>();
 
@@ -269,7 +289,7 @@ std::vector<Contact> KBucket<Contact, K>::find_nearest_to(const Contact& contact
         it = std::find_if(std::begin(contacts_by_distance), std::end(contacts_by_distance),
                          [&index_](const ContactHandle &a){ return index_ == a.index(); } );
     }
-    auto result_end = copy_cycle(it, std::begin(contacts_by_distance), std::end(contacts_by_distance),
+    auto result_end = loop_copy(it, std::begin(contacts_by_distance), std::end(contacts_by_distance),
                    std::begin(result), std::end(result));
 
     result.erase(result_end, std::end(result));
@@ -277,9 +297,9 @@ std::vector<Contact> KBucket<Contact, K>::find_nearest_to(const Contact& contact
 }
 
 template <class Contact, int K>
-std::vector<Contact> KBucket<Contact, K>::find_closest()
+std::vector<Contact> KBucket<Contact, K>::list_closests() const
 {
-    return find_nearest_to(origin, false);
+    return list_nearests_to(origin, false);
 }
 
 template <class Contact, int K>
