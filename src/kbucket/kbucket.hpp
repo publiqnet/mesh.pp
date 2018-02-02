@@ -78,16 +78,19 @@ class KBucket
 public:
     using iterator = typename ContactIndex::iterator;
     using const_iterator = typename ContactIndex::const_iterator;
-    enum class probe_result { IS_NEW, IS_ORIGIN, IS_FULL, IS_OUTDATED };
+
+    enum { LEVELS = K };
+    enum class probe_result { IS_NEW, IS_ORIGIN, IS_FULL, IS_EXPIRED };
 
     iterator end() { return contacts.end(); }
     iterator begin() { return contacts.begin(); }
 
-    const_iterator cend() const { return contacts.end(); }
-    const_iterator cbegin() const { return contacts.begin(); }
+    const_iterator cend() const { return contacts.cend(); }
+    const_iterator cbegin() const { return contacts.cbegin(); }
 
     KBucket(const Contact &origin_) : origin{origin_} {}
     KBucket(Contact &&origin_) : origin{std::move(origin_)} {}
+    KBucket<Contact, K> rebase(const Contact &new_origin, bool include_origin = true) const;
 
     probe_result probe(const Contact &) const;
 
@@ -102,7 +105,6 @@ public:
     std::vector<Contact> find_nearest_to(const Contact &contact, bool prefer_same_index = false);
     std::vector<Contact> find_closest();
     const Contact& operator[](const distance_type& key) const;
-
 
 private:
     ContactIndex contacts;
@@ -136,6 +138,25 @@ private:
 };
 
 
+template <class Contact, int K>
+KBucket<Contact, K> KBucket<Contact, K>::rebase(const Contact &new_origin, bool include_origin) const
+{
+    KBucket<Contact, K> result(new_origin);
+
+    if (new_origin == this->origin)
+        return *this;
+
+    if(include_origin)
+        result.insert(this->origin);
+
+    for(auto c = cbegin(); c != cend(); ++c)
+    {
+        if (c->value() != new_origin.get_id())
+            result.insert(*c);
+    }
+
+    return result;
+}
 
 template <class Contact, int K>
 typename KBucket<Contact, K>::probe_result KBucket<Contact, K>::probe(const Contact& contact) const
@@ -155,7 +176,7 @@ typename KBucket<Contact, K>::probe_result KBucket<Contact, K>::probe(const Cont
     auto it = std::find_if(cbegin(), cend(), eq_index);
 
     if (actions::age(*it) == actions::not_accessible())
-        return probe_result::IS_OUTDATED;
+        return probe_result::IS_EXPIRED;
 
     return probe_result::IS_NEW;
 }
@@ -170,7 +191,7 @@ bool KBucket<Contact, K>::insert(const std::shared_ptr<const Contact>& contact)
         return false;
     case probe_result::IS_FULL:
         return false;
-    case probe_result::IS_OUTDATED:
+    case probe_result::IS_EXPIRED:
         return replace(ContactHandle{this, contact->get_ptr()});
     case probe_result::IS_NEW:
     default:
