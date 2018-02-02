@@ -1,4 +1,5 @@
 #include "message.hpp"
+#include "konnection.hpp"
 
 #include <kbucket/kbucket.hpp>
 
@@ -150,72 +151,6 @@ bool operator == (ip_address const& l, ip_address const& r) noexcept
             l.type == r.type);
 }
 }
-
-template <class distance_type_ = CryptoPP::Integer, class  age_type_ = std::time_t>
-struct Konnection: public ip_address, std::enable_shared_from_this<Konnection<distance_type_, age_type_>>
-{
-    using distance_type = distance_type_;
-    using age_type = age_type_;
-
-    static distance_type distance(const distance_type& a, const distance_type& b)
-    {
-        //  hopefully temporary
-        if (&a == &b)
-        {
-            return CryptoPP::Integer::Zero();
-        }
-        else
-        {
-            auto abs_a = a.AbsoluteValue(), abs_b = b.AbsoluteValue();
-            CryptoPP::Integer result(abs_a);
-            if (abs_b > abs_a)
-                result = abs_b;
-            size_t size_a = abs_a.ByteCount();
-            size_t size_b = abs_b.ByteCount();
-            size_t size = std::max(size_a, size_b);
-            for (size_t index = 0; index < size; ++index)
-            {
-                unsigned char byte_a = 0, byte_b = 0;
-                if (index <= size_a)
-                    byte_a = abs_a.GetByte(index);
-                if (index <= size_b)
-                    byte_b = abs_b.GetByte(index);
-
-                result.SetByte(index, byte_a ^ byte_b);
-            }
-
-            return result;
-        }
-    }
-    static std::string distance_to_string(const distance_type& n)
-    {
-        std::ostringstream os;
-        os << /*std::hex <<*/ n;
-        return os.str();
-    }
-
-    operator string() const { return distance_to_string(get_id()); }
-
-    Konnection(distance_type_ const &d = {}, ip_address const & c = {}, age_type age = {}):
-        ip_address{c}, value{ d }, age_{age} {}
-
-    Konnection(string &d, ip_address const & c = {}, age_type age = {}):
-        ip_address{c}, value{ d.c_str() }, age_{age} {}
-
-    distance_type distance_from (const Konnection &r) const { return distance(value, r.value); }
-    bool is_same(const Konnection &r) const { return distance_from(r) == distance_type{}; }
-    age_type age() const   { return age_; }
-
-    std::shared_ptr<const Konnection<distance_type_, age_type_>> get_ptr() const { return this->shared_from_this(); }
-
-    distance_type_ get_id() const { return value; }
-    void set_id(const distance_type_ & v) { value = v; }
-    void set_id(const string &v ) { value = distance_type_{v.c_str()}; }
-
-private:
-    distance_type value;
-    age_type age_;
-};
 
 class peer_state
 {
@@ -670,7 +605,7 @@ int main(int argc, char* argv[])
 
         string option_bind, option_connect;
 
-        const string NodeID(Konnection<>::distance_to_string(iNodeID));
+        const string NodeID(Konnection<>::to_string(iNodeID));
 
         if (NodeID.empty())
             throw std::runtime_error("something wrong with nodeid");
@@ -942,7 +877,7 @@ int main(int argc, char* argv[])
 
                     for (Konnection<> const& konnection_item : konnections)
                     {
-                        if (static_cast<ip_address>(konnection_item) ==
+                        if (konnection_item.get_ip_address() ==
                             current_connection)
                             continue;
 
@@ -976,8 +911,8 @@ int main(int argc, char* argv[])
                     auto it_find = kbucket.find(msg_konnection);
                     if (it_find != kbucket.end())
                     {
-                        ip_address msg_konnection_addr =
-                                static_cast<ip_address>(*it_find);
+                        msg_konnection = Konnection<>(*it_find);
+                        ip_address msg_konnection_addr = msg_konnection.get_ip_address();
                         message_open_connection_with msg_open;
 
                         assign(msg_open.addr, msg_konnection_addr);
