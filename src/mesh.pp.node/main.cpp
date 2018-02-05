@@ -23,9 +23,11 @@
 #include <ctime>
 #include <sstream>
 #include <chrono>
+#include <utility>
 
 using std::string;
 using std::vector;
+using std::pair;
 using beltpp::ip_address;
 using beltpp::packet;
 using packets = beltpp::socket::packets;
@@ -71,8 +73,8 @@ using sf = beltpp::socket_family_t<
 >;
 
 bool split_address_port(string const& address_port,
-                   string& address,
-                   unsigned short& port)
+                        string& address,
+                        unsigned short& port)
 {
     auto pos = address_port.find(":");
     if (string::npos == pos ||
@@ -305,9 +307,9 @@ public:
         }
         else
         {
-            auto iter_remove = set_to_remove.find(it_find->second);
-            if (iter_remove != set_to_remove.end())
-                set_to_remove.erase(iter_remove);
+            auto iter_remove = map_to_remove.find(it_find->second);
+            if (iter_remove != map_to_remove.end())
+                map_to_remove.erase(iter_remove);
         }
 
         return insert_code::old;
@@ -427,37 +429,71 @@ public:
         return false;
     }
 
-    void remove_later(ip_address const& addr)
+    void do_step()
+    {
+        for (auto& item : map_to_remove)
+        {
+            if (item.second.first != 0)
+                --item.second.first;
+        }
+    }
+
+    void remove_later(ip_address const& addr, size_t step, bool send_drop)
     {
         auto it_find_addr = map_by_address.find(addr);
         if (it_find_addr != map_by_address.end())
         {
-            set_to_remove.insert(it_find_addr->second);
+            map_to_remove.insert({it_find_addr->second, {step, send_drop}});
         }
     }
 
-    void remove_later(peer_id const& p)
+    void remove_later(peer_id const& p, size_t step, bool send_drop)
     {
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
         {
-            set_to_remove.insert(it_find_peer_id->second);
+            map_to_remove.insert({it_find_peer_id->second, {step, send_drop}});
         }
     }
 
-    vector<typename T_value::key_type> remove_pending()
+    void undo_remove(peer_id const& p)
     {
-        vector<typename T_value::key_type> result;
+        auto it_find_peer_id = map_by_peer_id.find(p);
+        if (it_find_peer_id != map_by_peer_id.end())
+        {
+            auto it_remove = map_to_remove.find(it_find_peer_id->second);
+            if (it_remove != map_to_remove.end())
+                map_to_remove.erase(it_remove);
+        }
+    }
+
+    pair<vector<typename T_value::key_type>,
+        vector<peer_id>> remove_pending()
+    {
+        pair<vector<typename T_value::key_type>,
+            vector<peer_id>> result;
         vector<size_t> indices;
 
-        for (size_t index : set_to_remove)
+        auto iter_remove = map_to_remove.begin();
+        while (iter_remove != map_to_remove.end())
         {
+            auto const& pair_item = *iter_remove;
+            if (pair_item.second.first != 0)
+            {
+                ++iter_remove;
+                continue;
+            }
+
+            size_t index = pair_item.first;
             auto const& item = peers[index];
 
             if (item.value.key() != typename T_value::key_type())
-                result.push_back(item.value.key());
+                result.first.push_back(item.value.key());
+            if (iter_remove->second.second)
+                result.second.push_back(item.get_peer());
 
             indices.push_back(index);
+            iter_remove = map_to_remove.erase(iter_remove);
         }
 
         std::sort(indices.begin(), indices.end());
@@ -476,8 +512,6 @@ public:
             remove_from_map(index, map_by_key);
         }
 
-        set_to_remove.clear();
-
         return result;
     }
 
@@ -487,7 +521,9 @@ public:
 
         for (size_t index : set_to_listen)
         {
-            if (set_to_remove.find(index) != set_to_remove.end())
+            auto iter_remove = map_to_remove.find(index);
+            if (iter_remove != map_to_remove.end() &&
+                iter_remove->second.first == 0)
                 continue;
 
             state_item const& item = peers[index];
@@ -503,7 +539,9 @@ public:
 
         for (size_t index : set_to_connect)
         {
-            if (set_to_remove.find(index) != set_to_remove.end())
+            auto iter_remove = map_to_remove.find(index);
+            if (iter_remove != map_to_remove.end() &&
+                iter_remove->second.first == 0)
                 continue;
 
             state_item const& item = peers[index];
@@ -521,7 +559,9 @@ public:
         {
             auto const& item = peers[index];
 
-            if (set_to_remove.find(index) != set_to_remove.end())
+            auto iter_remove = map_to_remove.find(index);
+            if (iter_remove != map_to_remove.end() &&
+                iter_remove->second.first == 0)
                 continue;
 
             if (item.state() == state_item::e_state::active &&
@@ -540,7 +580,9 @@ public:
         {
             auto const& item = peers[index];
 
-            if (set_to_remove.find(index) != set_to_remove.end())
+            auto iter_remove = map_to_remove.find(index);
+            if (iter_remove != map_to_remove.end() &&
+                iter_remove->second.first == 0)
                 continue;
 
             if (item.state() == state_item::e_state::active &&
@@ -583,7 +625,7 @@ public:
     unordered_map<typename T_value::key_type, size_t> map_by_key;
     unordered_set<size_t> set_to_listen;
     unordered_set<size_t> set_to_connect;
-    unordered_set<size_t> set_to_remove;
+    unordered_map<size_t, pair<size_t, bool>> map_to_remove;
 };
 
 int main(int argc, char* argv[])
@@ -690,10 +732,15 @@ int main(int argc, char* argv[])
         while (true)
         {
             auto to_remove = program_state.remove_pending();
-            auto iter_remove = to_remove.begin();
-            for (; iter_remove != to_remove.end(); ++iter_remove)
+            auto iter_remove_kb = to_remove.first.begin();
+            for (; iter_remove_kb != to_remove.first.end(); ++iter_remove_kb)
             {
-                kbucket.erase(Konnection<>(*iter_remove));
+                kbucket.erase(Konnection<>(*iter_remove_kb));
+            }
+            auto iter_remove_sk = to_remove.second.begin();
+            for (; iter_remove_sk != to_remove.second.end(); ++iter_remove_sk)
+            {
+                sk.send(*iter_remove_sk, message_drop());
             }
 
             auto to_listen = program_state.get_to_listen();
@@ -702,7 +749,7 @@ int main(int argc, char* argv[])
             {
                 auto item = *iter_listen;
 
-                program_state.remove_later(item);
+                program_state.remove_later(item, 0, false);
 
                 if (fixed_local_port)
                     item.local.port = fixed_local_port;
@@ -735,7 +782,7 @@ int main(int argc, char* argv[])
                 //  if needed
                 auto const& item = *iter_connect;
 
-                program_state.remove_later(item);
+                program_state.remove_later(item, 0, false);
 
                 size_t attempts = 0;
                 peer_state value;
@@ -792,6 +839,7 @@ int main(int argc, char* argv[])
                         msg_ping.nodeid = NodeID;
                         cout << "sending ping" << endl;
                         sk.send(current_peer, msg_ping);
+                        program_state.remove_later(current_peer, 10, true);
 
                         fixed_local_port = current_connection.local.port;
 
@@ -814,14 +862,13 @@ int main(int argc, char* argv[])
                          << current_connection.to_string()
                          << endl;
                     cout << "dropping " << current_peer << endl;
-                    program_state.remove_later(current_peer);
-                    sk.send(current_peer, message_drop());
+                    program_state.remove_later(current_peer, 0, true);
                     break;
                 }
                 case message_drop::rtt:
                 {
                     cout << "dropped " << current_peer << endl;
-                    program_state.remove_later(current_peer);
+                    program_state.remove_later(current_peer, 0, false);
                     break;
                 }
                 case message_ping::rtt:
@@ -841,12 +888,12 @@ int main(int argc, char* argv[])
                         message_pong msg_pong;
                         msg_pong.nodeid = NodeID;
                         sk.send(current_peer, msg_pong);
+
+                        program_state.undo_remove(current_peer);
                     }
                     else
                     {
                         cout << "kbucket insert gave false" << endl;
-                        program_state.remove_later(current_peer);
-                        sk.send(current_peer, message_drop());
                     }
                     break;
                 }
@@ -959,6 +1006,8 @@ int main(int argc, char* argv[])
                 }
                 case message_timer_out::rtt:
                 {
+                    program_state.do_step();
+
                     auto connected = program_state.get_connected();
                     for (auto const& item : connected)
                     {
