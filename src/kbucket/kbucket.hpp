@@ -175,7 +175,8 @@ typename KBucket<Contact, K>::probe_result KBucket<Contact, K>::probe(const Cont
 
     auto it = std::find_if(cbegin(), cend(), eq_index);
 
-    if (actions::age(*it) == actions::not_accessible())
+    if (it != cend() &&
+        actions::age(*it) == actions::not_accessible())
         return probe_result::IS_EXPIRED;
 
     return probe_result::IS_NEW;
