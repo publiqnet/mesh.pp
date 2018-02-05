@@ -271,6 +271,16 @@ private:
             }
         }
     }
+
+    template <typename T_map>
+    static void insert_and_replace(T_map& map, typename T_map::const_reference value)
+    {
+        auto res = map.insert(value);
+        if (res.second == false)
+        {
+            res.first->second = value.second;
+        }
+    }
 public:
     enum class insert_code {old, fresh};
     enum class update_code {updated, added};
@@ -295,8 +305,11 @@ public:
 
             peers.emplace_back(item);
             size_t index = peers.size() - 1;
-            map_by_address.insert(std::make_pair(addr, index));
-            map_by_key.insert(std::make_pair(item.value.key(), index));
+            auto by_addr_res =
+                    map_by_address.insert(std::make_pair(addr, index));
+            insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
+
+            assert(by_addr_res.second);
 
             if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
@@ -354,8 +367,8 @@ public:
         if (it_find_listen != set_to_listen.end())
             set_to_listen.erase(it_find_listen);
 
-        map_by_peer_id.insert(std::make_pair(p, index));
-        map_by_key.insert(std::make_pair(item.value.key(), index));
+        insert_and_replace(map_by_peer_id, std::make_pair(p, index));
+        insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
 
         if (add_passive_code == insert_code::old)
             return update_code::updated;
@@ -380,7 +393,7 @@ public:
             item.value = value;
             item.value.update();
 
-            map_by_key.insert(std::make_pair(item.value.key(), index));
+            insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
         }
     }
 
@@ -443,7 +456,10 @@ public:
         auto it_find_addr = map_by_address.find(addr);
         if (it_find_addr != map_by_address.end())
         {
-            map_to_remove.insert({it_find_addr->second, {step, send_drop}});
+            insert_and_replace(map_to_remove,
+                               std::make_pair(it_find_addr->second,
+                                              std::make_pair(step,
+                                                             send_drop)));
         }
     }
 
@@ -452,7 +468,10 @@ public:
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
         {
-            map_to_remove.insert({it_find_peer_id->second, {step, send_drop}});
+            insert_and_replace(map_to_remove,
+                               std::make_pair(it_find_peer_id->second,
+                                              std::make_pair(step,
+                                                             send_drop)));
         }
     }
 
