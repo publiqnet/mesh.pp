@@ -1,47 +1,50 @@
-class message_ip_destination
+namespace beltpp
 {
-    port : int
-    address : string
-};
-class message_ip_address
-{
-    type : int
-    local : message_ip_destination
-    remote : message_ip_destination
-};
-class message_join
-{
-};
-class message_drop
-{
-};
-class message_ping
-{
-    nodeid : string
-};
-class message_pong
-{
-    nodeid : string
-};
-class message_error
-{
-};
-class message_timer_out
-{
-};
-class message_find_node
-{
-    nodeid : string
-};
-class message_node_details
-{
-    nodeid : string
-};
-class message_introduce_to
-{
-    nodeid : string
-};
-class message_open_connection_with
-{
-    addr : message_ip_address
+    class message_ip_destination
+    {
+        port : int
+        address : string
+    }
+    class message_ip_address
+    {
+        type : int
+        local : message_ip_destination
+        remote : message_ip_destination
+    }
+    class message_join
+    {
+    }
+    class message_drop
+    {
+    }
+    class message_ping
+    {
+        nodeid : string
+    }
+    class message_pong
+    {
+        nodeid : string
+    }
+    class message_error
+    {
+    }
+    class message_timer_out
+    {
+    }
+    class message_find_node
+    {
+        nodeid : string
+    }
+    class message_node_details
+    {
+        nodeid : string
+    }
+    class message_introduce_to
+    {
+        nodeid : string
+    }
+    class message_open_connection_with
+    {
+        addr : message_ip_address
+    }
 }
