@@ -1,12 +1,12 @@
 class message_ip_destination
 {
-    port : int;
+    port : int
     address : string
 };
 class message_ip_address
 {
-    type : int;
-    local : message_ip_destination;
+    type : int
+    local : message_ip_destination
     remote : message_ip_destination
 };
 class message_join
