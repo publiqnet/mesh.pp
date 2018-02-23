@@ -279,22 +279,24 @@ using std::endl;
 
 int main()
 {
-    size_t const limit = 1000;
+    size_t const limit = 2;
     beltpp::json::ptr_expression_tree pexp;
     beltpp::json::expression_tree* proot = nullptr;
     {
-    string test1 = "{\"rtt\":4,\"message\":\"hi from node1\"}{\"\" :1";
+    string test1 = "{\"rtt\":{},\"message\":{\"rtt\":4},\"\" :1";
     auto it_begin = test1.begin();
     auto it_end = test1.end();
 
-    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, 2, proot);
+    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, limit, proot);
 
-    cout << *it_begin << endl;
+    cout << &(*it_begin) << endl;
     if (beltpp::e_three_state_result::error == code)
         cout << "test1 error" << endl;
     else
     {
+        cout << "<===" << endl;
         cout << beltpp::dump(proot) << endl;
+        cout << "===>" << endl;
         if (beltpp::e_three_state_result::success == code)
             return 0;
     }
@@ -307,12 +309,14 @@ int main()
 
     auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, limit, proot);
 
-    cout << *it_begin << endl;
+    cout << &(*it_begin) << endl;
     if (beltpp::e_three_state_result::error == code)
         cout << "test2 error" << endl;
     else
     {
+        cout << "<===" << endl;
         cout << beltpp::dump(proot) << endl;
+        cout << "===>" << endl;
         if (beltpp::e_three_state_result::success == code)
             return 0;
     }
