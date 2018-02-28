@@ -69,7 +69,7 @@ using sf = beltpp::socket_family_t<
     &beltpp::message_join::saver,
     &beltpp::message_drop::saver,
     &beltpp::message_timer_out::saver,
-    &beltpp::message_list_load
+    &beltpp::message_list_load<nullptr>
 >;
 
 bool split_address_port(string const& address_port,
