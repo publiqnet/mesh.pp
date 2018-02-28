@@ -7,6 +7,7 @@
 #include <belt.pp/socket.hpp>
 
 #include <boost/optional.hpp>
+#include <boost/locale.hpp>
 
 #include <cryptopp/integer.h>
 #include <cryptopp/eccrypto.h>
@@ -56,6 +57,13 @@ using beltpp::message_timer_out;
 //using beltpp::message_get_peers;
 //using beltpp::message_peer_info;
 
+bool utf32_to_utf8(uint32_t cp, string& utf8_value)
+{
+    bool code = true;
+    utf8_value = boost::locale::conv::utf_to_utf<char>(&cp, &cp + 1);
+    return code;
+}
+
 using sf = beltpp::socket_family_t<
     beltpp::message_error::rtt,
     beltpp::message_join::rtt,
@@ -69,7 +77,7 @@ using sf = beltpp::socket_family_t<
     &beltpp::message_join::saver,
     &beltpp::message_drop::saver,
     &beltpp::message_timer_out::saver,
-    &beltpp::message_list_load<nullptr>
+    &beltpp::message_list_load<&utf32_to_utf8>
 >;
 
 bool split_address_port(string const& address_port,
