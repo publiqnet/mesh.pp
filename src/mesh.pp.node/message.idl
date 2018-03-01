@@ -2,12 +2,12 @@ namespace beltpp
 {
     class message_ip_destination
     {
-        port : int
+        port : uint16
         address : string
     }
     class message_ip_address
     {
-        type : int
+        type : int32
         local : message_ip_destination
         remote : message_ip_destination
     }
