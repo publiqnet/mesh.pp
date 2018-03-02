@@ -1,8 +1,8 @@
 # generate message.gen.hpp from message.idl
 add_custom_command (
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/message.gen.hpp
-  MAIN_DEPENDENCY message.idl
-  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/message.idl ${CMAKE_CURRENT_SOURCE_DIR}/message.gen.hpp
+  MAIN_DEPENDENCY message.go
+  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/message.go ${CMAKE_CURRENT_SOURCE_DIR}/message.gen.hpp
 )
 
 # define the executable
