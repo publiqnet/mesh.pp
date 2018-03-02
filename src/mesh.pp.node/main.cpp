@@ -158,7 +158,7 @@ bool operator == (ip_address const& l, ip_address const& r) noexcept
 {
     return (l.local == r.local &&
             l.remote == r.remote &&
-            l.type == r.type);
+            l.ip_type == r.ip_type);
 }
 }
 
@@ -657,6 +657,26 @@ public:
 
 int main(int argc, char* argv[])
 {
+    /*beltpp::message_hello hi;
+    hi.value.push_back("a");
+    hi.value.push_back("bb");
+
+    string encode = R"F({"rtt" : 12,"value" : ["a", "b"]})F";
+    beltpp::iterator_wrapper<char const> b(encode.begin());
+    beltpp::iterator_wrapper<char const> e(encode.end());
+    beltpp::detail::pmsg_all pmsg = beltpp::message_list_load<nullptr>(b, e);
+    if (pmsg.pmsg)
+    {
+        beltpp::packet p;
+        p.set(pmsg.rtt, std::move(pmsg.pmsg), pmsg.fsaver);
+        if (p.type() == beltpp::message_hello::rtt)
+        {
+            p.get(hi);
+            cout << beltpp::detail::saver(hi) << endl;
+        }
+    }
+
+    return 0;*/
     try
     {
         CryptoPP::AutoSeededRandomPool prng;
@@ -871,7 +891,7 @@ int main(int argc, char* argv[])
                         fixed_local_port = current_connection.local.port;
 
                         ip_address to_listen(current_connection.local,
-                                             current_connection.type);
+                                             current_connection.ip_type);
                         program_state.add_passive(to_listen);
                     }
                     else

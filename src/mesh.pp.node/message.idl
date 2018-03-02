@@ -1,50 +1,46 @@
-namespace beltpp
+package beltpp
+
+type message_join struct {}
+type message_drop struct {}
+type message_error struct {}
+type message_timer_out struct {}
+
+type message_ip_destination struct
 {
-    class message_ip_destination
-    {
-        port : uint16
-        address : string
-    }
-    class message_ip_address
-    {
-        type : int32
-        local : message_ip_destination
-        remote : message_ip_destination
-    }
-    class message_join
-    {
-    }
-    class message_drop
-    {
-    }
-    class message_ping
-    {
-        nodeid : string
-    }
-    class message_pong
-    {
-        nodeid : string
-    }
-    class message_error
-    {
-    }
-    class message_timer_out
-    {
-    }
-    class message_find_node
-    {
-        nodeid : string
-    }
-    class message_node_details
-    {
-        nodeid : string
-    }
-    class message_introduce_to
-    {
-        nodeid : string
-    }
-    class message_open_connection_with
-    {
-        addr : message_ip_address
-    }
+    port uint16
+    address string
+}
+type message_ip_address struct
+{
+    ip_type int32
+    local message_ip_destination
+    remote message_ip_destination
+}
+type message_ping struct
+{
+    nodeid string
+}
+type message_pong struct
+{
+    nodeid string
+}
+type message_find_node struct
+{
+    nodeid string
+}
+type message_node_details struct
+{
+    nodeid string
+}
+type message_introduce_to struct
+{
+    nodeid string
+}
+type message_open_connection_with struct
+{
+    addr message_ip_address
+}
+type message_hello struct
+{
+    value []string
 }
