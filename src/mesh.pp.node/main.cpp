@@ -44,18 +44,7 @@ using chrono::steady_clock;
 
 using boost::optional;
 
-using beltpp::message_join;
-using beltpp::message_drop;
-using beltpp::message_ping;
-using beltpp::message_pong;
-using beltpp::message_find_node;
-using beltpp::message_node_details;
-using beltpp::message_introduce_to;
-using beltpp::message_open_connection_with;
-using beltpp::message_error;
-using beltpp::message_timer_out;
-//using beltpp::message_get_peers;
-//using beltpp::message_peer_info;
+using namespace meshpp_messages;
 
 bool utf32_to_utf8(uint32_t cp, string& utf8_value)
 {
@@ -65,19 +54,19 @@ bool utf32_to_utf8(uint32_t cp, string& utf8_value)
 }
 
 using sf = beltpp::socket_family_t<
-    beltpp::message_error::rtt,
-    beltpp::message_join::rtt,
-    beltpp::message_drop::rtt,
-    beltpp::message_timer_out::rtt,
-    &beltpp::make_void_unique_ptr<beltpp::message_error>,
-    &beltpp::make_void_unique_ptr<beltpp::message_join>,
-    &beltpp::make_void_unique_ptr<beltpp::message_drop>,
-    &beltpp::make_void_unique_ptr<beltpp::message_timer_out>,
-    &beltpp::message_error::saver,
-    &beltpp::message_join::saver,
-    &beltpp::message_drop::saver,
-    &beltpp::message_timer_out::saver,
-    &beltpp::message_list_load
+    message_error::rtt,
+    message_join::rtt,
+    message_drop::rtt,
+    message_timer_out::rtt,
+    &beltpp::make_void_unique_ptr<message_error>,
+    &beltpp::make_void_unique_ptr<message_join>,
+    &beltpp::make_void_unique_ptr<message_drop>,
+    &beltpp::make_void_unique_ptr<message_timer_out>,
+    &message_error::saver,
+    &message_join::saver,
+    &message_drop::saver,
+    &message_timer_out::saver,
+    &message_list_load
 >;
 
 bool split_address_port(string const& address_port,
@@ -657,25 +646,16 @@ public:
 
 int main(int argc, char* argv[])
 {
-    /*beltpp::message_hello hi;
+    /*message_hello hi, hi2;
     hi.value.push_back("a");
     hi.value.push_back("bb");
 
-    string encode = R"F({"rtt" : 12,"value" : ["a", "b"]})F";
-    beltpp::iterator_wrapper<char const> b(encode.begin());
-    beltpp::iterator_wrapper<char const> e(encode.end());
-    beltpp::detail::pmsg_all pmsg = beltpp::message_list_load<nullptr>(b, e);
-    if (pmsg.pmsg)
-    {
-        beltpp::packet p;
-        p.set(pmsg.rtt, std::move(pmsg.pmsg), pmsg.fsaver);
-        if (p.type() == beltpp::message_hello::rtt)
-        {
-            p.get(hi);
-            cout << beltpp::detail::saver(hi) << endl;
-        }
-    }
+    hi.hash_table.insert({"a", "bbbb"});
+    hi.hash_table.insert({"abbbb", "aaab"});
 
+    detail::loader(hi2, R"f({"rtt":12,"value":["a1","b2"],"hash_table":{"a":"bbbb","abbbb":"ccb"},"hash_table2":{}})f");
+
+    cout << detail::saver(hi2) << endl;
     return 0;*/
     try
     {

@@ -1,4 +1,4 @@
-package beltpp
+package meshpp_messages
 
 type message_join struct {}
 type message_drop struct {}
@@ -43,4 +43,6 @@ type message_open_connection_with struct
 type message_hello struct
 {
     value []string
+    hash_table map[string]string
+    hash_table2 map[message_pong]string
 }
