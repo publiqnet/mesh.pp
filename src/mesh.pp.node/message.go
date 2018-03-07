@@ -44,5 +44,10 @@ type message_hello struct
 {
     value []string
     hash_table map[string]string
-    hash_table2 map[message_pong]string
+}
+type message_hello_container struct
+{
+    lst []message_hello
+    mp map[message_hello]message_hello
+    mp2 map[int]int
 }

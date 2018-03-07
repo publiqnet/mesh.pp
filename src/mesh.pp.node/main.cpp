@@ -647,15 +647,27 @@ public:
 int main(int argc, char* argv[])
 {
     /*message_hello hi, hi2;
-    hi.value.push_back("a");
-    hi.value.push_back("bb");
+    hi.value.push_back("1_arr1");
+    hi.value.push_back("1_arr2");
 
-    hi.hash_table.insert({"a", "bbbb"});
-    hi.hash_table.insert({"abbbb", "aaab"});
+    hi.hash_table.insert({"1_key1", "1_val1"});
+    hi.hash_table.insert({"1_key2", "1_val2"});
 
-    detail::loader(hi2, R"f({"rtt":12,"value":["a1","b2"],"hash_table":{"a":"bbbb","abbbb":"ccb"},"hash_table2":{}})f");
+    detail::loader(hi2, R"f({"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key2":"2_val2","2_key1":"2_val1"}})f");
 
-    cout << detail::saver(hi2) << endl;
+    //cout << detail::saver(hi2) << endl;
+
+    message_hello_container hicon, hicon2;
+    hicon.lst.push_back(hi2);
+    hicon.mp.insert({hi, hi2});
+    hicon.mp.insert({hi2, hi});
+
+    //cout << detail::saver(hicon) << endl;
+
+    detail::loader(hicon2, R"f({"rtt":13,"lst":[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],"mp":[[{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}},{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}},{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}}]],"mp2":[[3,4],[1,2]]})f");
+    hicon2.mp2.insert({5,6});
+    cout << detail::saver(hicon2);
+
     return 0;*/
     try
     {
