@@ -664,9 +664,13 @@ int main(int argc, char* argv[])
 
     //cout << detail::saver(hicon) << endl;
 
-    detail::loader(hicon2, R"f({"rtt":13,"lst":[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],"mp":[[{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}},{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}},{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}}]],"mp2":[[3,4],[1,2]]})f");
+    detail::loader(hicon2, R"f({"rtt":13,"lst":[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],"mp":[[{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}},{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}},{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}}]],"mp2":[[1,2],[3,4]],"tm":["2018-02-29 00:00:59"]})f");
     hicon2.mp2.insert({5,6});
     cout << detail::saver(hicon2);
+
+    //std::hash<message_hello> hasher;
+    //cout << hasher(hi) << endl;
+    //cout << hasher(hi2) << endl;
 
     return 0;*/
     try

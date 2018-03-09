@@ -17,6 +17,7 @@ target_link_libraries(mesh.pp.node PUBLIC
     mesh.pp
     packet
     socket
+    utility
     kbucket
     )
 
