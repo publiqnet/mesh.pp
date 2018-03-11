@@ -1,4 +1,4 @@
-package meshpp_messages
+package meshpp_message
 
 type message_join struct {}
 type message_drop struct {}
@@ -50,5 +50,15 @@ type message_hello_container struct
     lst []message_hello
     mp map[message_hello]message_hello
     mp2 map[int]int
-    tm []time.Time
+    tm []time
+    obj meshpp_message
+}
+type message_string struct
+{
+    message string
+}
+type message_stamp struct
+{
+    obj meshpp_message
+    stamp time
 }

@@ -7,7 +7,6 @@
 #include <belt.pp/socket.hpp>
 
 #include <boost/optional.hpp>
-#include <boost/locale.hpp>
 
 #include <cryptopp/integer.h>
 #include <cryptopp/eccrypto.h>
@@ -44,24 +43,17 @@ using chrono::steady_clock;
 
 using boost::optional;
 
-using namespace meshpp_messages;
-
-bool utf32_to_utf8(uint32_t cp, string& utf8_value)
-{
-    bool code = true;
-    utf8_value = boost::locale::conv::utf_to_utf<char>(&cp, &cp + 1);
-    return code;
-}
+using namespace meshpp_message;
 
 using sf = beltpp::socket_family_t<
     message_error::rtt,
     message_join::rtt,
     message_drop::rtt,
     message_timer_out::rtt,
-    &beltpp::make_void_unique_ptr<message_error>,
-    &beltpp::make_void_unique_ptr<message_join>,
-    &beltpp::make_void_unique_ptr<message_drop>,
-    &beltpp::make_void_unique_ptr<message_timer_out>,
+    &beltpp::new_void_unique_ptr<message_error>,
+    &beltpp::new_void_unique_ptr<message_join>,
+    &beltpp::new_void_unique_ptr<message_drop>,
+    &beltpp::new_void_unique_ptr<message_timer_out>,
     &message_error::saver,
     &message_join::saver,
     &message_drop::saver,
@@ -646,7 +638,19 @@ public:
 
 int main(int argc, char* argv[])
 {
-    /*message_hello hi, hi2;
+    /*message_string mstr;
+    mstr.message = "that's it";
+    message_stamp mstamp;
+    mstamp.obj.set(mstr);
+    cout << detail::saver(mstamp) << endl;
+
+    message_stamp mstamp2(mstamp);
+    ::beltpp::assign(mstamp2, mstamp);
+    mstamp2.obj.set(mstamp);
+    cout << detail::saver(mstamp2) << endl;
+    return 0;
+
+    message_hello hi, hi2;
     hi.value.push_back("1_arr1");
     hi.value.push_back("1_arr2");
 
@@ -664,8 +668,14 @@ int main(int argc, char* argv[])
 
     //cout << detail::saver(hicon) << endl;
 
-    detail::loader(hicon2, R"f({"rtt":13,"lst":[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],"mp":[[{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}},{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}},{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}}]],"mp2":[[1,2],[3,4]],"tm":["2018-02-29 00:00:59"]})f");
+    detail::loader(hicon2, R"f({"rtt":13,"lst":[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],"mp":[[{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}},{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}}],[{"rtt":12,"value":["2_arr1","2_arr2"],"hash_table":{"2_key1":"2_val1","2_key2":"2_val2"}},{"rtt":12,"value":["1_arr1","1_arr2"],"hash_table":{"1_key1":"1_val1","1_key2":"1_val2"}}]],"mp2":[[1,2],[3,4]],"tm":["2018-02-29 00:00:59"],"obj":{"rtt":5,"ip_type":0,"local":{"rtt":4,"port":9999,"address":"google.com"},"remote":{"rtt":4,"port":0,"address":""}}})f");
     hicon2.mp2.insert({5,6});
+    if (hicon2.obj.type() == message_ip_address::rtt)
+    {
+        message_ip_address addr;
+        hicon2.obj.get(addr);
+        hicon2.obj.set(message_hello());
+    }
     cout << detail::saver(hicon2);
 
     //std::hash<message_hello> hasher;
