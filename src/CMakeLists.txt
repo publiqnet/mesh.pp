@@ -11,7 +11,11 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/mesh.pp")
 # by writing piece of code that should not be here
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/belt.pp")
 
+set(MESH_PP_LOADED TRUE)
+
+if(NOT BELT_PP_LOADED)
 add_subdirectory(belt.pp)
+endif()
 add_subdirectory(mesh.pp)
 add_subdirectory(mesh.pp.node)
 add_subdirectory(kbucket)
