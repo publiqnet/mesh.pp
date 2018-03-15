@@ -8,5 +8,7 @@ add_compile_options(-Werror)
 
 project(mesh.pp)
 
+set(MESH_PP_LOADED TRUE PARENT_SCOPE)
+
 add_subdirectory(src)
 
