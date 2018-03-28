@@ -67,7 +67,8 @@ install(TARGETS mesh.pp
         DESTINATION lib/mesh.pp)
 
 set(SRC_FILES
-    global.hpp)
+    global.hpp
+    p2psocket.hpp)
 
 install(FILES
     ${SRC_FILES}
