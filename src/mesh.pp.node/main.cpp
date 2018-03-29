@@ -702,12 +702,12 @@ int main(int argc, char* argv[])
 
         string option_bind, option_connect;
 
-        const string NodeID(Konnection<>::to_string(iNodeID));
+        const string SelfID(Konnection<>::to_string(iNodeID));
 
-        if (NodeID.empty())
+        if (SelfID.empty())
             throw std::runtime_error("something wrong with nodeid");
 
-        cout << NodeID << endl;
+        cout << SelfID << endl;
 
         unsigned short fixed_local_port = 0;
 
@@ -849,7 +849,7 @@ int main(int argc, char* argv[])
             }
 
             if (0 == receive_attempt_count)
-                cout << NodeID.substr(0, 5) << " reading...";
+                cout << SelfID.substr(0, 5) << " reading...";
             else
                 cout << " " << receive_attempt_count << "...";
 
@@ -890,7 +890,7 @@ int main(int argc, char* argv[])
                                                  current_peer);
 
                         message_ping msg_ping;
-                        msg_ping.nodeid = NodeID;
+                        msg_ping.nodeid = SelfID;
                         cout << "sending ping" << endl;
                         sk.send(current_peer, msg_ping);
                         program_state.remove_later(current_peer, 10, true);
@@ -940,7 +940,7 @@ int main(int argc, char* argv[])
                         program_state.set_active_value(current_peer, value);
 
                         message_pong msg_pong;
-                        msg_pong.nodeid = NodeID;
+                        msg_pong.nodeid = SelfID;
                         sk.send(current_peer, msg_pong);
 
                         program_state.undo_remove(current_peer);
@@ -967,7 +967,7 @@ int main(int argc, char* argv[])
 
                     cout << "sending find node" << endl;
                     message_find_node msg_fn;
-                    msg_fn.nodeid = NodeID;
+                    msg_fn.nodeid = SelfID;
                     sk.send(current_peer, msg_fn);
 
                     break;
@@ -1066,7 +1066,7 @@ int main(int argc, char* argv[])
                     for (auto const& item : connected)
                     {
                         message_ping msg_ping;
-                        msg_ping.nodeid = NodeID;
+                        msg_ping.nodeid = SelfID;
                         sk.send(item.get_peer(), msg_ping);
 
                         //if (item.second.str_hi_message.empty())
