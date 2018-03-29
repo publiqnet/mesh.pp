@@ -7,24 +7,29 @@
 
 struct NodeLookup
 {
-    NodeLookup(KBucket<Konnection<>> const & kbucket): _kbucket_{kbucket}, _state{State::Z} { reset(); }
-
-    void init(Konnection<> const & node_to_search_);
-    void reset();
+    NodeLookup(KBucket<Konnection<>> const & kbucket, Konnection<> const & node_to_search_) :
+        _kbucket_{kbucket},
+        kbucket {_kbucket_.rebase(node_to_search_, false)},
+        alpha_semaphore {alpha},
+        stall_counter {alpha},
+        _state{State::Running},
+        target {node_to_search_},
+        target_source {}
+    { }
 
     std::vector<bool> add_konnections(Konnection<> const & source, std::vector<Konnection<> const> const & konnections);
     std::vector<Konnection<>> get_konnections();
 
     bool update_peer(Konnection<> const & konnection);
 
-    std::set<Konnection<>> list() const;
+    std::set<Konnection<>> candidate_list() const;
     std::set<Konnection<>> orphan_list() const;
     std::set<Konnection<>> drop_list() const;
 
 
     typename KBucket<Konnection<>>::iterator begin() const { return kbucket.begin(); }
     typename KBucket<Konnection<>>::iterator end() const { return kbucket.end(); }
-    operator bool() const { return _state == State::Running; }
+    bool is_complete() const { return _state != State::Running; }
 
 private:
     enum {alpha = 3};
@@ -34,42 +39,18 @@ private:
 
     std::atomic<int> alpha_semaphore, stall_counter;
 
-    enum class State {Z, Running, Stalled, Found} _state;
+    enum class State {Running, Stalled, Found} _state;
 
     std::set<Konnection<>> probed_set, sources_set;
     Konnection<> target, target_source;
 };
 
 
-
-
-void NodeLookup::init(Konnection<> const & node_to_search_)
-{
-    reset();
-    _state = State::Running;
-    alpha_semaphore = alpha;
-    stall_counter = alpha;
-    target = node_to_search_;
-    kbucket = _kbucket_.rebase(node_to_search_, false);
-}
-
-void NodeLookup::reset()
-{
-    _state = State::Z;
-    alpha_semaphore = 0;
-    stall_counter = 0;
-    kbucket.clear();
-    probed_set.clear();
-    sources_set.clear();
-    target = {};
-    target_source = {};
-}
-
 std::vector<bool> NodeLookup::add_konnections(Konnection<> const & source, std::vector<Konnection<> const> const & konnections)
 {
     std::vector<bool> result;
 
-    if (_state != State::Running)
+    if (is_complete())
         return result;
 
     if (probed_set.find(source) == std::end(probed_set))
@@ -115,7 +96,7 @@ bool NodeLookup::update_peer(Konnection<> const & konnection)
     return kbucket.replace(konnection);
 }
 
-std::set<Konnection<>> NodeLookup::list() const
+std::set<Konnection<>> NodeLookup::candidate_list() const
 {
     if (target.get_peer().empty())
         return {target_source};
@@ -130,8 +111,8 @@ std::set<Konnection<>> NodeLookup::list() const
 
 std::set<Konnection<>> NodeLookup::orphan_list() const
 {
-    auto const &_list = list();
-    decltype(list()) result;
+    auto const &_list = candidate_list();
+    decltype(candidate_list()) result;
 
     for (auto const &li : _list)
         if(li.get_peer().empty())
@@ -144,17 +125,14 @@ std::set<Konnection<>> NodeLookup::drop_list() const
 {
     std::set<Konnection<>> result {};
 
-    if (_state == State::Running)
-        return result;
-
     auto _begin = begin();
     auto const & _end = end();
-    auto const & _list = list();
+    auto const & _list = candidate_list();
     for ( ; _begin != _end; ++_begin )
     {
         Konnection<> const & konnection = *_begin;
 
-        if ( _list.find(konnection) != _list.end() )
+        if ( is_complete() and _list.find(konnection) != _list.end() )
             continue;
 
         if ( _kbucket_.probe(konnection) == KBucket<Konnection<>>::probe_result::IS_NEW and
@@ -170,14 +148,15 @@ std::vector<Konnection<>> NodeLookup::get_konnections()
 {
     std::vector<Konnection<>> result;
 
-    if ( _state != State::Running )
+    if ( is_complete() )
         return result;
 
     if ( 0 == alpha_semaphore )
         return result;
 
-    auto _begin = list().begin();
-    auto _end = list().end();
+    auto const & _list = candidate_list();
+    auto _begin = _list.begin();
+    auto _end = _list.end();
     if (std::distance(_begin, _end) > alpha_semaphore)
     {
         _end = _begin;

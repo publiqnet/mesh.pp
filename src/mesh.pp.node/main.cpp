@@ -46,23 +46,6 @@ using boost::optional;
 
 using namespace meshpp_message;
 
-template< typename T1, typename T2, template<typename, typename...> class C1, template<typename, typename...> class C2,
-          class Cr = C1<std::pair<T1, T2>>>
-Cr zip (C1<T1> const & c1, C2<T2> const & c2)
-{
-//    static_assert(std::is_same<C1<std::pair<T1, T2>>, C2<std::pair<T1, T2>>>::value, "containers should be the same");
-    Cr result {};
-
-    auto _begin1 = std::begin(c1);
-    auto const & _end1 = std::end(c1);
-    auto _begin2 = std::begin(c2);
-    auto const & _end2 = std::end(c2);
-    for ( ; _begin1 != _end1 && _begin2 != _end2; ++_begin1, ++_begin2)
-    {
-        result.emplace_back(*_begin1, *_begin2);
-    }
-    return result;
-}
 
 using sf = beltpp::socket_family_t<
     message_error::rtt,
@@ -720,7 +703,7 @@ int main(int argc, char* argv[])
 
         auto iNodeID = publicKey.GetPublicElement().x;
 
-        string option_bind, option_connect;
+        string option_bind, option_connect, option_query;
 
         const string SelfID(Konnection<>::to_string(iNodeID));
 
@@ -740,6 +723,8 @@ int main(int argc, char* argv[])
                 option_bind = argvalue;
             else if (argname == "--connect")
                 option_connect = argvalue;
+            else if (argname == "--query")
+                option_query = argvalue;
         }
 
         ip_address bind, connect;
@@ -775,7 +760,7 @@ int main(int argc, char* argv[])
         KBucket<Konnection<>> kbucket{self};
 
 
-        NodeLookup node_lookup{kbucket};
+        std::unique_ptr<NodeLookup> node_lookup;
 
         beltpp::socket sk = beltpp::getsocket<sf>();
         sk.set_timer(std::chrono::seconds(10));
@@ -985,7 +970,9 @@ int main(int argc, char* argv[])
 
                     Konnection<> k(msg.nodeid, current_peer, t_now);
                     kbucket.replace(k);
-                    node_lookup.update_peer(k);
+
+                    if(node_lookup)
+                        node_lookup->update_peer(k);
 
                     cout << "sending find node" << endl;
                     message_find_node msg_fn;
@@ -1035,15 +1022,18 @@ int main(int argc, char* argv[])
                         _konnections.push_back(_konnection);
                     }
 
-                    node_lookup.add_konnections(from, _konnections);
-
-                    /* NODE LOOKUP MAINTENANCE */
-                    auto const & orphans = node_lookup.orphan_list();
-                    for (auto const & li : orphans)
+                    if(node_lookup)
                     {
-                        message_introduce_to msg_intro;
-                        msg_intro.nodeid = static_cast<std::string>(li);
-                        sk.send(current_peer, msg_intro);
+                        node_lookup->add_konnections(from, _konnections);
+
+                        /* NODE LOOKUP MAINTENANCE */
+                        auto const & orphans = node_lookup->orphan_list();
+                        for (auto const & li : orphans)
+                        {
+                            message_introduce_to msg_intro;
+                            msg_intro.nodeid = static_cast<std::string>(li);
+                            sk.send(current_peer, msg_intro);
+                        }
                     }
 
                     break;
@@ -1113,56 +1103,52 @@ int main(int argc, char* argv[])
 
             }
 
-            if(true) // command to find some node)
+            if(not option_query.empty()) // command to find some node)
             {
-                std::string q_node = {};
+                Konnection<> konnection {option_query};
 
-                if ( node_lookup.list().empty() and
-                     node_lookup.get_konnections().empty() and
-                     not q_node.empty() and
-                     not node_lookup
-                     )
+                if(node_lookup)
                 {
-                    Konnection<> konnection {q_node};
-                    node_lookup.init(konnection);
-                    for (auto const & _konnection : node_lookup.list())
-                    {
-                        message_find_node msg;
-                        msg.nodeid = static_cast<std::string>(_konnection);
-                        sk.send(_konnection.get_peer(), msg);
-                    }
-                    q_node = {};
-                }
-                else if ( not node_lookup.get_konnections().empty() and
-                          not node_lookup.list().empty() and
-                          node_lookup
-                          )
-                {
-                    /* NOOP */ ;
-                }
-                else if ( not node_lookup.get_konnections().empty() and
-                          not node_lookup.list().empty() and
-                          not node_lookup
-                          )
-                {
-                    std::cout << "final list";
-                    for (auto const & _konnection : node_lookup.list())
-                    {
-                        message_ping msg;
-                        msg.nodeid = static_cast<std::string>(_konnection);
-                        sk.send(_konnection.get_peer(), msg);
-                    }
-
-                    for (auto const & _konnection : node_lookup.drop_list())
+                    // cleanup peers
+                    for (auto const & _konnection : node_lookup->drop_list())
                     {
                         message_drop msg;
-                        //                        msg.nodeid = static_cast<std::string>(_konnection);
                         sk.send(_konnection.get_peer(), msg);
                     }
-
-                    node_lookup.reset();
                 }
+                node_lookup.reset(new NodeLookup {kbucket, konnection});
+                option_query.clear();
 
+                if (node_lookup)
+                {
+                    if ( not node_lookup->is_complete() )
+                    {
+                        for (auto const & _konnection : node_lookup->get_konnections())
+                        {
+                            message_find_node msg;
+                            msg.nodeid = static_cast<std::string>(_konnection);
+                            sk.send(_konnection.get_peer(), msg);
+                        }
+                    }
+                    else
+                    {
+                        std::cout << "final candidate list";
+                        for (auto const & _konnection : node_lookup->candidate_list())
+                        {
+                            message_ping msg;
+                            msg.nodeid = static_cast<std::string>(_konnection);
+                            sk.send(_konnection.get_peer(), msg);
+                        }
+
+                        for (auto const & _konnection : node_lookup->drop_list())
+                        {
+                            message_drop msg;
+                            sk.send(_konnection.get_peer(), msg);
+                        }
+
+                        node_lookup.reset(nullptr);
+                    }
+                }
             }
 
             /*if (read_packets.empty())
