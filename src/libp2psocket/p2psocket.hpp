@@ -2,6 +2,7 @@
 
 #include "global.hpp"
 #include <belt.pp/isocket.hpp>
+#include <belt.pp/socket.hpp>
 #include <belt.pp/message_global.hpp>
 
 #include <memory>
@@ -56,7 +57,7 @@ public:
     using packet = beltpp::packet;
     using packets = beltpp::isocket::packets;
 
-    p2psocket(std::unique_ptr<beltpp::isocket>&& ptr_socket,
+    p2psocket(std::unique_ptr<beltpp::socket>&& ptr_socket,
               size_t _rtt_error,
               size_t _rtt_join,
               size_t _rtt_drop,
@@ -85,7 +86,7 @@ private:
 };
 
 template <typename T_p2psocket_family>
-p2psocket P2PSOCKETSHARED_EXPORT getp2psocket(std::unique_ptr<beltpp::isocket>&& ptr_socket)
+p2psocket P2PSOCKETSHARED_EXPORT getp2psocket(std::unique_ptr<beltpp::socket>&& ptr_socket)
 {
     return
     p2psocket(std::move(ptr_socket),

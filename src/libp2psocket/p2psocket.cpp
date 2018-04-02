@@ -11,7 +11,7 @@ namespace detail
 class p2psocket_internals
 {
 public:
-    p2psocket_internals(std::unique_ptr<beltpp::isocket>&& ptr_socket,
+    p2psocket_internals(std::unique_ptr<beltpp::socket>&& ptr_socket,
                         size_t rtt_error,
                         size_t rtt_join,
                         size_t rtt_drop,
@@ -45,7 +45,7 @@ public:
             throw std::runtime_error("null socket");
     }
 
-    std::unique_ptr<beltpp::isocket> m_ptr_socket;
+    std::unique_ptr<beltpp::socket> m_ptr_socket;
 
     size_t m_rtt_error;
     size_t m_rtt_join;
@@ -66,7 +66,7 @@ public:
 /*
  * p2psocket
  */
-p2psocket::p2psocket(std::unique_ptr<beltpp::isocket>&& ptr_socket,
+p2psocket::p2psocket(std::unique_ptr<beltpp::socket>&& ptr_socket,
                      size_t _rtt_error,
                      size_t _rtt_join,
                      size_t _rtt_drop,
