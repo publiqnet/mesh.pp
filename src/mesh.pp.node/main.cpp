@@ -299,6 +299,7 @@ public:
             insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
 
             assert(by_addr_res.second);
+            B_UNUSED(by_addr_res);
 
             if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
