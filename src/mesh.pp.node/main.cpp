@@ -1118,38 +1118,39 @@ int main(int argc, char* argv[])
                 }
                 node_lookup.reset(new NodeLookup {kbucket, konnection});
                 option_query.clear();
+            }
 
-                if (node_lookup)
+            if (node_lookup)
+            {
+                if ( not node_lookup->is_complete() )
                 {
-                    if ( not node_lookup->is_complete() )
+                    for (auto const & _konnection : node_lookup->get_konnections())
                     {
-                        for (auto const & _konnection : node_lookup->get_konnections())
-                        {
-                            message_find_node msg;
-                            msg.nodeid = static_cast<std::string>(_konnection);
-                            sk.send(_konnection.get_peer(), msg);
-                        }
-                    }
-                    else
-                    {
-                        std::cout << "final candidate list";
-                        for (auto const & _konnection : node_lookup->candidate_list())
-                        {
-                            message_ping msg;
-                            msg.nodeid = static_cast<std::string>(_konnection);
-                            sk.send(_konnection.get_peer(), msg);
-                        }
-
-                        for (auto const & _konnection : node_lookup->drop_list())
-                        {
-                            message_drop msg;
-                            sk.send(_konnection.get_peer(), msg);
-                        }
-
-                        node_lookup.reset(nullptr);
+                        message_find_node msg;
+                        msg.nodeid = static_cast<std::string>(_konnection);
+                        sk.send(_konnection.get_peer(), msg);
                     }
                 }
+                else
+                {
+                    std::cout << "final candidate list";
+                    for (auto const & _konnection : node_lookup->candidate_list())
+                    {
+                        message_ping msg;
+                        msg.nodeid = static_cast<std::string>(_konnection);
+                        sk.send(_konnection.get_peer(), msg);
+                    }
+
+                    for (auto const & _konnection : node_lookup->drop_list())
+                    {
+                        message_drop msg;
+                        sk.send(_konnection.get_peer(), msg);
+                    }
+
+                    node_lookup.reset(nullptr);
+                }
             }
+
 
             /*if (read_packets.empty())
             {
