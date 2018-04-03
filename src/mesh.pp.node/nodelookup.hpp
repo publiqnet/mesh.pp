@@ -98,7 +98,7 @@ bool NodeLookup::update_peer(Konnection<> const & konnection)
 
 std::set<Konnection<>> NodeLookup::candidate_list() const
 {
-    if (target.get_peer().empty())
+    if ( State::Found == _state and target.get_peer().empty() )
         return {target_source};
     else
     {
@@ -166,6 +166,9 @@ std::vector<Konnection<>> NodeLookup::get_konnections()
     std::copy_if(_begin, _end, std::back_inserter(result), [&](const Konnection<> &k) {
         return ( probed_set.find(k) == probed_set.end() and not k.get_peer().empty() );
     });
+
+    if (result.empty())
+        _state = State::Stalled;
 
     for (auto const &el : result)
     {
