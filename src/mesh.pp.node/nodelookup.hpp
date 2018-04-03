@@ -17,7 +17,7 @@ struct NodeLookup
         target_source {}
     { }
 
-    std::vector<bool> add_konnections(Konnection<> const & source, std::vector<Konnection<> const> const & konnections);
+    std::vector<bool> add_konnections(Konnection<> const & source, const std::vector<Konnection<> > &konnections);
     std::vector<Konnection<>> get_konnections();
 
     bool update_peer(Konnection<> const & konnection);
@@ -46,7 +46,7 @@ private:
 };
 
 
-std::vector<bool> NodeLookup::add_konnections(Konnection<> const & source, std::vector<Konnection<> const> const & konnections)
+std::vector<bool> NodeLookup::add_konnections(Konnection<> const & source, std::vector<Konnection<>> const & konnections)
 {
     std::vector<bool> result;
 
@@ -160,7 +160,7 @@ std::vector<Konnection<>> NodeLookup::get_konnections()
     if (std::distance(_begin, _end) > alpha_semaphore)
     {
         _end = _begin;
-        std::advance(_end, alpha_semaphore);
+        std::advance(_end, alpha_semaphore.load());
     }
 
     std::copy_if(_begin, _end, std::back_inserter(result), [&](const Konnection<> &k) {

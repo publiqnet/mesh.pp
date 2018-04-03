@@ -296,11 +296,8 @@ public:
 
             peers.emplace_back(item);
             size_t index = peers.size() - 1;
-//            auto by_addr_res = map_by_address.insert(std::make_pair(addr, index));
-            insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
 
-            assert(by_addr_res.second);
-            B_UNUSED(by_addr_res);
+            insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
 
             if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
@@ -1006,7 +1003,7 @@ int main(int argc, char* argv[])
                     packet.get(msg);
 
                     Konnection<> from{msg.origin, current_peer, t_now};
-                    std::vector<Konnection<> const> _konnections;
+                    std::vector<Konnection<>> _konnections;
                     for (auto const & nodeid : msg.nodeid)
                     {
                         if (nodeid == SelfID)   // skip ourself if it happens the we are one of the closest nodes
