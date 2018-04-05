@@ -281,8 +281,12 @@ public:
 
             peers.emplace_back(item);
             size_t index = peers.size() - 1;
-
+            auto by_addr_res =
+                    map_by_address.insert(std::make_pair(addr, index));
             insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
+
+            assert(by_addr_res.second);
+            B_UNUSED(by_addr_res);
 
             if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
