@@ -27,7 +27,7 @@ public:
     size_t left_min = 0;
     enum { grow_priority = 1 };
 
-    std::pair<bool, bool> check(char ch)
+    beltpp::e_three_state_result check(char ch)
     {
         return beltpp::standard_operator_check<beltpp::standard_operator_set<void>>(ch);
     }
@@ -49,7 +49,7 @@ public:
     size_t left_min = 1;
     enum { grow_priority = 1 };
 
-    std::pair<bool, bool> check(char ch)
+    beltpp::e_three_state_result check(char ch)
     {
         return beltpp::standard_operator_check<beltpp::standard_operator_set<void>>(ch);
     }
@@ -71,7 +71,7 @@ public:
     size_t left_min = 1;
     enum { grow_priority = 1 };
 
-    std::pair<bool, bool> check(char ch)
+    beltpp::e_three_state_result check(char ch)
     {
         return beltpp::standard_operator_check<beltpp::standard_operator_set<void>>(ch);
     }
@@ -94,32 +94,32 @@ public:
     size_t left_min = 1;
     enum { grow_priority = 1 };
 
-    std::pair<bool, bool> check(char ch)
+    beltpp::e_three_state_result check(char ch)
     {
         if ((ch >= 'a' && ch <= 'z') ||
             (ch >= 'A' && ch <= 'Z'))
         {
             state_must_open = true;
-            return std::make_pair(true, false);
+            return beltpp::e_three_state_result::attempt;
         }
         if (state_must_open && ch == '}')
-            return std::make_pair(false, false);
+            return beltpp::e_three_state_result::error;
         if (false == state_must_open && ch == '}')
         {
             right = 0;
             left_min = 0;
             left_max = 1;
-            return std::make_pair(true, true);
+            return beltpp::e_three_state_result::success;
         }
         if (ch == '{')
         {
             right = 1;
             left_min = 0;
             left_max = 0;
-            return std::make_pair(true, true);
+            return beltpp::e_three_state_result::success;
         }
 
-        return std::make_pair(false, false);
+        return beltpp::e_three_state_result::error;
     }
 
     template <typename T_iterator>
@@ -149,15 +149,15 @@ private:
         return true;
     }
 public:
-    std::pair<bool, bool> check(char ch)
+    beltpp::e_three_state_result check(char ch)
     {
         value += ch;
         if ("." == value || "-" == value || "-." == value)
-            return std::make_pair(true, false);
+            return beltpp::e_three_state_result::attempt;
         else if (_check(value))
-            return std::make_pair(true, false);
+            return beltpp::e_three_state_result::attempt;
         else
-            return std::make_pair(false, false);
+            return beltpp::e_three_state_result::error;
     }
 
     template <typename T_iterator>
