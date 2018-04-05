@@ -11,6 +11,7 @@ public:
     enum class insert_code {old, fresh};
     enum class update_code {updated, added};
 
+    virtual ~p2pstate() = 0;
     virtual std::string name() const noexcept = 0;
     virtual std::string short_name() const noexcept = 0;
 
