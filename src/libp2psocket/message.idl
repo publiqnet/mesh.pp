@@ -1,0 +1,56 @@
+module P2PMessage
+{
+    type Join {}
+    type Drop {}
+    type Error {}
+    type TimerOut {}
+
+    class IPDestination
+    {
+        UInt16 port
+        String address
+    }
+
+    class IPAddress
+    {
+        Int ip_type
+        IPDestination local
+        IPDestination remote
+    }
+
+    class Ping
+    {
+        String nodeid
+    }
+
+    class Pong
+    {
+        String nodeid
+    }
+
+    class FindNode
+    {
+        String nodeid
+    }
+
+    class NodeDetails
+    {
+        String origin
+        Array String nodeids
+    }
+
+    class IntroduceTo
+    {
+        String nodeid
+    }
+
+    class OpenConnectionWith
+    {
+        IPAddress addr
+    }
+
+    class Other
+    {
+        Extension contents
+    }
+}
