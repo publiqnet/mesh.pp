@@ -1,69 +1,70 @@
-package meshpp_message
+module meshpp_message
+{
+type message_join {}
+type message_drop {}
+type message_error {}
+type message_timer_out {}
 
-type message_join struct {}
-type message_drop struct {}
-type message_error struct {}
-type message_timer_out struct {}
-
-type message_ip_destination struct
+class message_ip_destination
 {
-    port uint16
-    address string
+    UInt16 port
+    String address
 }
-type message_ip_address struct
+class message_ip_address
 {
-    ip_type int32
-    local message_ip_destination
-    remote message_ip_destination
+    Int32 ip_type
+    message_ip_destination local
+    message_ip_destination remote
 }
-type message_ping struct
+class message_ping
 {
-    nodeid string
+    String nodeid
 }
-type message_pong struct
+class message_pong
 {
-    nodeid string
+    String nodeid
 }
-type message_find_node struct
+class message_find_node
 {
-    nodeid string
+    String nodeid
 }
-type message_node_details struct
+class message_node_details
 {
-    origin string
-    nodeid []string
+    String origin
+    Array String nodeid
 }
-type message_introduce_to struct
+class message_introduce_to
 {
-    nodeid string
+    String nodeid
 }
-type message_open_connection_with struct
+class message_open_connection_with
 {
-    addr message_ip_address
+    message_ip_address addr
 }
-type message_hello struct
+class message_hello
 {
-    value []string
-    hash_table map[string]string
+    Array String value
+    Hash String String hash_table
 }
-type message_hello_container struct
+class message_hello_container
 {
-    lst []message_hello
-    mp map[message_hello]message_hello
-    mp2 map[int]int
-    tm []time
-    obj meshpp_message
+    Array message_hello lst
+    Hash message_hello message_hello mp
+    Hash Int Int mp2
+    Array TimePoint tm
+    Object obj
 }
-type message_string struct
+class message_string
 {
-    message string
+    String message
 }
-type message_stamp struct
+class message_stamp
 {
-    obj meshpp_message
-    stamp time
+    Object obj
+    TimePoint stamp
 }
-type message_lookup_node struct
+class message_lookup_node
 {
-    nodeid string
+    String nodeid
+}
 }

@@ -5,6 +5,7 @@ add_custom_command (
   COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/message.go ${CMAKE_CURRENT_SOURCE_DIR}/message.gen.hpp
 )
 
+
 # define the executable
 add_executable(mesh.pp.node
     main.cpp

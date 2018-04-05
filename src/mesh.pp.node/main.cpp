@@ -130,21 +130,6 @@ public:
     }
 };
 
-namespace beltpp
-{
-bool operator == (ip_destination const& l, ip_destination const& r) noexcept
-{
-    return (l.address == r.address &&
-            l.port == r.port);
-}
-bool operator == (ip_address const& l, ip_address const& r) noexcept
-{
-    return (l.local == r.local &&
-            l.remote == r.remote &&
-            l.ip_type == r.ip_type);
-}
-}
-
 class peer_state
 {
 public:
@@ -635,10 +620,11 @@ public:
     unordered_map<size_t, pair<size_t, bool>> map_to_remove;
 };
 
-
+//#define TEST
 
 int main(int argc, char* argv[])
 {
+#ifdef TEST
     /*message_string mstr;
     mstr.message = "that's it";
     message_stamp mstamp;
@@ -649,7 +635,7 @@ int main(int argc, char* argv[])
     ::beltpp::assign(mstamp2, mstamp);
     mstamp2.obj.set(mstamp);
     cout << detail::saver(mstamp2) << endl;
-    return 0;
+    return 0;*/
 
     message_hello hi, hi2;
     hi.value.push_back("1_arr1");
@@ -683,7 +669,8 @@ int main(int argc, char* argv[])
     //cout << hasher(hi) << endl;
     //cout << hasher(hi2) << endl;
 
-    return 0;*/
+    return 0;
+#else
     try
     {
         CryptoPP::AutoSeededRandomPool prng;
@@ -1179,7 +1166,6 @@ int main(int argc, char* argv[])
                 cout<<"KBucket list\n--------\n";
                 kbucket.print_list();
                 cout<<"========\n";
-
             }
 
         }}
@@ -1202,5 +1188,6 @@ int main(int argc, char* argv[])
         std::cout << "too well done ...\nthat was an exception\n";
         return -1;
     }
+#endif
     return 0;
 }
