@@ -6,35 +6,78 @@
 
 #include <exception>
 #include <string>
+#include <memory>
 
-using std::string;
-using std::vector;
+using namespace P2PMessage;
+
 using beltpp::ip_address;
 using beltpp::ip_destination;
 using beltpp::socket;
 using peer_id = socket::peer_id;
-using namespace P2PMessage;
+
+using std::string;
+using std::vector;
+using std::unique_ptr;
 
 namespace meshpp
 {
+
+using sf = beltpp::socket_family_t<
+    Error::rtt,
+    Join::rtt,
+    Drop::rtt,
+    TimerOut::rtt,
+    &beltpp::new_void_unique_ptr<Error>,
+    &beltpp::new_void_unique_ptr<Join>,
+    &beltpp::new_void_unique_ptr<Drop>,
+    &beltpp::new_void_unique_ptr<TimerOut>,
+    &Error::saver,
+    &Join::saver,
+    &Drop::saver,
+    &TimerOut::saver,
+    &message_list_load
+>;
+
 namespace detail
 {
 class p2psocket_internals
 {
 public:
-    p2psocket_internals(std::unique_ptr<socket>&& ptr_socket,
-                        ip_destination const& bind_to_address,
-                        std::vector<ip_destination> const& connect_to_addresses)
-        : m_ptr_socket(std::move(ptr_socket))
+    p2psocket_internals(ip_destination const& bind_to_address,
+                        std::vector<ip_destination> const& connect_to_addresses,
+                        size_t rtt_error,
+                        size_t rtt_join,
+                        size_t rtt_drop,
+                        size_t rtt_timer_out,
+                        detail::fptr_creator fcreator_error,
+                        detail::fptr_creator fcreator_join,
+                        detail::fptr_creator fcreator_drop,
+                        detail::fptr_creator fcreator_timer_out,
+                        detail::fptr_saver fsaver_error,
+                        detail::fptr_saver fsaver_join,
+                        detail::fptr_saver fsaver_drop,
+                        detail::fptr_saver fsaver_timer_out,
+                        beltpp::void_unique_ptr&& putl)
+        : m_ptr_socket(new beltpp::socket(
+            beltpp::getsocket<sf>(std::move(putl))
+                                          ))
         , m_ptr_state() // will need to initialize properly
         , m_flog_message(nullptr)
         , m_flog_message_line(nullptr)
         , receive_attempt_count(0)
+        , m_rtt_error(rtt_error)
+        , m_rtt_join(rtt_join)
+        , m_rtt_drop(rtt_drop)
+        , m_rtt_timer_out(rtt_timer_out)
+        , m_fcreator_error(fcreator_error)
+        , m_fcreator_join(fcreator_join)
+        , m_fcreator_drop(fcreator_drop)
+        , m_fcreator_timer_out(fcreator_timer_out)
+        , m_fsaver_error(fsaver_error)
+        , m_fsaver_join(fsaver_join)
+        , m_fsaver_drop(fsaver_drop)
+        , m_fsaver_timer_out(fsaver_timer_out)
     {
-        assert(m_ptr_socket);
-        if (nullptr == m_ptr_socket)
-            throw std::runtime_error("null socket");
-
         if (bind_to_address.empty() &&
             connect_to_addresses.empty())
             throw std::runtime_error("dummy socket");
@@ -60,27 +103,62 @@ public:
         }
     }
 
-    std::unique_ptr<beltpp::socket> m_ptr_socket;
-    std::unique_ptr<meshpp::p2pstate> m_ptr_state;
-
-    beltpp::detail::fptr_message_loader m_fmessage_loader;
+    unique_ptr<beltpp::socket> m_ptr_socket;
+    unique_ptr<meshpp::p2pstate> m_ptr_state;
 
     void (*m_flog_message)(string const&);
     void (*m_flog_message_line)(string const&);
     size_t receive_attempt_count;
+
+    size_t m_rtt_error;
+    size_t m_rtt_join;
+    size_t m_rtt_drop;
+    size_t m_rtt_timer_out;
+    detail::fptr_creator m_fcreator_error;
+    detail::fptr_creator m_fcreator_join;
+    detail::fptr_creator m_fcreator_drop;
+    detail::fptr_creator m_fcreator_timer_out;
+    detail::fptr_saver m_fsaver_error;
+    detail::fptr_saver m_fsaver_join;
+    detail::fptr_saver m_fsaver_drop;
+    detail::fptr_saver m_fsaver_timer_out;
 };
 }
 
 /*
  * p2psocket
  */
-p2psocket::p2psocket(std::unique_ptr<beltpp::socket>&& ptr_socket,
-                     ip_destination const& bind_to_address,
-                     std::vector<ip_destination> const& connect_to_addresses)
+p2psocket::p2psocket(ip_destination const& bind_to_address,
+                     std::vector<ip_destination> const& connect_to_addresses,
+                     size_t _rtt_error,
+                     size_t _rtt_join,
+                     size_t _rtt_drop,
+                     size_t _rtt_timer_out,
+                     detail::fptr_creator _fcreator_error,
+                     detail::fptr_creator _fcreator_join,
+                     detail::fptr_creator _fcreator_drop,
+                     detail::fptr_creator _fcreator_timer_out,
+                     detail::fptr_saver _fsaver_error,
+                     detail::fptr_saver _fsaver_join,
+                     detail::fptr_saver _fsaver_drop,
+                     detail::fptr_saver _fsaver_timer_out,
+                     beltpp::void_unique_ptr&& putl)
     : isocket()
-    , m_pimpl(new detail::p2psocket_internals(std::move(ptr_socket),
-                                              bind_to_address,
-                                              connect_to_addresses))
+    , m_pimpl(new detail::p2psocket_internals(bind_to_address,
+                                              connect_to_addresses,
+                                              _rtt_error,
+                                              _rtt_join,
+                                              _rtt_drop,
+                                              _rtt_timer_out,
+                                              _fcreator_error,
+                                              _fcreator_join,
+                                              _fcreator_drop,
+                                              _fcreator_timer_out,
+                                              _fsaver_error,
+                                              _fsaver_join,
+                                              _fsaver_drop,
+                                              _fsaver_timer_out,
+                                              std::move(putl)))
 {
 
 }
