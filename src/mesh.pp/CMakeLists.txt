@@ -36,9 +36,13 @@ find_package(Boost 1.58 REQUIRED
                program_options
                locale)
 
+MESSAGE(STATUS "boost info")
+MESSAGE(STATUS "${Boost_INCLUDE_DIR}")
+MESSAGE(STATUS "${Boost_LIBRARIES}")
+
 add_library(boost INTERFACE IMPORTED)
-set_property(TARGET boost PROPERTY
-    INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
+set_property(TARGET boost PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
+set_property(TARGET boost PROPERTY INTERFACE_LINK_LIBRARIES ${Boost_LIBRARIES})
 
 list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules" )
 
@@ -68,6 +72,7 @@ install(TARGETS mesh.pp
 
 set(SRC_FILES
     global.hpp
+    p2pmessage.hpp
     p2psocket.hpp)
 
 install(FILES

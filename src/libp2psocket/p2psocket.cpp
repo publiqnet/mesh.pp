@@ -24,47 +24,9 @@ class p2psocket_internals
 public:
     p2psocket_internals(std::unique_ptr<socket>&& ptr_socket,
                         ip_destination const& bind_to_address,
-                        std::vector<ip_destination> const& connect_to_addresses,
-                        size_t rtt_error,
-                        size_t rtt_join,
-                        size_t rtt_drop,
-                        size_t rtt_timer_out,
-                        size_t rtt_ping,
-                        size_t rtt_pong,
-                        detail::fptr_creator fcreator_error,
-                        detail::fptr_creator fcreator_join,
-                        detail::fptr_creator fcreator_drop,
-                        detail::fptr_creator fcreator_timer_out,
-                        detail::fptr_creator_str fcreator_ping,
-                        detail::fptr_creator_str fcreator_pong,
-                        beltpp::detail::fptr_saver fsaver_error,
-                        beltpp::detail::fptr_saver fsaver_join,
-                        beltpp::detail::fptr_saver fsaver_drop,
-                        beltpp::detail::fptr_saver fsaver_timer_out,
-                        beltpp::detail::fptr_saver fsaver_ping,
-                        beltpp::detail::fptr_saver fsaver_pong,
-                        beltpp::detail::fptr_message_loader fmessage_loader)
+                        std::vector<ip_destination> const& connect_to_addresses)
         : m_ptr_socket(std::move(ptr_socket))
         , m_ptr_state() // will need to initialize properly
-        , m_rtt_error(rtt_error)
-        , m_rtt_join(rtt_join)
-        , m_rtt_drop(rtt_drop)
-        , m_rtt_timer_out(rtt_timer_out)
-        , m_rtt_ping(rtt_ping)
-        , m_rtt_pong(rtt_pong)
-        , m_fcreator_error(fcreator_error)
-        , m_fcreator_join(fcreator_join)
-        , m_fcreator_drop(fcreator_drop)
-        , m_fcreator_timer_out(fcreator_timer_out)
-        , m_fcreator_ping(fcreator_ping)
-        , m_fcreator_pong(fcreator_pong)
-        , m_fsaver_error(fsaver_error)
-        , m_fsaver_join(fsaver_join)
-        , m_fsaver_drop(fsaver_drop)
-        , m_fsaver_timer_out(fsaver_timer_out)
-        , m_fsaver_ping(fsaver_ping)
-        , m_fsaver_pong(fsaver_pong)
-        , m_fmessage_loader(fmessage_loader)
         , m_flog_message(nullptr)
         , m_flog_message_line(nullptr)
         , receive_attempt_count(0)
@@ -101,24 +63,6 @@ public:
     std::unique_ptr<beltpp::socket> m_ptr_socket;
     std::unique_ptr<meshpp::p2pstate> m_ptr_state;
 
-    size_t m_rtt_error;
-    size_t m_rtt_join;
-    size_t m_rtt_drop;
-    size_t m_rtt_timer_out;
-    size_t m_rtt_ping;
-    size_t m_rtt_pong;
-    detail::fptr_creator m_fcreator_error;
-    detail::fptr_creator m_fcreator_join;
-    detail::fptr_creator m_fcreator_drop;
-    detail::fptr_creator m_fcreator_timer_out;
-    detail::fptr_creator_str m_fcreator_ping;
-    detail::fptr_creator_str m_fcreator_pong;
-    beltpp::detail::fptr_saver m_fsaver_error;
-    beltpp::detail::fptr_saver m_fsaver_join;
-    beltpp::detail::fptr_saver m_fsaver_drop;
-    beltpp::detail::fptr_saver m_fsaver_timer_out;
-    beltpp::detail::fptr_saver m_fsaver_ping;
-    beltpp::detail::fptr_saver m_fsaver_pong;
     beltpp::detail::fptr_message_loader m_fmessage_loader;
 
     void (*m_flog_message)(string const&);
@@ -132,49 +76,11 @@ public:
  */
 p2psocket::p2psocket(std::unique_ptr<beltpp::socket>&& ptr_socket,
                      ip_destination const& bind_to_address,
-                     std::vector<ip_destination> const& connect_to_addresses,
-                     size_t _rtt_error,
-                     size_t _rtt_join,
-                     size_t _rtt_drop,
-                     size_t _rtt_timer_out,
-                     size_t _rtt_ping,
-                     size_t _rtt_pong,
-                     detail::fptr_creator _fcreator_error,
-                     detail::fptr_creator _fcreator_join,
-                     detail::fptr_creator _fcreator_drop,
-                     detail::fptr_creator _fcreator_timer_out,
-                     detail::fptr_creator_str _fcreator_ping,
-                     detail::fptr_creator_str _fcreator_pong,
-                     beltpp::detail::fptr_saver _fsaver_error,
-                     beltpp::detail::fptr_saver _fsaver_join,
-                     beltpp::detail::fptr_saver _fsaver_drop,
-                     beltpp::detail::fptr_saver _fsaver_timer_out,
-                     beltpp::detail::fptr_saver _fsaver_ping,
-                     beltpp::detail::fptr_saver _fsaver_pong,
-                     beltpp::detail::fptr_message_loader _fmessage_loader)
+                     std::vector<ip_destination> const& connect_to_addresses)
     : isocket()
     , m_pimpl(new detail::p2psocket_internals(std::move(ptr_socket),
                                               bind_to_address,
-                                              connect_to_addresses,
-                                              _rtt_error,
-                                              _rtt_join,
-                                              _rtt_drop,
-                                              _rtt_timer_out,
-                                              _rtt_ping,
-                                              _rtt_pong,
-                                              _fcreator_error,
-                                              _fcreator_join,
-                                              _fcreator_drop,
-                                              _fcreator_timer_out,
-                                              _fcreator_ping,
-                                              _fcreator_pong,
-                                              _fsaver_error,
-                                              _fsaver_join,
-                                              _fsaver_drop,
-                                              _fsaver_timer_out,
-                                              _fsaver_ping,
-                                              _fsaver_pong,
-                                              _fmessage_loader))
+                                              connect_to_addresses))
 {
 
 }
@@ -203,12 +109,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
     while (return_packets.empty())
     {
         auto to_remove = state.remove_pending();
-        packet drop;
-        drop.set(m_pimpl->m_rtt_drop,
-                 m_pimpl->m_fcreator_drop(),
-                 m_pimpl->m_fsaver_drop);
         for (auto const& remove_sk : to_remove)
-            sk.send(remove_sk, drop);
+            sk.send(remove_sk, Drop());
 
         auto to_listen = state.get_to_listen();
         for (auto& item : to_listen)
@@ -280,8 +182,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
         for (auto const& received_packet : received_packets)
         {
-            if (m_pimpl->m_rtt_timer_out != received_packet.type() &&
-                m_pimpl->m_rtt_drop != received_packet.type())
+            if (TimerOut::rtt != received_packet.type() &&
+                Drop::rtt != received_packet.type())
             {
                 assert(false == current_peer.empty());
                 try {
@@ -298,12 +200,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 {
                     state.add_active(current_connection, current_peer);
 
-                    packet ping;
-                    ping.set(m_pimpl->m_rtt_ping,
-                             m_pimpl->m_fcreator_ping(state.name()),
-                             m_pimpl->m_fsaver_ping);
+                    Ping ping_msg;
+                    ping_msg.nodeid = state.name();
                     writeln("sending ping");
-                    sk.send(current_peer, ping);
+                    sk.send(current_peer, ping_msg);
                     state.remove_later(current_peer, 10, true);
 
                     state.set_fixed_local_port(current_connection.local.port);
@@ -314,7 +214,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 }
                 else
                 {
-                    sk.send(current_peer, drop);
+                    sk.send(current_peer, Drop());
                     current_connection.local.port = state.get_fixed_local_port();
                     state.add_passive(current_connection);
                 }

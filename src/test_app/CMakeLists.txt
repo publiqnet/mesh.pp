@@ -3,7 +3,7 @@ add_executable(test_app
     main.cpp)
 
 # libraries this module links to
-target_link_libraries(test_app PUBLIC
+target_link_libraries(test_app PRIVATE
     mesh.pp
     packet
     messages

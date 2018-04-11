@@ -8,6 +8,7 @@
 #include <belt.pp/socket.hpp>
 
 #include <boost/optional.hpp>
+#include <boost/program_options.hpp>
 
 #include <cryptopp/integer.h>
 #include <cryptopp/eccrypto.h>

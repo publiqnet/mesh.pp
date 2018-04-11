@@ -17,7 +17,12 @@ add_library(p2psocket SHARED
     message.gen.hpp)
 
 # libraries this module links to
-target_link_libraries(p2psocket PUBLIC mesh.pp belt.pp socket packet utility)
+target_link_libraries(p2psocket PUBLIC
+    mesh.pp
+    belt.pp
+    socket
+    packet
+    utility)
 
 # what to do on make install
 install(TARGETS p2psocket
@@ -28,4 +33,6 @@ install(TARGETS p2psocket
 install(FILES
     global.hpp
     p2psocket.hpp
+    message.hpp
+    message.gen.hpp
     DESTINATION include/mesh.pp/libp2psocket)
