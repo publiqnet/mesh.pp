@@ -59,8 +59,8 @@ public:
     using packet = beltpp::packet;
     using packets = beltpp::isocket::packets;
 
-    p2psocket(beltpp::ip_destination const& bind_to_address,
-              std::vector<beltpp::ip_destination> const& connect_to_addresses,
+    p2psocket(beltpp::ip_address const& bind_to_address,
+              std::vector<beltpp::ip_address> const& connect_to_addresses,
               size_t _rtt_error,
               size_t _rtt_join,
               size_t _rtt_drop,
@@ -89,8 +89,8 @@ private:
 };
 
 template <typename T_p2psocket_family>
-p2psocket P2PSOCKETSHARED_EXPORT getp2psocket(beltpp::ip_destination const& bind_to_address,
-                                              std::vector<beltpp::ip_destination> const& connect_to_addresses,
+P2PSOCKETSHARED_EXPORT p2psocket getp2psocket(beltpp::ip_address const& bind_to_address,
+                                              std::vector<beltpp::ip_address> const& connect_to_addresses,
                                               beltpp::void_unique_ptr&& putl)
 {
     return
@@ -108,7 +108,7 @@ p2psocket P2PSOCKETSHARED_EXPORT getp2psocket(beltpp::ip_destination const& bind
               T_p2psocket_family::fsaver_join,
               T_p2psocket_family::fsaver_drop,
               T_p2psocket_family::fsaver_timer_out,
-              putl);
+              std::move(putl));
 }
 
 }

@@ -3,10 +3,12 @@
 #include "message.hpp"
 
 #include <belt.pp/packet.hpp>
+#include <belt.pp/utility.hpp>
 
 #include <exception>
 #include <string>
 #include <memory>
+#include <chrono>
 
 using namespace P2PMessage;
 
@@ -15,6 +17,9 @@ using beltpp::ip_destination;
 using beltpp::socket;
 using peer_id = socket::peer_id;
 
+namespace chrono = std::chrono;
+using chrono::system_clock;
+using chrono::steady_clock;
 using std::string;
 using std::vector;
 using std::unique_ptr;
@@ -43,8 +48,8 @@ namespace detail
 class p2psocket_internals
 {
 public:
-    p2psocket_internals(ip_destination const& bind_to_address,
-                        std::vector<ip_destination> const& connect_to_addresses,
+    p2psocket_internals(ip_address const& bind_to_address,
+                        std::vector<ip_address> const& connect_to_addresses,
                         size_t rtt_error,
                         size_t rtt_join,
                         size_t rtt_drop,
@@ -61,7 +66,7 @@ public:
         : m_ptr_socket(new beltpp::socket(
             beltpp::getsocket<sf>(std::move(putl))
                                           ))
-        , m_ptr_state() // will need to initialize properly
+        , m_ptr_state(getp2pstate())
         , m_flog_message(nullptr)
         , m_flog_message_line(nullptr)
         , receive_attempt_count(0)
@@ -78,33 +83,33 @@ public:
         , m_fsaver_drop(fsaver_drop)
         , m_fsaver_timer_out(fsaver_timer_out)
     {
-        if (bind_to_address.empty() &&
+        if (bind_to_address.local.empty() &&
             connect_to_addresses.empty())
             throw std::runtime_error("dummy socket");
 
         p2pstate& state = *m_ptr_state.get();
 
-        if (false == bind_to_address.empty())
+        if (false == bind_to_address.local.empty())
         {
-            state.set_fixed_local_port(bind_to_address.port);
-            ip_address address(bind_to_address, ip_address::e_type::any);
+            state.set_fixed_local_port(bind_to_address.local.port);
+            ip_address address(bind_to_address.local, bind_to_address.ip_type);
             state.add_passive(address);
         }
 
         for (auto& item : connect_to_addresses)
         {
-            if (item.empty())
+            if (item.local.empty())
                 throw std::runtime_error("incorrect connect configuration");
 
             ip_address address;
-            address.remote = item;
-            address.ip_type = ip_address::e_type::any;
+            address.remote = item.local;
+            address.ip_type = item.ip_type;
             state.add_passive(address);
         }
     }
 
     unique_ptr<beltpp::socket> m_ptr_socket;
-    unique_ptr<meshpp::p2pstate> m_ptr_state;
+    meshpp::p2pstate_ptr m_ptr_state;
 
     void (*m_flog_message)(string const&);
     void (*m_flog_message_line)(string const&);
@@ -128,8 +133,8 @@ public:
 /*
  * p2psocket
  */
-p2psocket::p2psocket(ip_destination const& bind_to_address,
-                     std::vector<ip_destination> const& connect_to_addresses,
+p2psocket::p2psocket(ip_address const& bind_to_address,
+                     std::vector<ip_address> const& connect_to_addresses,
                      size_t _rtt_error,
                      size_t _rtt_join,
                      size_t _rtt_drop,
@@ -225,8 +230,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             //  so that will not try to connect to this, over and over
             //  because the corresponding "add_active" is not always able to replace this
 
-            size_t attempts = 0;
-            state.get_open_attempts(item, attempts);
+            size_t attempts = state.get_open_attempts(item);
 
             write("connect to ");
             writeln(item.to_string());
@@ -382,7 +386,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 received_packet.get(msg);
 
                 vector<string> want_introduce =
-                        state.process_node_details(current_peer, msg.origin, msg.nodeids);
+                        state.process_node_details(current_peer,
+                                                   msg.origin,
+                                                   msg.nodeids);
 
                 for (auto const& intro : want_introduce)
                 {
@@ -454,9 +460,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
         if (false == received_packets.empty())
         {
-            /*auto tp_now = std::chrono::system_clock::now();
-            std::time_t t_now = std::chrono::system_clock::to_time_t(tp_now);
-            std::cout << std::ctime(&t_now) << std::endl;*/
+            std::time_t time_t_now = system_clock::to_time_t(system_clock::now());
+            writeln(beltpp::gm_time_t_to_lc_string(time_t_now));
+
             auto connected = state.get_connected_addresses();
             auto listening = state.get_listening_addresses();
 

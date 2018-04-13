@@ -10,8 +10,12 @@ add_definitions(-DP2P_LIBRARY)
 # define the shared library
 add_library(p2psocket SHARED
     global.hpp
+    kbucket.hpp
+    konnection.hpp
+    nodelookup.hpp
     p2psocket.cpp
     p2psocket.hpp
+    p2pstate.cpp
     p2pstate.hpp
     message.hpp
     message.gen.hpp)
@@ -21,8 +25,8 @@ target_link_libraries(p2psocket PUBLIC
     mesh.pp
     belt.pp
     packet
-    utility
     PRIVATE
+    utility
     socket)
 
 # what to do on make install

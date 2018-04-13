@@ -1,17 +1,22 @@
 #pragma once
 
-#include <vector>
+#include "global.hpp"
+
 #include <belt.pp/socket.hpp>
+
+#include <vector>
+#include <memory>
 
 namespace meshpp
 {
+
 class p2pstate
 {
 public:
     enum class insert_code {old, fresh};
     enum class update_code {updated, added};
 
-    virtual ~p2pstate() = 0;
+    virtual ~p2pstate() {};
     virtual std::string name() const noexcept = 0;
     virtual std::string short_name() const noexcept = 0;
 
@@ -23,7 +28,7 @@ public:
     virtual bool add_contact(beltpp::socket::peer_id const& peer_id,
                              std::string const& nodeid) = 0;
 
-    virtual bool set_active_nodeid(beltpp::socket::peer_id const& peer_id,
+    virtual void set_active_nodeid(beltpp::socket::peer_id const& peer_id,
                                    std::string const& nodeid) = 0;
 
     virtual void update(beltpp::socket::peer_id const& peer_id,
@@ -40,7 +45,7 @@ public:
     virtual std::vector<beltpp::ip_address> get_to_listen() const = 0;
     virtual std::vector<beltpp::ip_address> get_to_connect() const = 0;
 
-    virtual void get_open_attempts(beltpp::ip_address const& addr, size_t& attempts) const = 0;
+    virtual size_t get_open_attempts(beltpp::ip_address const& addr) const = 0;
 
     virtual void remove_later(beltpp::socket::peer_id const& p,
                               size_t step,
@@ -65,4 +70,7 @@ public:
 
     virtual std::string bucket_dump() = 0;
 };
+
+using p2pstate_ptr = std::unique_ptr<p2pstate, void (*)(p2pstate* &)>;
+p2pstate_ptr getp2pstate();
 }
