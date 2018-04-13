@@ -8,7 +8,7 @@
 
 #include <array>
 #include <functional>
-#include <iostream>
+#include <ostream>
 #include <set>
 #include <utility>
 #include <vector>
@@ -108,7 +108,7 @@ public:
 
     bool replace(const Contact& contact);
 
-    void print_list();
+    void print_list(std::ostream& out);
     iterator find(const Contact& contact);
     std::vector<Contact> list_nearests_to(const Contact &contact, bool prefer_same_index = false) const;
     std::vector<Contact> list_closests() const;
@@ -303,12 +303,12 @@ std::vector<Contact> KBucket<Contact, K>::list_closests() const
 }
 
 template <class Contact, int K>
-void KBucket<Contact, K>::print_list()
+void KBucket<Contact, K>::print_list(std::ostream& out)
 {
     auto & contacts_by_distance = contacts.template get<by_distance>();
     for(auto &it : contacts_by_distance)
     {
-        std::cout<<"index: "<<it.index()<<", id: "<<Contact::to_string(it.value()).substr(0, 5) << std::endl;//<<", dist: "<<it.distance()<<"\n";
+        out<<"index: "<<it.index()<<", id: "<<Contact::to_string(it.value()).substr(0, 5) << std::endl;//<<", dist: "<<it.distance()<<"\n";
     };
 }
 

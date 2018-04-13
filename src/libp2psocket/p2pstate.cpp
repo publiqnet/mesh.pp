@@ -1,7 +1,7 @@
 #include "p2pstate.hpp"
-#include "konnection.hpp"
-#include "kbucket.hpp"
-#include "nodelookup.hpp"
+#include <kbucket/konnection.hpp>
+#include <kbucket/kbucket.hpp>
+#include <kbucket/nodelookup.hpp>
 
 #include <cryptopp/integer.h>
 #include <cryptopp/eccrypto.h>
@@ -620,8 +620,9 @@ public:
         Konnection<> k(nodeid, peerid, system_clock::now());
         kbucket.replace(k);
 
-        if(node_lookup)
-            node_lookup->update_peer(k);
+        //  node lookup design is wrong, does not fit in
+        /*if(node_lookup)
+            node_lookup->update_peer(k);*/
     }
 
     vector<peer_id> get_connected_peerids() const override
@@ -744,15 +745,16 @@ public:
             _konnections.push_back(_konnection);
         }
 
-        if(node_lookup)
+        //  node lookup design is wrong, does not fit in
+        /*if(node_lookup)
         {
             node_lookup->add_konnections(from, _konnections);
 
-            /* NODE LOOKUP MAINTENANCE */
+            /-* NODE LOOKUP MAINTENANCE *-/
             auto const & orphans = node_lookup->orphan_list();
             for (auto const & li : orphans)
                 result.push_back(static_cast<std::string>(li));
-        }
+        }*/
 
         return result;
     }
@@ -790,7 +792,8 @@ public:
     unsigned short fixed_local_port;
     string SelfID;
     KBucket<Konnection<>> kbucket;
-    unique_ptr<NodeLookup> node_lookup;
+    //  node lookup design is wrong, does not fit in
+    //unique_ptr<NodeLookup> node_lookup;
     communication_state<peer_state> program_state;
 };
 using std::unique_ptr;

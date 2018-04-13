@@ -11,8 +11,6 @@ add_executable(mesh.pp.node
     main.cpp
     message.hpp
     message.gen.hpp
-    konnection.hpp
-    nodelookup.hpp
     )
 
 # libraries this module links to

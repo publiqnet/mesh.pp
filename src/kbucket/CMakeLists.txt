@@ -18,8 +18,7 @@ install(TARGETS kbucket
         EXPORT mesh.pp.package
         DESTINATION lib/mesh.pp)
 
-set(SRC_FILES
-    kbucket.hpp)
+set(SRC_FILES)
 
 install(FILES
     ${SRC_FILES}
@@ -29,4 +28,7 @@ install(FILES
 # add custom target simply for IDE to show the files
 #
 add_custom_target(kbucket.include SOURCES
-    ${SRC_FILES})
+    ${SRC_FILES}
+    kbucket.hpp
+    konnection.hpp
+    nodelookup.hpp)

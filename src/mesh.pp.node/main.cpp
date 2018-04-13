@@ -1,7 +1,7 @@
 #include "message.hpp"
 
-#include "nodelookup.hpp"
-#include "konnection.hpp"
+#include <kbucket/nodelookup.hpp>
+#include <kbucket/konnection.hpp>
 #include <kbucket/kbucket.hpp>
 
 #include <belt.pp/packet.hpp>
@@ -1169,7 +1169,7 @@ int main(int argc, char* argv[])
                     cout << "\t" << item.get_address().to_string() << endl;
 
                 cout<<"KBucket list\n--------\n";
-                kbucket.print_list();
+                kbucket.print_list(cout);
                 cout<<"========\n";
             }
 

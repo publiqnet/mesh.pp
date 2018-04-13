@@ -213,7 +213,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             item.local.port = state.get_fixed_local_port();
 
-            m_pimpl->write("start to listen on ");
+            m_pimpl->write("start to listen on");
             m_pimpl->writeln(item.to_string());
 
             peer_ids peers = sk.listen(item);
@@ -221,7 +221,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             for (auto const& peer_item : peers)
             {
                 auto conn_item = sk.info(peer_item);
-                m_pimpl->write("listening on ");
+                m_pimpl->write("listening on");
                 m_pimpl->writeln(conn_item.to_string());
 
                 state.add_active(conn_item, peer_item);
@@ -237,7 +237,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             size_t attempts = state.get_open_attempts(item);
 
-            m_pimpl->write("connect to ");
+            m_pimpl->write("connect to");
             m_pimpl->writeln(item.to_string());
             sk.open(item, attempts);
         }   //  for to_connect
@@ -245,11 +245,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         if (0 == m_pimpl->receive_attempt_count)
         {
             m_pimpl->write(state.short_name());
-            m_pimpl->write(" reading...");
+            m_pimpl->write("reading...");
         }
         else
         {
-            m_pimpl->write(" ");
             m_pimpl->write(std::to_string(m_pimpl->receive_attempt_count));
             m_pimpl->write("...");
         }
@@ -262,7 +261,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         if (false == received_packets.empty())
         {
             m_pimpl->receive_attempt_count = 0;
-            m_pimpl->writeln(" done");
+            m_pimpl->writeln("done");
         }
         else
             ++m_pimpl->receive_attempt_count;
@@ -309,9 +308,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case Error::rtt:
             {
-                m_pimpl->write("got error from bad guy ");
+                m_pimpl->write("got error from bad guy");
                 m_pimpl->writeln(current_connection.to_string());
-                m_pimpl->write("dropping ");
+                m_pimpl->write("dropping");
                 m_pimpl->writeln(current_peer);
                 state.remove_later(current_peer, 0, true);
 
@@ -321,7 +320,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case Drop::rtt:
             {
-                m_pimpl->write("dropped ");
+                m_pimpl->write("dropped");
                 m_pimpl->writeln(current_peer);
                 state.remove_later(current_peer, 0, false);
 
@@ -417,7 +416,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     ip_address introduce_addr = sk.info(introduce_peer_id);
                     OpenConnectionWith msg_open;
 
-                    m_pimpl->write("sending connect info ");
+                    m_pimpl->write("sending connect info");
                     m_pimpl->writeln(introduce_addr.to_string());
 
                     assign(msg_open.addr, introduce_addr);
@@ -462,6 +461,54 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         }
 
         // add missing two node lookup blocks
+        /* node lookup design is wrong, does not fit in
+        if(not option_query.empty()) // command to find some node)
+        {
+            Konnection<> konnection {option_query};
+
+            if(node_lookup)
+            {
+                // cleanup peers
+                for (auto const & _konnection : node_lookup->drop_list())
+                {
+                    message_drop msg;
+                    sk.send(_konnection.get_peer(), msg);
+                }
+            }
+            node_lookup.reset(new NodeLookup {kbucket, konnection});
+            option_query.clear();
+        }
+
+        if (node_lookup)
+        {
+            if ( not node_lookup->is_complete() )
+            {
+                for (auto const & _konnection : node_lookup->get_konnections())
+                {
+                    message_find_node msg;
+                    msg.nodeid = static_cast<std::string>(_konnection);
+                    sk.send(_konnection.get_peer(), msg);
+                }
+            }
+            else
+            {
+                std::cout << "final candidate list";
+                for (auto const & _konnection : node_lookup->candidate_list())
+                {
+                    message_ping msg;
+                    msg.nodeid = static_cast<std::string>(_konnection);
+                    sk.send(_konnection.get_peer(), msg);
+                }
+
+                for (auto const & _konnection : node_lookup->drop_list())
+                {
+                    message_drop msg;
+                    sk.send(_konnection.get_peer(), msg);
+                }
+
+                node_lookup.reset(nullptr);
+            }
+        }*/
 
         if (false == received_packets.empty())
         {
@@ -475,14 +522,14 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 m_pimpl->writeln("status summary - connected");
             for (auto const& item : connected)
             {
-                m_pimpl->write("\t");
+                m_pimpl->write("   ");
                 m_pimpl->writeln(item.to_string());
             }
             if (false == listening.empty())
                 m_pimpl->writeln("status summary - listening");
             for (auto const& item : listening)
             {
-                m_pimpl->write("\t");
+                m_pimpl->write("   ");
                 m_pimpl->writeln(item.to_string());
             }
 
@@ -500,6 +547,11 @@ void p2psocket::send(p2psocket::peer_id const& peer,
                      beltpp::packet const& msg)
 {
     m_pimpl->m_ptr_socket->send(peer, msg);
+}
+
+void p2psocket::set_timer(std::chrono::steady_clock::duration const& period)
+{
+    m_pimpl->m_ptr_socket->set_timer(period);
 }
 }
 
