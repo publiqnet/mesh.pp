@@ -190,7 +190,7 @@ p2psocket::~p2psocket()
 
 p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 {
-    p2psocket::packets return_packets;
+    packets return_packets;
 
     p2pstate& state = *m_pimpl->m_ptr_state.get();
     socket& sk = *m_pimpl->m_ptr_socket.get();
@@ -315,7 +315,14 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 state.remove_later(current_peer, 0, true);
 
                 peer = state.get_nodeid(current_peer);
-                return_packets.emplace_back(Drop());
+                if (false == peer.empty())
+                {
+                    packet packet_drop;
+                    packet_drop.set(m_pimpl->m_rtt_drop,
+                                    m_pimpl->m_fcreator_drop(),
+                                    m_pimpl->m_fsaver_drop);
+                    return_packets.emplace_back(std::move(packet_drop));
+                }
                 break;
             }
             case Drop::rtt:
@@ -325,7 +332,14 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 state.remove_later(current_peer, 0, false);
 
                 peer = state.get_nodeid(current_peer);
-                return_packets.emplace_back(Drop());
+                if (false == peer.empty())
+                {
+                    packet packet_drop;
+                    packet_drop.set(m_pimpl->m_rtt_drop,
+                                    m_pimpl->m_fcreator_drop(),
+                                    m_pimpl->m_fsaver_drop);
+                    return_packets.emplace_back(std::move(packet_drop));
+                }
 
                 break;
             }
@@ -335,7 +349,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 Ping msg;
                 received_packet.get(msg);
 
-                if (state.add_contact(current_peer, msg.nodeid))
+                p2pstate::contact_status status =
+                    state.add_contact(current_peer, msg.nodeid);
+
+                if (status != p2pstate::contact_status::no_contact)
                 {
                     state.set_active_nodeid(current_peer, msg.nodeid);
 
@@ -345,8 +362,16 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                     state.undo_remove(current_peer);
 
-                    return_packets.emplace_back(Join());
-                    peer = state.get_nodeid(current_peer);
+                    if (false == msg.nodeid.empty() &&
+                        p2pstate::contact_status::new_contact == status)
+                    {
+                        peer = msg.nodeid;
+                        packet packet_join;
+                        packet_join.set(m_pimpl->m_rtt_join,
+                                        m_pimpl->m_fcreator_join(),
+                                        m_pimpl->m_fsaver_join);
+                        return_packets.emplace_back(std::move(packet_join));
+                    }
                 }
                 else
                     m_pimpl->writeln("cannot add contact");
@@ -454,7 +479,22 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     sk.send(item, msg_ping);
                 }
 
-                return_packets.emplace_back(TimerOut());
+                packet packet_timer_out;
+                packet_timer_out.set(m_pimpl->m_rtt_timer_out,
+                                     m_pimpl->m_fcreator_timer_out(),
+                                     m_pimpl->m_fsaver_timer_out);
+                return_packets.emplace_back(std::move(packet_timer_out));
+                break;
+            }
+            case Other::rtt:
+            {
+                peer = state.get_nodeid(current_peer);
+                if (false == peer.empty())
+                {
+                    Other pack;
+                    received_packet.get(pack);
+                    return_packets.emplace_back(std::move(pack.contents));
+                }
                 break;
             }
             }
@@ -543,15 +583,31 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
     return return_packets;
 }
 
-void p2psocket::send(p2psocket::peer_id const& peer,
-                     beltpp::packet const& msg)
+void p2psocket::send(peer_id const& peer,
+                     packet&& pack)
 {
-    m_pimpl->m_ptr_socket->send(peer, msg);
+    p2pstate& state = *m_pimpl->m_ptr_state.get();
+    peer_id p2p_peerid;
+
+    if (state.get_peer_id(peer, p2p_peerid))
+    {
+        Other wrapper;
+        wrapper.contents = std::move(pack);
+        m_pimpl->m_ptr_socket->send(p2p_peerid, wrapper);
+    }
+    else
+        throw std::runtime_error("no such node: " + peer);
 }
 
 void p2psocket::set_timer(std::chrono::steady_clock::duration const& period)
 {
     m_pimpl->m_ptr_socket->set_timer(period);
+}
+
+string p2psocket::name() const
+{
+    p2pstate& state = *m_pimpl->m_ptr_state.get();
+    return state.name();
 }
 }
 

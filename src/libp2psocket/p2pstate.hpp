@@ -15,18 +15,19 @@ class p2pstate
 public:
     enum class insert_code {old, fresh};
     enum class update_code {updated, added};
+    enum class contact_status {no_contact, new_contact, existing_contact};
 
     virtual ~p2pstate() {};
-    virtual std::string name() const noexcept = 0;
-    virtual std::string short_name() const noexcept = 0;
+    virtual std::string name() const = 0;
+    virtual std::string short_name() const = 0;
 
     virtual void set_fixed_local_port(unsigned short fixed_local_port) = 0;
     virtual unsigned short get_fixed_local_port() const = 0;
 
     virtual void do_step() = 0;
 
-    virtual bool add_contact(beltpp::socket::peer_id const& peer_id,
-                             std::string const& nodeid) = 0;
+    virtual contact_status add_contact(beltpp::socket::peer_id const& peer_id,
+                                       std::string const& nodeid) = 0;
 
     virtual void set_active_nodeid(beltpp::socket::peer_id const& peer_id,
                                    std::string const& nodeid) = 0;
@@ -65,6 +66,7 @@ public:
                                                           std::vector<std::string> const& nodeids) = 0;
 
     virtual std::string get_nodeid(beltpp::socket::peer_id const& peer_id) = 0;
+    virtual bool get_peer_id(std::string const& nodeid, beltpp::socket::peer_id& peerid) = 0;
     virtual bool process_introduce_request(std::string const& nodeid,
                                            beltpp::socket::peer_id& peer_id) = 0;
 

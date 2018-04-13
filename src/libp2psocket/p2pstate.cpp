@@ -579,11 +579,11 @@ public:
     {
 
     }
-    string name() const noexcept override
+    string name() const override
     {
         return SelfID;
     }
-    string short_name() const noexcept override
+    string short_name() const override
     {
         return SelfID.substr(0, 5) + "...";
     }
@@ -602,10 +602,16 @@ public:
         program_state.do_step();
     }
 
-    bool add_contact(peer_id const& peerid, string const& nodeid) override
+    contact_status add_contact(peer_id const& peerid,
+                               string const& nodeid) override
     {
         Konnection<> k{nodeid, peerid, {}};
-        return (kbucket.find(k) != kbucket.end() || kbucket.insert(k));
+        if (kbucket.find(k) != kbucket.end())
+            return contact_status::existing_contact;
+        else if (kbucket.insert(k))
+            return contact_status::new_contact;
+        else
+            return contact_status::no_contact;
     }
 
     void set_active_nodeid(peer_id const& peerid, string const& nodeid) override
@@ -765,6 +771,19 @@ public:
         if (program_state.get_active_value(peerid, value))
             return value.node_id;
         return string();
+    }
+
+    bool get_peer_id(string const& nodeid, peer_id& peerid) override
+    {
+        Konnection<> k_nodeid(nodeid);
+        auto it_find = kbucket.find(k_nodeid);
+        if (it_find != kbucket.end())
+        {
+            auto k = Konnection<>(*it_find);
+            peerid = k.get_peer();
+            return true;
+        }
+        return false;
     }
 
     bool process_introduce_request(string const& nodeid, peer_id& peerid) override
