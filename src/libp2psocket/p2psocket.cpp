@@ -62,13 +62,13 @@ public:
                         detail::fptr_saver fsaver_join,
                         detail::fptr_saver fsaver_drop,
                         detail::fptr_saver fsaver_timer_out,
-                        beltpp::void_unique_ptr&& putl)
+                        beltpp::void_unique_ptr&& putl,
+                        beltpp::ilog* _plogger)
         : m_ptr_socket(new beltpp::socket(
             beltpp::getsocket<sf>(std::move(putl))
                                           ))
         , m_ptr_state(getp2pstate())
-        , m_flog_message(nullptr)
-        , m_flog_message_line(nullptr)
+        , plogger(_plogger)
         , receive_attempt_count(0)
         , m_rtt_error(rtt_error)
         , m_rtt_join(rtt_join)
@@ -108,11 +108,22 @@ public:
         }
     }
 
+    void write(string const& value)
+    {
+        if (plogger)
+            plogger->message_no_eol(value);
+    }
+
+    void writeln(string const& value)
+    {
+        if (plogger)
+            plogger->message(value);
+    }
+
     unique_ptr<beltpp::socket> m_ptr_socket;
     meshpp::p2pstate_ptr m_ptr_state;
 
-    void (*m_flog_message)(string const&);
-    void (*m_flog_message_line)(string const&);
+    beltpp::ilog* plogger;
     size_t receive_attempt_count;
 
     size_t m_rtt_error;
@@ -147,7 +158,8 @@ p2psocket::p2psocket(ip_address const& bind_to_address,
                      detail::fptr_saver _fsaver_join,
                      detail::fptr_saver _fsaver_drop,
                      detail::fptr_saver _fsaver_timer_out,
-                     beltpp::void_unique_ptr&& putl)
+                     beltpp::void_unique_ptr&& putl,
+                     beltpp::ilog* plogger)
     : isocket()
     , m_pimpl(new detail::p2psocket_internals(bind_to_address,
                                               connect_to_addresses,
@@ -163,7 +175,8 @@ p2psocket::p2psocket(ip_address const& bind_to_address,
                                               _fsaver_join,
                                               _fsaver_drop,
                                               _fsaver_timer_out,
-                                              std::move(putl)))
+                                              std::move(putl),
+                                              plogger))
 {
 
 }
@@ -174,14 +187,6 @@ p2psocket::~p2psocket()
 {
 
 }
-
-void invoke(void(*fp)(string const&), string const& m)
-{
-    if (fp) fp(m);
-}
-
-#define write(x) invoke(m_pimpl->m_flog_message, (x))
-#define writeln(x) invoke(m_pimpl->m_flog_message_line, (x))
 
 p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 {
@@ -208,16 +213,16 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             item.local.port = state.get_fixed_local_port();
 
-            write("start to listen on ");
-            writeln(item.to_string());
+            m_pimpl->write("start to listen on ");
+            m_pimpl->writeln(item.to_string());
 
             peer_ids peers = sk.listen(item);
 
             for (auto const& peer_item : peers)
             {
                 auto conn_item = sk.info(peer_item);
-                write("listening on ");
-                writeln(conn_item.to_string());
+                m_pimpl->write("listening on ");
+                m_pimpl->writeln(conn_item.to_string());
 
                 state.add_active(conn_item, peer_item);
             }
@@ -232,21 +237,21 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             size_t attempts = state.get_open_attempts(item);
 
-            write("connect to ");
-            writeln(item.to_string());
+            m_pimpl->write("connect to ");
+            m_pimpl->writeln(item.to_string());
             sk.open(item, attempts);
         }   //  for to_connect
 
         if (0 == m_pimpl->receive_attempt_count)
         {
-            write(state.short_name());
-            write(" reading...");
+            m_pimpl->write(state.short_name());
+            m_pimpl->write(" reading...");
         }
         else
         {
-            write(" ");
-            write(std::to_string(m_pimpl->receive_attempt_count));
-            write("...");
+            m_pimpl->write(" ");
+            m_pimpl->write(std::to_string(m_pimpl->receive_attempt_count));
+            m_pimpl->write("...");
         }
 
         peer_id current_peer;
@@ -257,7 +262,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         if (false == received_packets.empty())
         {
             m_pimpl->receive_attempt_count = 0;
-            writeln(" done");
+            m_pimpl->writeln(" done");
         }
         else
             ++m_pimpl->receive_attempt_count;
@@ -284,7 +289,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                     Ping ping_msg;
                     ping_msg.nodeid = state.name();
-                    writeln("sending ping");
+                    m_pimpl->writeln("sending ping");
                     sk.send(current_peer, ping_msg);
                     state.remove_later(current_peer, 10, true);
 
@@ -304,10 +309,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case Error::rtt:
             {
-                write("got error from bad guy ");
-                writeln(current_connection.to_string());
-                write("dropping ");
-                writeln(current_peer);
+                m_pimpl->write("got error from bad guy ");
+                m_pimpl->writeln(current_connection.to_string());
+                m_pimpl->write("dropping ");
+                m_pimpl->writeln(current_peer);
                 state.remove_later(current_peer, 0, true);
 
                 peer = state.get_nodeid(current_peer);
@@ -316,8 +321,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case Drop::rtt:
             {
-                write("dropped ");
-                writeln(current_peer);
+                m_pimpl->write("dropped ");
+                m_pimpl->writeln(current_peer);
                 state.remove_later(current_peer, 0, false);
 
                 peer = state.get_nodeid(current_peer);
@@ -327,7 +332,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case Ping::rtt:
             {
-                writeln("ping received");
+                m_pimpl->writeln("ping received");
                 Ping msg;
                 received_packet.get(msg);
 
@@ -345,12 +350,12 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     peer = state.get_nodeid(current_peer);
                 }
                 else
-                    writeln("cannot add contact");
+                    m_pimpl->writeln("cannot add contact");
                 break;
             }
             case Pong::rtt:
             {
-                writeln("pong received");
+                m_pimpl->writeln("pong received");
                 Pong msg;
                 received_packet.get(msg);
 
@@ -359,7 +364,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 state.update(current_peer, msg.nodeid);
 
-                writeln("sending find node");
+                m_pimpl->writeln("sending find node");
 
                 FindNode msg_fn;
                 msg_fn.nodeid = state.name();
@@ -368,7 +373,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case FindNode::rtt:
             {
-                writeln("find node received");
+                m_pimpl->writeln("find node received");
                 FindNode msg;
                 received_packet.get(msg);
 
@@ -381,7 +386,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case NodeDetails::rtt:
             {
-                writeln("node details received");
+                m_pimpl->writeln("node details received");
                 NodeDetails msg;
                 received_packet.get(msg);
 
@@ -402,7 +407,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case IntroduceTo::rtt:
             {
-                writeln("introduce request received");
+                m_pimpl->writeln("introduce request received");
                 IntroduceTo msg;
                 received_packet.get(msg);
 
@@ -412,8 +417,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     ip_address introduce_addr = sk.info(introduce_peer_id);
                     OpenConnectionWith msg_open;
 
-                    write("sending connect info ");
-                    writeln(introduce_addr.to_string());
+                    m_pimpl->write("sending connect info ");
+                    m_pimpl->writeln(introduce_addr.to_string());
 
                     assign(msg_open.addr, introduce_addr);
 
@@ -426,7 +431,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             case OpenConnectionWith::rtt:
             {
-                writeln("connect info received");
+                m_pimpl->writeln("connect info received");
 
                 OpenConnectionWith msg;
                 received_packet.get(msg);
@@ -461,30 +466,30 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         if (false == received_packets.empty())
         {
             std::time_t time_t_now = system_clock::to_time_t(system_clock::now());
-            writeln(beltpp::gm_time_t_to_lc_string(time_t_now));
+            m_pimpl->writeln(beltpp::gm_time_t_to_lc_string(time_t_now));
 
             auto connected = state.get_connected_addresses();
             auto listening = state.get_listening_addresses();
 
             if (false == connected.empty())
-                writeln("status summary - connected");
+                m_pimpl->writeln("status summary - connected");
             for (auto const& item : connected)
             {
-                write("\t");
-                writeln(item.to_string());
+                m_pimpl->write("\t");
+                m_pimpl->writeln(item.to_string());
             }
             if (false == listening.empty())
-                writeln("status summary - listening");
+                m_pimpl->writeln("status summary - listening");
             for (auto const& item : listening)
             {
-                write("\t");
-                writeln(item.to_string());
+                m_pimpl->write("\t");
+                m_pimpl->writeln(item.to_string());
             }
 
-            writeln("KBucket list");
-            writeln("--------");
-            writeln(state.bucket_dump());
-            writeln("========");
+            m_pimpl->writeln("KBucket list");
+            m_pimpl->writeln("--------");
+            m_pimpl->writeln(state.bucket_dump());
+            m_pimpl->writeln("========");
         }
     }
 

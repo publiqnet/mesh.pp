@@ -4,6 +4,7 @@
 #include <belt.pp/isocket.hpp>
 #include <belt.pp/packet.hpp>
 #include <belt.pp/message_global.hpp>
+#include <belt.pp/ilog.hpp>
 
 #include <memory>
 #include <string>
@@ -73,7 +74,8 @@ public:
               detail::fptr_saver _fsaver_join,
               detail::fptr_saver _fsaver_drop,
               detail::fptr_saver _fsaver_timer_out,
-              beltpp::void_unique_ptr&& putl);
+              beltpp::void_unique_ptr&& putl,
+              beltpp::ilog* plogger);
     p2psocket(p2psocket&& other);
     virtual ~p2psocket();
 
@@ -91,7 +93,8 @@ private:
 template <typename T_p2psocket_family>
 P2PSOCKETSHARED_EXPORT p2psocket getp2psocket(beltpp::ip_address const& bind_to_address,
                                               std::vector<beltpp::ip_address> const& connect_to_addresses,
-                                              beltpp::void_unique_ptr&& putl)
+                                              beltpp::void_unique_ptr&& putl,
+                                              beltpp::ilog* plogger)
 {
     return
     p2psocket(bind_to_address,
@@ -108,7 +111,8 @@ P2PSOCKETSHARED_EXPORT p2psocket getp2psocket(beltpp::ip_address const& bind_to_
               T_p2psocket_family::fsaver_join,
               T_p2psocket_family::fsaver_drop,
               T_p2psocket_family::fsaver_timer_out,
-              std::move(putl));
+              std::move(putl),
+              plogger);
 }
 
 }

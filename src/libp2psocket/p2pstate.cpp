@@ -807,9 +807,6 @@ namespace meshpp
 {
 p2pstate_ptr getp2pstate()
 {
-    p2pstate_ptr ptr(nullptr, &del_p2pstate_ex);
-    ptr.reset(new p2pstate_ex());
-
-    return ptr;
+    return beltpp::new_dc_unique_ptr<meshpp::p2pstate, p2pstate_ex>();
 }
 }

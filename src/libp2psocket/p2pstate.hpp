@@ -71,6 +71,6 @@ public:
     virtual std::string bucket_dump() = 0;
 };
 
-using p2pstate_ptr = std::unique_ptr<p2pstate, void (*)(p2pstate* &)>;
+using p2pstate_ptr = beltpp::t_unique_ptr<p2pstate>;
 p2pstate_ptr getp2pstate();
 }
