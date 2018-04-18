@@ -266,7 +266,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         else
             ++m_pimpl->receive_attempt_count;
 
-        for (auto const& received_packet : received_packets)
+        for (auto& received_packet : received_packets)
         {
             if (TimerOut::rtt != received_packet.type() &&
                 Drop::rtt != received_packet.type())
@@ -317,11 +317,11 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 peer = state.get_nodeid(current_peer);
                 if (false == peer.empty())
                 {
-                    packet packet_drop;
-                    packet_drop.set(m_pimpl->m_rtt_drop,
-                                    m_pimpl->m_fcreator_drop(),
-                                    m_pimpl->m_fsaver_drop);
-                    return_packets.emplace_back(std::move(packet_drop));
+                    packet packet_error;
+                    packet_error.set(m_pimpl->m_rtt_error,
+                                     m_pimpl->m_fcreator_error(),
+                                     m_pimpl->m_fsaver_error);
+                    return_packets.emplace_back(std::move(packet_error));
                 }
                 break;
             }
@@ -492,7 +492,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 if (false == peer.empty())
                 {
                     Other pack;
-                    received_packet.get(pack);
+                    std::move(received_packet).get(pack);
                     return_packets.emplace_back(std::move(pack.contents));
                 }
                 break;
@@ -593,7 +593,7 @@ void p2psocket::send(peer_id const& peer,
     {
         Other wrapper;
         wrapper.contents = std::move(pack);
-        m_pimpl->m_ptr_socket->send(p2p_peerid, wrapper);
+        m_pimpl->m_ptr_socket->send(p2p_peerid, std::move(wrapper));
     }
     else
         throw std::runtime_error("no such node: " + peer);

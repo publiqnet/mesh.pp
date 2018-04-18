@@ -597,7 +597,7 @@ public:
         return fixed_local_port;
     }
 
-    void do_step()
+    void do_step() override
     {
         program_state.do_step();
     }
@@ -680,7 +680,7 @@ public:
     {
         return program_state.get_to_listen();
     }
-    vector<ip_address> get_to_connect() const
+    vector<ip_address> get_to_connect() const override
     {
         return program_state.get_to_connect();
     }
@@ -734,7 +734,7 @@ public:
 
     vector<string> process_node_details(peer_id const& peerid,
                                         string const& origin_nodeid,
-                                        vector<string> const& nodeids)
+                                        vector<string> const& nodeids) override
     {
         vector<string> result;
 
@@ -815,20 +815,11 @@ public:
     //unique_ptr<NodeLookup> node_lookup;
     communication_state<peer_state> program_state;
 };
-using std::unique_ptr;
-using meshpp::p2pstate;
-
-void del_p2pstate_ex(p2pstate* &p)
-{
-    p2pstate_ex* pex = dynamic_cast<p2pstate_ex*>(p);
-    delete pex;
-    p = nullptr;
-}
 
 namespace meshpp
 {
 p2pstate_ptr getp2pstate()
 {
-    return beltpp::new_dc_unique_ptr<meshpp::p2pstate, p2pstate_ex>();
+    return beltpp::new_dc_unique_ptr<p2pstate, p2pstate_ex>();
 }
 }

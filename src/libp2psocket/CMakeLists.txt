@@ -5,7 +5,7 @@ add_custom_command (
   COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/message.idl ${CMAKE_CURRENT_SOURCE_DIR}/message.gen.hpp
 )
 
-add_definitions(-DP2P_LIBRARY)
+add_definitions(-DP2PSOCKET_LIBRARY)
 
 # define the shared library
 add_library(p2psocket SHARED
