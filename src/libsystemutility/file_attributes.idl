@@ -1,0 +1,11 @@
+module FileAttributes
+{
+    class Attributes
+    {
+        Array Object attributes
+    }
+    class LockedByPID
+    {
+        UInt64 pid
+    }
+}

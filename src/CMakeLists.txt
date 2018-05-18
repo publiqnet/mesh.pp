@@ -10,6 +10,7 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/mesh.pp;${CMAKE_INSTALL_PRE
 if(NOT BELT_PP_LOADED)
 add_subdirectory(belt.pp)
 endif()
+add_subdirectory(libsystemutility)
 add_subdirectory(libp2psocket)
 add_subdirectory(mesh.pp)
 add_subdirectory(mesh.pp.node)

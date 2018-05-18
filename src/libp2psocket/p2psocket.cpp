@@ -578,6 +578,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln(state.bucket_dump());
             m_pimpl->writeln("========");
         }
+
+        if (received_packets.empty())   //  in cases when lower layer returns with no messages
+            break;                      //  let higher layer do the same
     }
 
     return return_packets;

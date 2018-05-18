@@ -72,6 +72,8 @@ install(TARGETS mesh.pp
 
 set(SRC_FILES
     global.hpp
+    fileutility.hpp
+    processutility.hpp
     p2psocket.hpp)
 
 install(FILES
