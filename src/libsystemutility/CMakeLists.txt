@@ -21,6 +21,7 @@ add_library(systemutility SHARED
 target_link_libraries(systemutility PUBLIC
     mesh.pp
     belt.pp
+    packet
     PRIVATE
     utility)
 
