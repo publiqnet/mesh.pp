@@ -6,6 +6,6 @@ module FileAttributes
     }
     class LockedByPID
     {
-        UInt64 pid
+        UInt64 owner
     }
 }
