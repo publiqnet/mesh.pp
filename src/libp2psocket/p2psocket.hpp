@@ -79,6 +79,10 @@ public:
     p2psocket(p2psocket&& other);
     virtual ~p2psocket();
 
+    int native_handle() const override;
+
+    void prepare_receive() override;
+
     packets receive(peer_id& peer) override;
 
     void send(peer_id const& peer,

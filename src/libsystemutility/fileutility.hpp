@@ -72,13 +72,17 @@ public:
     }
 
     T const* operator -> () const { return ptr.get(); }
-    T* operator -> () { return ptr.get(); }
+    T* operator -> () { clean_commited(); return ptr.get(); }
 
     T const& last_layer() const { return *ptr.get(); }
-    T& last_layer() { return *ptr.get(); }
+    T& last_layer() { clean_commited(); return *ptr.get(); }
     T const& next_layer() const { return *ptr.get(); }
-    T& next_layer() { return *ptr.get(); }
+    T& next_layer() { clean_commited(); return *ptr.get(); }
 private:
+    inline void clean_commited()
+    {
+        committed = false;
+    }
     bool _commit()
     {
         if (committed)
@@ -187,14 +191,18 @@ public:
     }
 
     T const* operator -> () const { return ptr.get(); }
-    T* operator -> () { return ptr.get(); }
+    T* operator -> () { clean_commited(); return ptr.get(); }
 
     T const& last_layer() const { return *ptr.get(); }
-    T& last_layer() { return *ptr.get(); }
+    T& last_layer() { clean_commited(); return *ptr.get(); }
     T const& next_layer() const { return *ptr.get(); }
-    T& next_layer() { return *ptr.get(); }
+    T& next_layer() { clean_commited(); return *ptr.get(); }
 
 private:
+    inline void clean_commited()
+    {
+        committed = false;
+    }
     bool _commit()
     {
         if (committed)

@@ -188,399 +188,409 @@ p2psocket::~p2psocket()
 
 }
 
+int p2psocket::native_handle() const
+{
+    return m_pimpl->m_ptr_socket->native_handle();
+}
+
+void p2psocket::prepare_receive()
+{
+    p2pstate& state = *m_pimpl->m_ptr_state.get();
+    socket& sk = *m_pimpl->m_ptr_socket.get();
+
+    auto to_remove = state.remove_pending();
+    for (auto const& remove_sk : to_remove)
+        sk.send(remove_sk, Drop());
+
+    auto to_listen = state.get_to_listen();
+    for (auto& item : to_listen)
+    {
+        state.remove_later(item, 0, false);
+        //  so that will not try to listen on this, over and over
+        //  because the below "add_active" is not always able to replace this
+
+        assert(state.get_fixed_local_port());
+        if (0 == state.get_fixed_local_port())
+            throw std::runtime_error("impossible to listen without fixed local port");
+
+        item.local.port = state.get_fixed_local_port();
+
+        m_pimpl->write("start to listen on");
+        m_pimpl->writeln(item.to_string());
+
+        peer_ids peers = sk.listen(item);
+
+        for (auto const& peer_item : peers)
+        {
+            auto conn_item = sk.info(peer_item);
+            m_pimpl->write("listening on");
+            m_pimpl->writeln(conn_item.to_string());
+
+            state.add_active(conn_item, peer_item);
+        }
+    }   //  for to_listen
+
+    auto to_connect = state.get_to_connect();
+    for (auto const& item : to_connect)
+    {
+        state.remove_later(item, 0, false);
+        //  so that will not try to connect to this, over and over
+        //  because the corresponding "add_active" is not always able to replace this
+
+        size_t attempts = state.get_open_attempts(item);
+
+        m_pimpl->write("connect to");
+        m_pimpl->writeln(item.to_string());
+        sk.open(item, attempts);
+    }   //  for to_connect
+
+    if (0 == m_pimpl->receive_attempt_count)
+    {
+        m_pimpl->write(state.short_name());
+        m_pimpl->write("reading...");
+    }
+    else
+    {
+        m_pimpl->write(std::to_string(m_pimpl->receive_attempt_count));
+        m_pimpl->write("...");
+    }
+
+    sk.prepare_receive();
+}
+
 p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 {
     packets return_packets;
 
     p2pstate& state = *m_pimpl->m_ptr_state.get();
     socket& sk = *m_pimpl->m_ptr_socket.get();
-    while (return_packets.empty())
+
+    prepare_receive();
+
+    peer_id current_peer;
+    ip_address current_connection;
+
+    packets received_packets = sk.receive(current_peer);
+
+    if (false == received_packets.empty())
     {
-        auto to_remove = state.remove_pending();
-        for (auto const& remove_sk : to_remove)
-            sk.send(remove_sk, Drop());
+        m_pimpl->receive_attempt_count = 0;
+        m_pimpl->writeln("done");
+    }
+    else
+        ++m_pimpl->receive_attempt_count;
 
-        auto to_listen = state.get_to_listen();
-        for (auto& item : to_listen)
+    for (auto& received_packet : received_packets)
+    {
+        if (TimerOut::rtt != received_packet.type() &&
+            Drop::rtt != received_packet.type())
         {
-            state.remove_later(item, 0, false);
-            //  so that will not try to listen on this, over and over
-            //  because the below "add_active" is not always able to replace this
-
-            assert(state.get_fixed_local_port());
-            if (0 == state.get_fixed_local_port())
-                throw std::runtime_error("impossible to listen without fixed local port");
-
-            item.local.port = state.get_fixed_local_port();
-
-            m_pimpl->write("start to listen on");
-            m_pimpl->writeln(item.to_string());
-
-            peer_ids peers = sk.listen(item);
-
-            for (auto const& peer_item : peers)
-            {
-                auto conn_item = sk.info(peer_item);
-                m_pimpl->write("listening on");
-                m_pimpl->writeln(conn_item.to_string());
-
-                state.add_active(conn_item, peer_item);
-            }
-        }   //  for to_listen
-
-        auto to_connect = state.get_to_connect();
-        for (auto const& item : to_connect)
-        {
-            state.remove_later(item, 0, false);
-            //  so that will not try to connect to this, over and over
-            //  because the corresponding "add_active" is not always able to replace this
-
-            size_t attempts = state.get_open_attempts(item);
-
-            m_pimpl->write("connect to");
-            m_pimpl->writeln(item.to_string());
-            sk.open(item, attempts);
-        }   //  for to_connect
-
-        if (0 == m_pimpl->receive_attempt_count)
-        {
-            m_pimpl->write(state.short_name());
-            m_pimpl->write("reading...");
-        }
-        else
-        {
-            m_pimpl->write(std::to_string(m_pimpl->receive_attempt_count));
-            m_pimpl->write("...");
+            assert(false == current_peer.empty());
+            try {
+            current_connection = sk.info(current_peer);
+            } catch (...) {assert(false);}
         }
 
-        peer_id current_peer;
-        ip_address current_connection;
-
-        packets received_packets = sk.receive(current_peer);
-
-        if (false == received_packets.empty())
+        switch (received_packet.type())
         {
-            m_pimpl->receive_attempt_count = 0;
-            m_pimpl->writeln("done");
-        }
-        else
-            ++m_pimpl->receive_attempt_count;
-
-        for (auto& received_packet : received_packets)
+        case Join::rtt:
         {
-            if (TimerOut::rtt != received_packet.type() &&
-                Drop::rtt != received_packet.type())
+            if (0 == state.get_fixed_local_port() ||
+                current_connection.local.port == state.get_fixed_local_port())
             {
-                assert(false == current_peer.empty());
-                try {
-                current_connection = sk.info(current_peer);
-                } catch (...) {assert(false);}
-            }
+                state.add_active(current_connection, current_peer);
 
-            switch (received_packet.type())
-            {
-            case Join::rtt:
-            {
-                if (0 == state.get_fixed_local_port() ||
-                    current_connection.local.port == state.get_fixed_local_port())
-                {
-                    state.add_active(current_connection, current_peer);
+                Ping ping_msg;
+                ping_msg.nodeid = state.name();
+                m_pimpl->writeln("sending ping");
+                sk.send(current_peer, ping_msg);
+                state.remove_later(current_peer, 10, true);
 
-                    Ping ping_msg;
-                    ping_msg.nodeid = state.name();
-                    m_pimpl->writeln("sending ping");
-                    sk.send(current_peer, ping_msg);
-                    state.remove_later(current_peer, 10, true);
+                state.set_fixed_local_port(current_connection.local.port);
 
-                    state.set_fixed_local_port(current_connection.local.port);
-
-                    ip_address to_listen(current_connection.local,
-                                         current_connection.ip_type);
-                    state.add_passive(to_listen);
-                }
-                else
-                {
-                    sk.send(current_peer, Drop());
-                    current_connection.local.port = state.get_fixed_local_port();
-                    state.add_passive(current_connection);
-                }
-                break;
-            }
-            case Error::rtt:
-            {
-                m_pimpl->write("got error from bad guy");
-                m_pimpl->writeln(current_connection.to_string());
-                m_pimpl->write("dropping");
-                m_pimpl->writeln(current_peer);
-                state.remove_later(current_peer, 0, true);
-
-                peer = state.get_nodeid(current_peer);
-                if (false == peer.empty())
-                {
-                    packet packet_error;
-                    packet_error.set(m_pimpl->m_rtt_error,
-                                     m_pimpl->m_fcreator_error(),
-                                     m_pimpl->m_fsaver_error);
-                    return_packets.emplace_back(std::move(packet_error));
-                }
-                break;
-            }
-            case Drop::rtt:
-            {
-                m_pimpl->write("dropped");
-                m_pimpl->writeln(current_peer);
-                state.remove_later(current_peer, 0, false);
-
-                peer = state.get_nodeid(current_peer);
-                if (false == peer.empty())
-                {
-                    packet packet_drop;
-                    packet_drop.set(m_pimpl->m_rtt_drop,
-                                    m_pimpl->m_fcreator_drop(),
-                                    m_pimpl->m_fsaver_drop);
-                    return_packets.emplace_back(std::move(packet_drop));
-                }
-
-                break;
-            }
-            case Ping::rtt:
-            {
-                m_pimpl->writeln("ping received");
-                Ping msg;
-                received_packet.get(msg);
-
-                p2pstate::contact_status status =
-                    state.add_contact(current_peer, msg.nodeid);
-
-                if (status != p2pstate::contact_status::no_contact)
-                {
-                    state.set_active_nodeid(current_peer, msg.nodeid);
-
-                    Pong msg_pong;
-                    msg_pong.nodeid = state.name();
-                    sk.send(current_peer, msg_pong);
-
-                    state.undo_remove(current_peer);
-
-                    if (false == msg.nodeid.empty() &&
-                        p2pstate::contact_status::new_contact == status)
-                    {
-                        peer = msg.nodeid;
-                        packet packet_join;
-                        packet_join.set(m_pimpl->m_rtt_join,
-                                        m_pimpl->m_fcreator_join(),
-                                        m_pimpl->m_fsaver_join);
-                        return_packets.emplace_back(std::move(packet_join));
-                    }
-                }
-                else
-                    m_pimpl->writeln("cannot add contact");
-                break;
-            }
-            case Pong::rtt:
-            {
-                m_pimpl->writeln("pong received");
-                Pong msg;
-                received_packet.get(msg);
-
-                if (state.name() == msg.nodeid)
-                    break;
-
-                state.update(current_peer, msg.nodeid);
-
-                m_pimpl->writeln("sending find node");
-
-                FindNode msg_fn;
-                msg_fn.nodeid = state.name();
-                sk.send(current_peer, msg_fn);
-                break;
-            }
-            case FindNode::rtt:
-            {
-                m_pimpl->writeln("find node received");
-                FindNode msg;
-                received_packet.get(msg);
-
-                NodeDetails response;
-                response.origin = state.name();
-                response.nodeids = state.list_nearest_to(msg.nodeid);
-
-                sk.send(current_peer, response);
-                break;
-            }
-            case NodeDetails::rtt:
-            {
-                m_pimpl->writeln("node details received");
-                NodeDetails msg;
-                received_packet.get(msg);
-
-                vector<string> want_introduce =
-                        state.process_node_details(current_peer,
-                                                   msg.origin,
-                                                   msg.nodeids);
-
-                for (auto const& intro : want_introduce)
-                {
-                    IntroduceTo msg_intro;
-                    msg_intro.nodeid = intro;
-
-                    sk.send(current_peer, msg_intro);
-                }
-
-                break;
-            }
-            case IntroduceTo::rtt:
-            {
-                m_pimpl->writeln("introduce request received");
-                IntroduceTo msg;
-                received_packet.get(msg);
-
-                peer_id introduce_peer_id;
-                if (state.process_introduce_request(msg.nodeid, introduce_peer_id))
-                {
-                    ip_address introduce_addr = sk.info(introduce_peer_id);
-                    OpenConnectionWith msg_open;
-
-                    m_pimpl->write("sending connect info");
-                    m_pimpl->writeln(introduce_addr.to_string());
-
-                    assign(msg_open.addr, introduce_addr);
-
-                    sk.send(current_peer, msg_open);
-
-                    msg_open.addr = current_connection;
-                    sk.send(introduce_peer_id, msg_open);
-                }
-                break;
-            }
-            case OpenConnectionWith::rtt:
-            {
-                m_pimpl->writeln("connect info received");
-
-                OpenConnectionWith msg;
-                received_packet.get(msg);
-
-                ip_address connect_to;
-                assign(connect_to, msg.addr);
-                connect_to.local = current_connection.local;
-
-                state.add_passive(connect_to, 100);
-                break;
-            }
-            case TimerOut::rtt:
-            {
-                state.do_step();
-
-                auto connected = state.get_connected_peerids();
-                for (auto const& item : connected)
-                {
-                    Ping msg_ping;
-                    msg_ping.nodeid = state.name();
-                    sk.send(item, msg_ping);
-                }
-
-                packet packet_timer_out;
-                packet_timer_out.set(m_pimpl->m_rtt_timer_out,
-                                     m_pimpl->m_fcreator_timer_out(),
-                                     m_pimpl->m_fsaver_timer_out);
-                return_packets.emplace_back(std::move(packet_timer_out));
-                break;
-            }
-            case Other::rtt:
-            {
-                peer = state.get_nodeid(current_peer);
-                if (false == peer.empty())
-                {
-                    Other pack;
-                    std::move(received_packet).get(pack);
-                    return_packets.emplace_back(std::move(pack.contents));
-                }
-                break;
-            }
-            }
-        }
-
-        // add missing two node lookup blocks
-        /* node lookup design is wrong, does not fit in
-        if(not option_query.empty()) // command to find some node)
-        {
-            Konnection<> konnection {option_query};
-
-            if(node_lookup)
-            {
-                // cleanup peers
-                for (auto const & _konnection : node_lookup->drop_list())
-                {
-                    message_drop msg;
-                    sk.send(_konnection.get_peer(), msg);
-                }
-            }
-            node_lookup.reset(new NodeLookup {kbucket, konnection});
-            option_query.clear();
-        }
-
-        if (node_lookup)
-        {
-            if ( not node_lookup->is_complete() )
-            {
-                for (auto const & _konnection : node_lookup->get_konnections())
-                {
-                    message_find_node msg;
-                    msg.nodeid = static_cast<std::string>(_konnection);
-                    sk.send(_konnection.get_peer(), msg);
-                }
+                ip_address to_listen(current_connection.local,
+                                     current_connection.ip_type);
+                state.add_passive(to_listen);
             }
             else
             {
-                std::cout << "final candidate list";
-                for (auto const & _konnection : node_lookup->candidate_list())
-                {
-                    message_ping msg;
-                    msg.nodeid = static_cast<std::string>(_konnection);
-                    sk.send(_konnection.get_peer(), msg);
-                }
-
-                for (auto const & _konnection : node_lookup->drop_list())
-                {
-                    message_drop msg;
-                    sk.send(_konnection.get_peer(), msg);
-                }
-
-                node_lookup.reset(nullptr);
+                sk.send(current_peer, Drop());
+                current_connection.local.port = state.get_fixed_local_port();
+                state.add_passive(current_connection);
             }
-        }*/
-
-        if (false == received_packets.empty())
+            break;
+        }
+        case Error::rtt:
         {
-            std::time_t time_t_now = system_clock::to_time_t(system_clock::now());
-            m_pimpl->writeln(beltpp::gm_time_t_to_lc_string(time_t_now));
+            m_pimpl->write("got error from bad guy");
+            m_pimpl->writeln(current_connection.to_string());
+            m_pimpl->write("dropping");
+            m_pimpl->writeln(current_peer);
+            state.remove_later(current_peer, 0, true);
 
-            auto connected = state.get_connected_addresses();
-            auto listening = state.get_listening_addresses();
+            peer = state.get_nodeid(current_peer);
+            if (false == peer.empty())
+            {
+                packet packet_error;
+                packet_error.set(m_pimpl->m_rtt_error,
+                                 m_pimpl->m_fcreator_error(),
+                                 m_pimpl->m_fsaver_error);
+                return_packets.emplace_back(std::move(packet_error));
+            }
+            break;
+        }
+        case Drop::rtt:
+        {
+            m_pimpl->write("dropped");
+            m_pimpl->writeln(current_peer);
+            state.remove_later(current_peer, 0, false);
 
-            if (false == connected.empty())
-                m_pimpl->writeln("status summary - connected");
+            peer = state.get_nodeid(current_peer);
+            if (false == peer.empty())
+            {
+                packet packet_drop;
+                packet_drop.set(m_pimpl->m_rtt_drop,
+                                m_pimpl->m_fcreator_drop(),
+                                m_pimpl->m_fsaver_drop);
+                return_packets.emplace_back(std::move(packet_drop));
+            }
+
+            break;
+        }
+        case Ping::rtt:
+        {
+            m_pimpl->writeln("ping received");
+            Ping msg;
+            received_packet.get(msg);
+
+            p2pstate::contact_status status =
+                state.add_contact(current_peer, msg.nodeid);
+
+            if (status != p2pstate::contact_status::no_contact)
+            {
+                state.set_active_nodeid(current_peer, msg.nodeid);
+
+                Pong msg_pong;
+                msg_pong.nodeid = state.name();
+                sk.send(current_peer, msg_pong);
+
+                state.undo_remove(current_peer);
+
+                if (false == msg.nodeid.empty() &&
+                    p2pstate::contact_status::new_contact == status)
+                {
+                    peer = msg.nodeid;
+                    packet packet_join;
+                    packet_join.set(m_pimpl->m_rtt_join,
+                                    m_pimpl->m_fcreator_join(),
+                                    m_pimpl->m_fsaver_join);
+                    return_packets.emplace_back(std::move(packet_join));
+                }
+            }
+            else
+                m_pimpl->writeln("cannot add contact");
+            break;
+        }
+        case Pong::rtt:
+        {
+            m_pimpl->writeln("pong received");
+            Pong msg;
+            received_packet.get(msg);
+
+            if (state.name() == msg.nodeid)
+                break;
+
+            state.update(current_peer, msg.nodeid);
+
+            m_pimpl->writeln("sending find node");
+
+            FindNode msg_fn;
+            msg_fn.nodeid = state.name();
+            sk.send(current_peer, msg_fn);
+            break;
+        }
+        case FindNode::rtt:
+        {
+            m_pimpl->writeln("find node received");
+            FindNode msg;
+            received_packet.get(msg);
+
+            NodeDetails response;
+            response.origin = state.name();
+            response.nodeids = state.list_nearest_to(msg.nodeid);
+
+            sk.send(current_peer, response);
+            break;
+        }
+        case NodeDetails::rtt:
+        {
+            m_pimpl->writeln("node details received");
+            NodeDetails msg;
+            received_packet.get(msg);
+
+            vector<string> want_introduce =
+                    state.process_node_details(current_peer,
+                                               msg.origin,
+                                               msg.nodeids);
+
+            for (auto const& intro : want_introduce)
+            {
+                IntroduceTo msg_intro;
+                msg_intro.nodeid = intro;
+
+                sk.send(current_peer, msg_intro);
+            }
+
+            break;
+        }
+        case IntroduceTo::rtt:
+        {
+            m_pimpl->writeln("introduce request received");
+            IntroduceTo msg;
+            received_packet.get(msg);
+
+            peer_id introduce_peer_id;
+            if (state.process_introduce_request(msg.nodeid, introduce_peer_id))
+            {
+                ip_address introduce_addr = sk.info(introduce_peer_id);
+                OpenConnectionWith msg_open;
+
+                m_pimpl->write("sending connect info");
+                m_pimpl->writeln(introduce_addr.to_string());
+
+                assign(msg_open.addr, introduce_addr);
+
+                sk.send(current_peer, msg_open);
+
+                msg_open.addr = current_connection;
+                sk.send(introduce_peer_id, msg_open);
+            }
+            break;
+        }
+        case OpenConnectionWith::rtt:
+        {
+            m_pimpl->writeln("connect info received");
+
+            OpenConnectionWith msg;
+            received_packet.get(msg);
+
+            ip_address connect_to;
+            assign(connect_to, msg.addr);
+            connect_to.local = current_connection.local;
+
+            state.add_passive(connect_to, 100);
+            break;
+        }
+        case TimerOut::rtt:
+        {
+            state.do_step();
+
+            auto connected = state.get_connected_peerids();
             for (auto const& item : connected)
             {
-                m_pimpl->write("   ");
-                m_pimpl->writeln(item.to_string());
-            }
-            if (false == listening.empty())
-                m_pimpl->writeln("status summary - listening");
-            for (auto const& item : listening)
-            {
-                m_pimpl->write("   ");
-                m_pimpl->writeln(item.to_string());
+                Ping msg_ping;
+                msg_ping.nodeid = state.name();
+                sk.send(item, msg_ping);
             }
 
-            m_pimpl->writeln("KBucket list");
-            m_pimpl->writeln("--------");
-            m_pimpl->writeln(state.bucket_dump());
-            m_pimpl->writeln("========");
+            packet packet_timer_out;
+            packet_timer_out.set(m_pimpl->m_rtt_timer_out,
+                                 m_pimpl->m_fcreator_timer_out(),
+                                 m_pimpl->m_fsaver_timer_out);
+            return_packets.emplace_back(std::move(packet_timer_out));
+            break;
+        }
+        case Other::rtt:
+        {
+            peer = state.get_nodeid(current_peer);
+            if (false == peer.empty())
+            {
+                Other pack;
+                std::move(received_packet).get(pack);
+                return_packets.emplace_back(std::move(pack.contents));
+            }
+            break;
+        }
+        }
+    }
+
+    // add missing two node lookup blocks
+    /* node lookup design is wrong, does not fit in
+    if(not option_query.empty()) // command to find some node)
+    {
+        Konnection<> konnection {option_query};
+
+        if(node_lookup)
+        {
+            // cleanup peers
+            for (auto const & _konnection : node_lookup->drop_list())
+            {
+                message_drop msg;
+                sk.send(_konnection.get_peer(), msg);
+            }
+        }
+        node_lookup.reset(new NodeLookup {kbucket, konnection});
+        option_query.clear();
+    }
+
+    if (node_lookup)
+    {
+        if ( not node_lookup->is_complete() )
+        {
+            for (auto const & _konnection : node_lookup->get_konnections())
+            {
+                message_find_node msg;
+                msg.nodeid = static_cast<std::string>(_konnection);
+                sk.send(_konnection.get_peer(), msg);
+            }
+        }
+        else
+        {
+            std::cout << "final candidate list";
+            for (auto const & _konnection : node_lookup->candidate_list())
+            {
+                message_ping msg;
+                msg.nodeid = static_cast<std::string>(_konnection);
+                sk.send(_konnection.get_peer(), msg);
+            }
+
+            for (auto const & _konnection : node_lookup->drop_list())
+            {
+                message_drop msg;
+                sk.send(_konnection.get_peer(), msg);
+            }
+
+            node_lookup.reset(nullptr);
+        }
+    }*/
+
+    if (false == received_packets.empty())
+    {
+        std::time_t time_t_now = system_clock::to_time_t(system_clock::now());
+        m_pimpl->writeln(beltpp::gm_time_t_to_lc_string(time_t_now));
+
+        auto connected = state.get_connected_addresses();
+        auto listening = state.get_listening_addresses();
+
+        if (false == connected.empty())
+            m_pimpl->writeln("status summary - connected");
+        for (auto const& item : connected)
+        {
+            m_pimpl->write("   ");
+            m_pimpl->writeln(item.to_string());
+        }
+        if (false == listening.empty())
+            m_pimpl->writeln("status summary - listening");
+        for (auto const& item : listening)
+        {
+            m_pimpl->write("   ");
+            m_pimpl->writeln(item.to_string());
         }
 
-        if (received_packets.empty())   //  in cases when lower layer returns with no messages
-            break;                      //  let higher layer do the same
+        m_pimpl->writeln("KBucket list");
+        m_pimpl->writeln("--------");
+        m_pimpl->writeln(state.bucket_dump());
+        m_pimpl->writeln("========");
     }
 
     return return_packets;
