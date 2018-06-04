@@ -420,6 +420,21 @@ public:
              --indices_index)
         {
             size_t index = indices[indices_index];
+
+            //  update map_to_remove keys that are indexes too
+            for (size_t index2 = index + 1; index2 < peers.size(); ++index2)
+            {
+                auto it_find = map_to_remove.find(index2);
+                if (map_to_remove.end() != it_find)
+                {
+                    std::pair<size_t, std::pair<size_t, bool>> insert_item =
+                            *it_find;
+                    insert_item.first--;
+                    map_to_remove.insert(insert_item);
+                    map_to_remove.erase(it_find);
+                }
+            }
+
             peers.erase(peers.begin() + index);
 
             remove_from_set(index, set_to_connect);
