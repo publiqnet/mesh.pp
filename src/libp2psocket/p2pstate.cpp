@@ -402,6 +402,7 @@ public:
             }
 
             size_t index = pair_item.first;
+            assert(peers.size() > index);
             auto const& item = peers[index];
 
             if (item.value.key() != typename T_value::key_type())

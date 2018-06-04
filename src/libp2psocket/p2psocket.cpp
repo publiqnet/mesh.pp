@@ -31,15 +31,12 @@ using sf = beltpp::socket_family_t<
     Error::rtt,
     Join::rtt,
     Drop::rtt,
-    TimerOut::rtt,
     &beltpp::new_void_unique_ptr<Error>,
     &beltpp::new_void_unique_ptr<Join>,
     &beltpp::new_void_unique_ptr<Drop>,
-    &beltpp::new_void_unique_ptr<TimerOut>,
     &Error::saver,
     &Join::saver,
     &Drop::saver,
-    &TimerOut::saver,
     &message_list_load
 >;
 
@@ -48,24 +45,22 @@ namespace detail
 class p2psocket_internals
 {
 public:
-    p2psocket_internals(ip_address const& bind_to_address,
+    p2psocket_internals(beltpp::event_handler& eh,
+                        ip_address const& bind_to_address,
                         std::vector<ip_address> const& connect_to_addresses,
                         size_t rtt_error,
                         size_t rtt_join,
                         size_t rtt_drop,
-                        size_t rtt_timer_out,
                         detail::fptr_creator fcreator_error,
                         detail::fptr_creator fcreator_join,
                         detail::fptr_creator fcreator_drop,
-                        detail::fptr_creator fcreator_timer_out,
                         detail::fptr_saver fsaver_error,
                         detail::fptr_saver fsaver_join,
                         detail::fptr_saver fsaver_drop,
-                        detail::fptr_saver fsaver_timer_out,
                         beltpp::void_unique_ptr&& putl,
                         beltpp::ilog* _plogger)
         : m_ptr_socket(new beltpp::socket(
-            beltpp::getsocket<sf>(std::move(putl))
+            beltpp::getsocket<sf>(eh, std::move(putl))
                                           ))
         , m_ptr_state(getp2pstate())
         , plogger(_plogger)
@@ -73,15 +68,12 @@ public:
         , m_rtt_error(rtt_error)
         , m_rtt_join(rtt_join)
         , m_rtt_drop(rtt_drop)
-        , m_rtt_timer_out(rtt_timer_out)
         , m_fcreator_error(fcreator_error)
         , m_fcreator_join(fcreator_join)
         , m_fcreator_drop(fcreator_drop)
-        , m_fcreator_timer_out(fcreator_timer_out)
         , m_fsaver_error(fsaver_error)
         , m_fsaver_join(fsaver_join)
         , m_fsaver_drop(fsaver_drop)
-        , m_fsaver_timer_out(fsaver_timer_out)
     {
         if (bind_to_address.local.empty() &&
             connect_to_addresses.empty())
@@ -129,52 +121,45 @@ public:
     size_t m_rtt_error;
     size_t m_rtt_join;
     size_t m_rtt_drop;
-    size_t m_rtt_timer_out;
     detail::fptr_creator m_fcreator_error;
     detail::fptr_creator m_fcreator_join;
     detail::fptr_creator m_fcreator_drop;
-    detail::fptr_creator m_fcreator_timer_out;
     detail::fptr_saver m_fsaver_error;
     detail::fptr_saver m_fsaver_join;
     detail::fptr_saver m_fsaver_drop;
-    detail::fptr_saver m_fsaver_timer_out;
 };
 }
 
 /*
  * p2psocket
  */
-p2psocket::p2psocket(ip_address const& bind_to_address,
+p2psocket::p2psocket(beltpp::event_handler& eh,
+                     ip_address const& bind_to_address,
                      std::vector<ip_address> const& connect_to_addresses,
                      size_t _rtt_error,
                      size_t _rtt_join,
                      size_t _rtt_drop,
-                     size_t _rtt_timer_out,
                      detail::fptr_creator _fcreator_error,
                      detail::fptr_creator _fcreator_join,
                      detail::fptr_creator _fcreator_drop,
-                     detail::fptr_creator _fcreator_timer_out,
                      detail::fptr_saver _fsaver_error,
                      detail::fptr_saver _fsaver_join,
                      detail::fptr_saver _fsaver_drop,
-                     detail::fptr_saver _fsaver_timer_out,
                      beltpp::void_unique_ptr&& putl,
                      beltpp::ilog* plogger)
-    : isocket()
-    , m_pimpl(new detail::p2psocket_internals(bind_to_address,
+    : isocket(eh)
+    , m_pimpl(new detail::p2psocket_internals(eh,
+                                              bind_to_address,
                                               connect_to_addresses,
                                               _rtt_error,
                                               _rtt_join,
                                               _rtt_drop,
-                                              _rtt_timer_out,
                                               _fcreator_error,
                                               _fcreator_join,
                                               _fcreator_drop,
-                                              _fcreator_timer_out,
                                               _fsaver_error,
                                               _fsaver_join,
                                               _fsaver_drop,
-                                              _fsaver_timer_out,
                                               std::move(putl),
                                               plogger))
 {
@@ -188,12 +173,7 @@ p2psocket::~p2psocket()
 
 }
 
-int p2psocket::native_handle() const
-{
-    return m_pimpl->m_ptr_socket->native_handle();
-}
-
-void p2psocket::prepare_receive()
+void p2psocket::prepare_wait()
 {
     p2pstate& state = *m_pimpl->m_ptr_state.get();
     socket& sk = *m_pimpl->m_ptr_socket.get();
@@ -255,7 +235,7 @@ void p2psocket::prepare_receive()
         m_pimpl->write("...");
     }
 
-    sk.prepare_receive();
+    sk.prepare_wait();
 }
 
 p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
@@ -264,8 +244,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
     p2pstate& state = *m_pimpl->m_ptr_state.get();
     socket& sk = *m_pimpl->m_ptr_socket.get();
-
-    prepare_receive();
 
     peer_id current_peer;
     ip_address current_connection;
@@ -282,8 +260,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
     for (auto& received_packet : received_packets)
     {
-        if (TimerOut::rtt != received_packet.type() &&
-            Drop::rtt != received_packet.type())
+        if (Drop::rtt != received_packet.type())
         {
             assert(false == current_peer.empty());
             try {
@@ -481,25 +458,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             state.add_passive(connect_to, 100);
             break;
         }
-        case TimerOut::rtt:
-        {
-            state.do_step();
-
-            auto connected = state.get_connected_peerids();
-            for (auto const& item : connected)
-            {
-                Ping msg_ping;
-                msg_ping.nodeid = state.name();
-                sk.send(item, msg_ping);
-            }
-
-            packet packet_timer_out;
-            packet_timer_out.set(m_pimpl->m_rtt_timer_out,
-                                 m_pimpl->m_fcreator_timer_out(),
-                                 m_pimpl->m_fsaver_timer_out);
-            return_packets.emplace_back(std::move(packet_timer_out));
-            break;
-        }
         case Other::rtt:
         {
             peer = state.get_nodeid(current_peer);
@@ -612,15 +570,33 @@ void p2psocket::send(peer_id const& peer,
         throw std::runtime_error("no such node: " + peer);
 }
 
-void p2psocket::set_timer(std::chrono::steady_clock::duration const& period)
+void p2psocket::timer_action()
 {
-    m_pimpl->m_ptr_socket->set_timer(period);
+    p2pstate& state = *m_pimpl->m_ptr_state.get();
+    socket& sk = *m_pimpl->m_ptr_socket.get();
+
+    sk.timer_action();
+
+    state.do_step();
+
+    auto connected = state.get_connected_peerids();
+    for (auto const& item : connected)
+    {
+        Ping msg_ping;
+        msg_ping.nodeid = state.name();
+        sk.send(item, msg_ping);
+    }
 }
 
 string p2psocket::name() const
 {
     p2pstate& state = *m_pimpl->m_ptr_state.get();
     return state.name();
+}
+
+beltpp::ievent_item const& p2psocket::worker() const
+{
+    return *m_pimpl->m_ptr_socket.get();
 }
 }
 

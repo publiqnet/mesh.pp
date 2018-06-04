@@ -3,7 +3,6 @@ module meshpp_message
 type message_join {}
 type message_drop {}
 type message_error {}
-type message_timer_out {}
 
 class message_ip_destination
 {

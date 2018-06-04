@@ -3,7 +3,6 @@ module P2PMessage
     type Join {}
     type Drop {}
     type Error {}
-    type TimerOut {}
 
     class IPDestination
     {

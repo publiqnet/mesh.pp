@@ -16,6 +16,7 @@ add_executable(mesh.pp.node
 # libraries this module links to
 target_link_libraries(mesh.pp.node PRIVATE
     mesh.pp
+    event
     packet
     socket
     utility

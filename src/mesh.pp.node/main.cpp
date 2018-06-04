@@ -6,6 +6,7 @@
 
 #include <belt.pp/packet.hpp>
 #include <belt.pp/socket.hpp>
+#include <belt.pp/event.hpp>
 
 #include <boost/optional.hpp>
 #include <boost/program_options.hpp>
@@ -52,15 +53,12 @@ using sf = beltpp::socket_family_t<
     message_error::rtt,
     message_join::rtt,
     message_drop::rtt,
-    message_timer_out::rtt,
     &beltpp::new_void_unique_ptr<message_error>,
     &beltpp::new_void_unique_ptr<message_join>,
     &beltpp::new_void_unique_ptr<message_drop>,
-    &beltpp::new_void_unique_ptr<message_timer_out>,
     &message_error::saver,
     &message_join::saver,
     &message_drop::saver,
-    &message_timer_out::saver,
     &message_list_load
 >;
 
@@ -751,8 +749,9 @@ int main(int argc, char* argv[])
 
         std::unique_ptr<NodeLookup> node_lookup;
 
-        beltpp::socket sk = beltpp::getsocket<sf>();
-        sk.set_timer(std::chrono::seconds(10));
+        beltpp::event_handler eh;
+        beltpp::socket sk = beltpp::getsocket<sf>(eh);
+        eh.set_timer(std::chrono::seconds(10));
 
         //
         //  by this point either bind or connect
@@ -849,6 +848,14 @@ int main(int argc, char* argv[])
                 cout << SelfID.substr(0, 5) << " reading...";
             else
                 cout << " " << receive_attempt_count << "...";
+
+            std::unordered_set<beltpp::ievent_item const*> set_psk;
+            beltpp::event_handler::wait_result wait_res = eh.wait(set_psk);
+
+            if (wait_res == beltpp::event_handler::event)
+            {
+            assert(set_psk.size() == 1);
+            assert(*set_psk.begin() == &sk);
 
             received_packets = sk.receive(current_peer);
             ip_address current_connection;
@@ -1070,26 +1077,7 @@ int main(int argc, char* argv[])
                     program_state.add_passive(connect_to, state);
                     break;
                 }
-                case message_timer_out::rtt:
-                {
-                    program_state.do_step();
-
-                    auto connected = program_state.get_connected();
-                    for (auto const& item : connected)
-                    {
-                        message_ping msg_ping;
-                        msg_ping.nodeid = SelfID;
-                        sk.send(item.get_peer(), msg_ping);
-
-                        //if (item.second.str_hi_message.empty())
-                        //{
-                        //    cout << "WARNING: never got message from peer " << item.first.to_string() << endl;
-                        //}
-                    }
-                    break;
                 }
-                }
-
             }
 
             if(not option_query.empty()) // command to find some node)
@@ -1171,6 +1159,26 @@ int main(int argc, char* argv[])
                 cout<<"KBucket list\n--------\n";
                 kbucket.print_list(cout);
                 cout<<"========\n";
+            }
+            }
+            else if (wait_res == beltpp::event_handler::timer_out)
+            {
+                sk.timer_action();
+
+                program_state.do_step();
+
+                auto connected = program_state.get_connected();
+                for (auto const& item : connected)
+                {
+                    message_ping msg_ping;
+                    msg_ping.nodeid = SelfID;
+                    sk.send(item.get_peer(), msg_ping);
+
+                    //if (item.second.str_hi_message.empty())
+                    //{
+                    //    cout << "WARNING: never got message from peer " << item.first.to_string() << endl;
+                    //}
+                }
             }
 
         }}
