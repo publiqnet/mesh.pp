@@ -55,7 +55,7 @@ void dostuff(int native_handle, boost::filesystem::path const& path)
     std::mt19937 mt(rd());
     std::uniform_real_distribution<double> dist(1.0, 10.0);
 
-    for (size_t index = 0; index < 10 && success == false; ++index)
+    for (size_t index = 0; index < 1000 && success == false; ++index)
     {
         if (0 < index)
         {
