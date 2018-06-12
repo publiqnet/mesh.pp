@@ -21,6 +21,7 @@ SYSTEMUTILITYSHARED_EXPORT int create_lock_file(boost::filesystem::path& path);
 SYSTEMUTILITYSHARED_EXPORT bool write_to_lock_file(int native_handle, std::string const& value);
 SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(int native_handle, boost::filesystem::path& path);
 SYSTEMUTILITYSHARED_EXPORT void dostuff(int native_handle, boost::filesystem::path const& path);
+SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
 }
 
 template <typename T,
@@ -115,9 +116,15 @@ public:
         lock_path = path;
         lock_path.remove_filename() /= fn;
 
-        native_handle = detail::create_lock_file(lock_path);
+        native_handle = -1;
+        for (size_t index = 0; index < 10 && native_handle < 0; ++index)
+        {
+            if (0 < index)
+                detail::small_random_sleep();
+            native_handle = detail::create_lock_file(lock_path);
+        }
         if (native_handle < 0)
-            throw std::runtime_error("unable to create a lock file: " + lock_path.string());
+            throw std::runtime_error("unable to create lock file: " + lock_path.string());
 
         beltpp::scope_helper guard_lock_file(
                     []{},

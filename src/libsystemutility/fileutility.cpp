@@ -42,6 +42,15 @@ void delete_lock_file(int native_handle, boost::filesystem::path& path)
     ::remove(path.native().c_str());
     ::close(native_handle);
 }
+void small_random_sleep()
+{
+    std::random_device rd;
+    std::mt19937 mt(rd());
+    std::uniform_real_distribution<double> dist(1.0, 10.0);
+
+    uint64_t random_sleep = dist(mt) * 10;
+    std::this_thread::sleep_for(std::chrono::milliseconds(random_sleep));
+}
 void dostuff(int native_handle, boost::filesystem::path const& path)
 {
     FileAttributes::LockedByPID attr_lock;
@@ -50,22 +59,9 @@ void dostuff(int native_handle, boost::filesystem::path const& path)
     FileAttributes::Attributes attrs;
     attrs.attributes.push_back(std::move(pck_lock));
 
-    bool success = false;
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    std::uniform_real_distribution<double> dist(1.0, 10.0);
-
-    for (size_t index = 0; index < 1000 && success == false; ++index)
-    {
-        if (0 < index)
-        {
-            uint64_t random_sleep = dist(mt) * 10;
-            std::this_thread::sleep_for(std::chrono::milliseconds(random_sleep));
-        }
-        success =
-                detail::write_to_lock_file(native_handle,
-                                           FileAttributes::detail::saver(attrs));
-    }
+    bool success =
+            detail::write_to_lock_file(native_handle,
+                                       FileAttributes::detail::saver(attrs));
     if (false == success)
         throw std::runtime_error("unable to write to lock file: " +
                                  path.string());
