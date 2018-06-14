@@ -29,8 +29,7 @@ if( APPLE )
 endif()
 
 find_package(Boost 1.58 REQUIRED
-    COMPONENTS thread
-               date_time
+    COMPONENTS date_time
                system
                filesystem
                program_options
