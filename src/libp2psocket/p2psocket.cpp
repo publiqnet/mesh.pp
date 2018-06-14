@@ -24,18 +24,12 @@ using std::string;
 using std::vector;
 using std::unique_ptr;
 
-namespace
-{    //    MSVS does not instansiate template function only because its address
-     //    is needed, so some dummy code here will force it
-    beltpp::void_unique_ptr new_void_unique_ptr_Error()
-    {
-        return beltpp::new_void_unique_ptr<Error>();
-    }
-    beltpp::void_unique_ptr new_void_unique_ptr_Join()
-    {
-        return beltpp::new_void_unique_ptr<Join>();
-    }
-}
+//  MSVS does not instansiate template function only because its address
+//  is needed, so some dummy code here will force it
+template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Error>();
+template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Join>();
+template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Drop>();
+
 
 using sf = beltpp::socket_family_t<
     Error::rtt,

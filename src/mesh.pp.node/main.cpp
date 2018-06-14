@@ -7,6 +7,7 @@
 #include <belt.pp/packet.hpp>
 #include <belt.pp/socket.hpp>
 #include <belt.pp/event.hpp>
+#include <belt.pp/utility.hpp>
 
 #include <boost/optional.hpp>
 #include <boost/program_options.hpp>
@@ -1143,7 +1144,7 @@ int main(int argc, char* argv[])
             {
                 auto tp_now = std::chrono::system_clock::now();
                 std::time_t t_now = std::chrono::system_clock::to_time_t(tp_now);
-                //std::cout << std::ctime(&t_now) << std::endl;
+                std::cout << beltpp::gm_time_t_to_lc_string(t_now) << std::endl;
                 auto connected = program_state.get_connected();
                 auto listening = program_state.get_listening();
 

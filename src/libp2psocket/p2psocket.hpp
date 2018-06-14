@@ -5,6 +5,7 @@
 #include <belt.pp/packet.hpp>
 #include <belt.pp/message_global.hpp>
 #include <belt.pp/ilog.hpp>
+#include <belt.pp/event.hpp>
 
 #include <memory>
 #include <string>
