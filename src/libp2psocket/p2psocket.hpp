@@ -89,7 +89,7 @@ private:
 };
 
 template <typename T_p2psocket_family>
-P2PSOCKETSHARED_EXPORT p2psocket getp2psocket(beltpp::event_handler& eh,
+p2psocket getp2psocket(beltpp::event_handler& eh,
                                               beltpp::ip_address const& bind_to_address,
                                               std::vector<beltpp::ip_address> const& connect_to_addresses,
                                               beltpp::void_unique_ptr&& putl,

@@ -681,11 +681,11 @@ int main(int argc, char* argv[])
         CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PublicKey publicKey;
 
         privateKey.Initialize( prng, CryptoPP::ASN1::secp256k1() );
-        if( not privateKey.Validate( prng, 3 ) )
+        if( ! privateKey.Validate( prng, 3 ) )
             throw std::runtime_error("invalid private key");
 
         privateKey.MakePublicKey( publicKey );
-        if( not publicKey.Validate( prng, 3 ) )
+        if( ! publicKey.Validate( prng, 3 ) )
             throw std::runtime_error("invalid public key");
 
         auto iNodeID = publicKey.GetPublicElement().x;
@@ -1080,7 +1080,7 @@ int main(int argc, char* argv[])
                 }
             }
 
-            if(not option_query.empty()) // command to find some node)
+            if(! option_query.empty()) // command to find some node)
             {
                 Konnection<> konnection {option_query};
 
@@ -1099,7 +1099,7 @@ int main(int argc, char* argv[])
 
             if (node_lookup)
             {
-                if ( not node_lookup->is_complete() )
+                if ( ! node_lookup->is_complete() )
                 {
                     for (auto const & _konnection : node_lookup->get_konnections())
                     {

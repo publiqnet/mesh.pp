@@ -77,13 +77,13 @@ std::vector<bool> NodeLookup::add_konnections(Konnection<> const & source, std::
             result.push_back(kbucket.insert(konnection));
     }
 
-    if ( new_source and _front == kbucket.cbegin() )
+    if ( new_source && _front == kbucket.cbegin() )
         --stall_counter;
     else if ( new_source )
         stall_counter = alpha;
 
 
-    if ( 0 == stall_counter or                           // alpha number of consecutive new sources have not improved the state
+    if ( 0 == stall_counter ||                           // alpha number of consecutive new sources have not improved the state
          sources_set.size() > KBucket<Konnection<>>::LEVELS  // maximum number of sources have been considered
          )
         _state = State::Stalled;
@@ -98,7 +98,7 @@ bool NodeLookup::update_peer(Konnection<> const & konnection)
 
 std::set<Konnection<>> NodeLookup::candidate_list() const
 {
-    if ( State::Found == _state and target.get_peer().empty() )
+    if ( State::Found == _state && target.get_peer().empty() )
         return {target_source};
     else
     {
@@ -132,11 +132,11 @@ std::set<Konnection<>> NodeLookup::drop_list() const
     {
         Konnection<> const & konnection = *_begin;
 
-        if ( is_complete() and _list.find(konnection) != _list.end() )
+        if ( is_complete() && _list.find(konnection) != _list.end() )
             continue;
 
-        if ( _kbucket_.probe(konnection) == KBucket<Konnection<>>::probe_result::IS_NEW and
-             not konnection.get_peer().empty()
+        if ( _kbucket_.probe(konnection) == KBucket<Konnection<>>::probe_result::IS_NEW &&
+             ! konnection.get_peer().empty()
              )
             result.insert(konnection);
     }
@@ -164,7 +164,7 @@ std::vector<Konnection<>> NodeLookup::get_konnections()
     }
 
     std::copy_if(_begin, _end, std::back_inserter(result), [&](const Konnection<> &k) {
-        return ( probed_set.find(k) == probed_set.end() and not k.get_peer().empty() );
+        return ( probed_set.find(k) == probed_set.end() && ! k.get_peer().empty() );
     });
 
     if (result.empty())

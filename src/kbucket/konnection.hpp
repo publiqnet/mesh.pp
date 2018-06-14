@@ -66,7 +66,7 @@ template<typename... T>
 bool operator <(const Konnection<T...> &l, const Konnection<T...> &r) { return l.get_id() < r.get_id(); }
 
 template<typename... T>
-bool operator ==(const Konnection<T...> &l, const Konnection<T...> &r) { return not (l < r and r < l); }
+bool operator ==(const Konnection<T...> &l, const Konnection<T...> &r) { return ! (l < r && r < l); }
 
 template<typename... T>
 bool operator ==(const Konnection<T...> &l, const std::string &r) { return l == Konnection<T...>{r}; }
