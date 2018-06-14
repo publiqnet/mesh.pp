@@ -76,7 +76,7 @@ bool split_address_port(string const& address_port,
     size_t end;
     try
     {
-        port = std::stoi(str_port, &end);
+        port = short(std::stoi(str_port, &end));
     }
     catch (...)
     {

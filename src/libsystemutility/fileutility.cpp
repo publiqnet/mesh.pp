@@ -66,7 +66,7 @@ void small_random_sleep()
     std::mt19937 mt(rd());
     std::uniform_real_distribution<double> dist(1.0, 10.0);
 
-    uint64_t random_sleep = dist(mt) * 10;
+    uint64_t random_sleep = uint64_t(dist(mt) * 10);
     std::this_thread::sleep_for(std::chrono::milliseconds(random_sleep));
 }
 void dostuff(int native_handle, boost::filesystem::path const& path)
