@@ -25,11 +25,10 @@ using std::vector;
 using std::unique_ptr;
 
 //  MSVS does not instansiate template function only because its address
-//  is needed, so some dummy code here will force it
+//  is needed, so let's force it
 template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Error>();
 template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Join>();
 template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Drop>();
-
 
 using sf = beltpp::socket_family_t<
     Error::rtt,

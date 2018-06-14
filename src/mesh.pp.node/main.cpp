@@ -49,6 +49,11 @@ using boost::optional;
 
 using namespace meshpp_message;
 
+//  MSVS does not instansiate template function only because its address
+//  is needed, so let's force it
+template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_error>();
+template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_join>();
+template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_drop>();
 
 using sf = beltpp::socket_family_t<
     message_error::rtt,
