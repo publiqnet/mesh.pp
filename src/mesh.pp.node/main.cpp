@@ -1143,7 +1143,7 @@ int main(int argc, char* argv[])
             {
                 auto tp_now = std::chrono::system_clock::now();
                 std::time_t t_now = std::chrono::system_clock::to_time_t(tp_now);
-                std::cout << std::ctime(&t_now) << std::endl;
+                //std::cout << std::ctime(&t_now) << std::endl;
                 auto connected = program_state.get_connected();
                 auto listening = program_state.get_listening();
 
