@@ -28,6 +28,7 @@ target_link_libraries(systemutility PUBLIC
 # what to do on make install
 install(TARGETS systemutility
         EXPORT mesh.pp.package
+        RUNTIME DESTINATION bin/mesh.pp
         LIBRARY DESTINATION lib/mesh.pp
         ARCHIVE DESTINATION lib/mesh.pp/archive)
 
