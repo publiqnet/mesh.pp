@@ -1,3 +1,5 @@
+#pragma once
+
 #include <belt.pp/global.hpp>
 
 #define MESH_EXPORT BELT_EXPORT

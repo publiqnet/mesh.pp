@@ -75,6 +75,7 @@ install(TARGETS mesh.pp
         DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
 
 set(SRC_FILES
+    cryptopp_byte.hpp
     global.hpp
     fileutility.hpp
     processutility.hpp
