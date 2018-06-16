@@ -28,12 +28,12 @@ target_link_libraries(systemutility PUBLIC
 # what to do on make install
 install(TARGETS systemutility
         EXPORT mesh.pp.package
-        RUNTIME DESTINATION bin/mesh.pp
-        LIBRARY DESTINATION lib/mesh.pp
-        ARCHIVE DESTINATION lib/mesh.pp/archive)
+        RUNTIME DESTINATION ${MESHPP_INSTALL_DESTINATION_RUNTIME}
+        LIBRARY DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY}
+        ARCHIVE DESTINATION ${MESHPP_INSTALL_DESTINATION_ARCHIVE})
 
 install(FILES
     global.hpp
     fileutility.hpp
     processutility.hpp
-    DESTINATION include/mesh.pp/libsystemutility)
+    DESTINATION ${MESHPP_INSTALL_DESTINATION_INCLUDE}/libsystemutility)

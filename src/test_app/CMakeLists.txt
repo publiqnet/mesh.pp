@@ -12,5 +12,7 @@ target_link_libraries(test_app PRIVATE
 # what to do on make install
 install(TARGETS test_app
         EXPORT mesh.pp.package
-        RUNTIME DESTINATION bin/mesh.pp)
+        RUNTIME DESTINATION ${MESHPP_INSTALL_DESTINATION_RUNTIME}
+        LIBRARY DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY}
+        ARCHIVE DESTINATION ${MESHPP_INSTALL_DESTINATION_ARCHIVE})
 

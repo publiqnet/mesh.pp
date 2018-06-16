@@ -16,13 +16,13 @@ target_link_libraries(kbucket INTERFACE
 # what to do on make install
 install(TARGETS kbucket
         EXPORT mesh.pp.package
-        DESTINATION lib/mesh.pp)
+        DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
 
 set(SRC_FILES)
 
 install(FILES
     ${SRC_FILES}
-    DESTINATION include/mesh.pp/kbucket)
+    DESTINATION ${MESHPP_INSTALL_DESTINATION_INCLUDE}/kbucket)
 
 #
 # add custom target simply for IDE to show the files

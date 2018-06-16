@@ -30,11 +30,11 @@ target_link_libraries(p2psocket PUBLIC
 # what to do on make install
 install(TARGETS p2psocket
         EXPORT mesh.pp.package
-        RUNTIME DESTINATION bin/mesh.pp
-        LIBRARY DESTINATION lib/mesh.pp
-        ARCHIVE DESTINATION lib/mesh.pp/archive)
+        RUNTIME DESTINATION ${MESHPP_INSTALL_DESTINATION_RUNTIME}
+        LIBRARY DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY}
+        ARCHIVE DESTINATION ${MESHPP_INSTALL_DESTINATION_ARCHIVE})
 
 install(FILES
     global.hpp
     p2psocket.hpp
-    DESTINATION include/mesh.pp/libp2psocket)
+    DESTINATION ${MESHPP_INSTALL_DESTINATION_INCLUDE}/libp2psocket)

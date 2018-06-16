@@ -39,9 +39,12 @@ MESSAGE(STATUS "boost info")
 MESSAGE(STATUS "${Boost_INCLUDE_DIR}")
 MESSAGE(STATUS "${Boost_LIBRARIES}")
 
-add_library(boost INTERFACE IMPORTED)
-set_property(TARGET boost PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
-set_property(TARGET boost PROPERTY INTERFACE_LINK_LIBRARIES ${Boost_LIBRARIES})
+# do not use imported boost library, as it creates difficulty on windows
+# with set INTERFACE_LINK_LIBRARIES when there are both release and debug
+# boost libraries
+#add_library(boost INTERFACE IMPORTED)
+#set_property(TARGET boost PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIR})
+#set_property(TARGET boost PROPERTY INTERFACE_LINK_LIBRARIES ${Boost_LIBRARIES})
 
 list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules" )
 
@@ -56,18 +59,20 @@ add_library(mesh.pp INTERFACE)
 # and for in-tree source build
 target_include_directories(mesh.pp INTERFACE
     $<INSTALL_INTERFACE:include/mesh.pp>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
+    ${Boost_INCLUDE_DIR})
 
 # libraries this module links to
 target_link_libraries(mesh.pp INTERFACE
-    boost
+    #boost
     cryptopp
+    ${Boost_LIBRARIES}
     )
 
 # what to do on make install
 install(TARGETS mesh.pp
         EXPORT mesh.pp.package
-        DESTINATION lib/mesh.pp)
+        DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
 
 set(SRC_FILES
     global.hpp
@@ -77,7 +82,7 @@ set(SRC_FILES
 
 install(FILES
     ${SRC_FILES}
-    DESTINATION include/mesh.pp/mesh.pp)
+    DESTINATION ${MESHPP_INSTALL_DESTINATION_INCLUDE}/mesh.pp)
 
 #
 # add custom target simply for IDE to show the files
