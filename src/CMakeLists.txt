@@ -37,5 +37,5 @@ add_subdirectory(kbucket)
 add_subdirectory(test_app)
 
 # following is used for find_package functionality
-install(FILES mesh.pp-config.cmake DESTINATION lib/mesh.pp)
-install(EXPORT mesh.pp.package DESTINATION lib/mesh.pp)
+install(FILES mesh.pp-config.cmake DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
+install(EXPORT mesh.pp.package DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
