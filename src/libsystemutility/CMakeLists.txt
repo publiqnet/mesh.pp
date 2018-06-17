@@ -7,8 +7,8 @@ add_custom_command (
 
 add_definitions(-DSYSTEMUTILITY_LIBRARY)
 
-# define the shared library
-add_library(systemutility SHARED
+# define the library
+add_library(systemutility
     global.hpp
     file_attributes.hpp
     file_attributes.gen.hpp

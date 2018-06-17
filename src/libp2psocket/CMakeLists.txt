@@ -7,8 +7,8 @@ add_custom_command (
 
 add_definitions(-DP2PSOCKET_LIBRARY)
 
-# define the shared library
-add_library(p2psocket SHARED
+# define the library
+add_library(p2psocket
     global.hpp
     p2psocket.cpp
     p2psocket.hpp
