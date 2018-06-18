@@ -28,6 +28,12 @@ if( APPLE )
     endif()
 endif()
 
+if (NOT BUILD_SHARED_LIBS)
+set (Boost_USE_STATIC_LIBS ON)
+endif()
+set (Boost_MULTITHREADED ON)
+set (Boost_USE_STATIC_RUNTIME OFF)
+
 find_package(Boost 1.58 REQUIRED
     COMPONENTS date_time
                system
