@@ -7,7 +7,7 @@
 
 struct NodeLookup
 {
-    NodeLookup(KBucket<Konnection<>> const & kbucket, Konnection<> const & node_to_search_) :
+    NodeLookup(KBucket<Konnection> const & kbucket, Konnection const & node_to_search_) :
         _kbucket_{kbucket},
         kbucket {_kbucket_.rebase(node_to_search_, false)},
         alpha_semaphore {alpha},
@@ -17,36 +17,36 @@ struct NodeLookup
         target_source {}
     { }
 
-    std::vector<bool> add_konnections(Konnection<> const & source, const std::vector<Konnection<> > &konnections);
-    std::vector<Konnection<>> get_konnections();
+    std::vector<bool> add_konnections(Konnection const & source, const std::vector<Konnection > &konnections);
+    std::vector<Konnection> get_konnections();
 
-    bool update_peer(Konnection<> const & konnection);
+    bool update_peer(Konnection const & konnection);
 
-    std::set<Konnection<>> candidate_list() const;
-    std::set<Konnection<>> orphan_list() const;
-    std::set<Konnection<>> drop_list() const;
+    std::set<Konnection> candidate_list() const;
+    std::set<Konnection> orphan_list() const;
+    std::set<Konnection> drop_list() const;
 
 
-    typename KBucket<Konnection<>>::iterator begin() const { return kbucket.begin(); }
-    typename KBucket<Konnection<>>::iterator end() const { return kbucket.end(); }
+    typename KBucket<Konnection>::iterator begin() const { return kbucket.begin(); }
+    typename KBucket<Konnection>::iterator end() const { return kbucket.end(); }
     bool is_complete() const { return _state != State::Running; }
 
 private:
     enum {alpha = 3};
 
-    KBucket<Konnection<>> const & _kbucket_;
-    KBucket<Konnection<>> kbucket;
+    KBucket<Konnection> const & _kbucket_;
+    KBucket<Konnection> kbucket;
 
     std::atomic<int> alpha_semaphore, stall_counter;
 
     enum class State {Running, Stalled, Found} _state;
 
-    std::set<Konnection<>> probed_set, sources_set;
-    Konnection<> target, target_source;
+    std::set<Konnection> probed_set, sources_set;
+    Konnection target, target_source;
 };
 
 
-std::vector<bool> NodeLookup::add_konnections(Konnection<> const & source, std::vector<Konnection<>> const & konnections)
+std::vector<bool> NodeLookup::add_konnections(Konnection const & source, std::vector<Konnection> const & konnections)
 {
     std::vector<bool> result;
 
@@ -84,32 +84,33 @@ std::vector<bool> NodeLookup::add_konnections(Konnection<> const & source, std::
 
 
     if ( 0 == stall_counter ||                           // alpha number of consecutive new sources have not improved the state
-         sources_set.size() > KBucket<Konnection<>>::LEVELS  // maximum number of sources have been considered
+         sources_set.size() > KBucket<Konnection>::LEVELS  // maximum number of sources have been considered
          )
         _state = State::Stalled;
 
     return result;
 }
 
-bool NodeLookup::update_peer(Konnection<> const & konnection)
+bool NodeLookup::update_peer(Konnection const & konnection)
 {
-    return kbucket.replace(konnection);
+    auto const & it = kbucket.find(konnection);
+    return kbucket.replace(it, konnection);
 }
 
-std::set<Konnection<>> NodeLookup::candidate_list() const
+std::set<Konnection> NodeLookup::candidate_list() const
 {
     if ( State::Found == _state && target.get_peer().empty() )
         return {target_source};
     else
     {
-        std::set<Konnection<>> result;
+        std::set<Konnection> result;
         for (auto const & _list : kbucket.list_closests())
             result.insert(_list);
         return result;
     }
 }
 
-std::set<Konnection<>> NodeLookup::orphan_list() const
+std::set<Konnection> NodeLookup::orphan_list() const
 {
     auto const &_list = candidate_list();
     decltype(candidate_list()) result;
@@ -121,22 +122,22 @@ std::set<Konnection<>> NodeLookup::orphan_list() const
     return result;
 }
 
-std::set<Konnection<>> NodeLookup::drop_list() const
+std::set<Konnection> NodeLookup::drop_list() const
 {
-    std::set<Konnection<>> result {};
+    std::set<Konnection> result {};
 
     auto _begin = begin();
     auto const & _end = end();
     auto const & _list = candidate_list();
     for ( ; _begin != _end; ++_begin )
     {
-        Konnection<> const & konnection = *_begin;
+        Konnection const & konnection = *_begin;
 
         if ( is_complete() && _list.find(konnection) != _list.end() )
             continue;
 
-        if ( _kbucket_.probe(konnection) == KBucket<Konnection<>>::probe_result::IS_NEW &&
-             ! konnection.get_peer().empty()
+        if ( _kbucket_.probe(konnection) == KBucket<Konnection>::probe_result::IS_NEW &&
+             not konnection.get_peer().empty()
              )
             result.insert(konnection);
     }
@@ -144,9 +145,9 @@ std::set<Konnection<>> NodeLookup::drop_list() const
     return result;
 }
 
-std::vector<Konnection<>> NodeLookup::get_konnections()
+std::vector<Konnection> NodeLookup::get_konnections()
 {
-    std::vector<Konnection<>> result;
+    std::vector<Konnection> result;
 
     if ( is_complete() )
         return result;
@@ -163,7 +164,7 @@ std::vector<Konnection<>> NodeLookup::get_konnections()
         std::advance(_end, alpha_semaphore.load());
     }
 
-    std::copy_if(_begin, _end, std::back_inserter(result), [&](const Konnection<> &k) {
+    std::copy_if(_begin, _end, std::back_inserter(result), [&](const Konnection &k) {
         return ( probed_set.find(k) == probed_set.end() && ! k.get_peer().empty() );
     });
 

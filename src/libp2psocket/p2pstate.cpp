@@ -581,14 +581,14 @@ public:
 
         auto iNodeID = publicKey.GetPublicElement().x;
 
-        SelfID = Konnection<>::to_string(iNodeID);
+        SelfID = Konnection::to_string(iNodeID);
 
         if (SelfID.empty())
             throw std::runtime_error("something wrong with nodeid");
 
 
-        Konnection<> self {iNodeID};
-        kbucket = KBucket<Konnection<>>{self};
+        Konnection self {iNodeID};
+        kbucket = KBucket<Konnection>{self};
     }
 
     virtual ~p2pstate_ex()
@@ -621,7 +621,7 @@ public:
     contact_status add_contact(peer_id const& peerid,
                                string const& nodeid) override
     {
-        Konnection<> k{nodeid, peerid, {}};
+        Konnection k{nodeid, {}, peerid, {}};
         if (kbucket.find(k) != kbucket.end())
             return contact_status::existing_contact;
         else if (kbucket.insert(k))
@@ -639,7 +639,7 @@ public:
 
     void update(peer_id const& peerid, string const& nodeid) override
     {
-        Konnection<> k(nodeid, peerid, system_clock::now());
+        Konnection k(nodeid, system_clock::now(), peerid, {});
         kbucket.replace(k);
 
         //  node lookup design is wrong, does not fit in
@@ -730,19 +730,19 @@ public:
         auto to_remove = program_state.remove_pending();
 
         for (auto const& key_item : to_remove.first)
-            kbucket.erase(Konnection<>(key_item));
+            kbucket.erase(Konnection(key_item));
 
         return to_remove.second;
     }
 
     vector<string> list_nearest_to(string const& nodeid) override
     {
-        Konnection<> k(nodeid);
+        Konnection k(nodeid);
         auto konnections = kbucket.list_nearests_to(k, false);
 
         vector<string> result;
 
-        for (Konnection<> const& konnection_item : konnections)
+        for (Konnection const& konnection_item : konnections)
             result.push_back(string(konnection_item));
 
         return result;
@@ -754,14 +754,14 @@ public:
     {
         vector<string> result;
 
-        Konnection<> from{origin_nodeid, peerid, system_clock::now()};
-        std::vector<Konnection<>> _konnections;
+        Konnection from{origin_nodeid, system_clock::now(), peerid};
+        std::vector<Konnection> _konnections;
         for (auto const & nodeid : nodeids)
         {
             if (nodeid == SelfID)   // skip ourself if it happens the we are one of the closest nodes
                 continue;
-            Konnection<> _konnection{nodeid};
-            if (KBucket<Konnection<>>::probe_result::IS_NEW == kbucket.probe(_konnection))
+            Konnection _konnection{nodeid};
+            if (KBucket<Konnection>::probe_result::IS_NEW == kbucket.probe(_konnection))
                 result.push_back(static_cast<std::string>(_konnection));
 
             _konnections.push_back(_konnection);
@@ -791,11 +791,11 @@ public:
 
     bool get_peer_id(string const& nodeid, peer_id& peerid) override
     {
-        Konnection<> k_nodeid(nodeid);
+        Konnection k_nodeid(nodeid);
         auto it_find = kbucket.find(k_nodeid);
         if (it_find != kbucket.end())
         {
-            auto k = Konnection<>(*it_find);
+            auto k = Konnection(*it_find);
             peerid = k.get_peer();
             return true;
         }
@@ -804,11 +804,11 @@ public:
 
     bool process_introduce_request(string const& nodeid, peer_id& peerid) override
     {
-        Konnection<> msg_konnection(nodeid);
+        Konnection msg_konnection(nodeid);
         auto it_find = kbucket.find(msg_konnection);
         if (it_find != kbucket.end())
         {
-            msg_konnection = Konnection<>(*it_find);
+            msg_konnection = Konnection(*it_find);
             peerid = msg_konnection.get_peer();
 
             return true;
@@ -826,7 +826,7 @@ public:
 
     unsigned short fixed_local_port;
     string SelfID;
-    KBucket<Konnection<>> kbucket;
+    KBucket<Konnection> kbucket;
     //  node lookup design is wrong, does not fit in
     //unique_ptr<NodeLookup> node_lookup;
     communication_state<peer_state> program_state;

@@ -8,7 +8,7 @@
 
 #include <array>
 #include <functional>
-#include <ostream>
+#include <iostream>
 #include <set>
 #include <utility>
 #include <vector>
@@ -62,19 +62,55 @@ class KBucket
     using index_type = typename actions::index_type;
     using age_type = typename actions::age_type;
 
-    class ContactHandle;
     struct by_distance {};
     struct by_age {};
+    struct by_value {};
 
-    using ContactIndex = bmi::multi_index_container<ContactHandle, bmi::indexed_by<
-        bmi::ordered_unique<bmi::tag<by_distance>, bmi::composite_key<ContactHandle,
-            bmi::const_mem_fun<ContactHandle, index_type, &ContactHandle::index>,
-            bmi::const_mem_fun<ContactHandle, distance_type, &ContactHandle::distance>
-        >>,
-        bmi::ordered_non_unique<bmi::tag<by_age>, bmi::composite_key<ContactHandle,
-            bmi::const_mem_fun<ContactHandle, index_type, &ContactHandle::index>,
-            bmi::const_mem_fun<ContactHandle, age_type, &ContactHandle::age>
-        >>
+    template <class _Contact = Contact>
+    struct rel_distance
+    {
+        rel_distance(_Contact const & origin): _origin{origin} {}
+        bool operator()(_Contact const & a, _Contact const &b)
+        {
+        auto const & da = actions::distance(_origin, a);
+        auto const & db = actions::distance(_origin, b);
+        if ( da < db)
+            return true;
+        else
+            return false;
+        }
+
+    private:
+        _Contact _origin;
+    };
+
+    template <class _Contact = Contact>
+    struct rel_index
+    {
+        rel_index(_Contact const & origin): _origin{origin} {}
+
+        bool operator ()(_Contact const & a, _Contact const &b)
+        {
+        auto const & ia = actions::index(_origin, a);
+        auto const & ib = actions::index(_origin, b);
+
+        if ( ia < ib )
+            return true;
+        else if ( ia == ib and actions::age(a) < actions::age(b) )
+            return true;
+        else
+            return false;
+        }
+
+        private:
+            _Contact _origin;
+    };
+
+
+    using ContactIndex = bmi::multi_index_container<Contact, bmi::indexed_by<
+        bmi::ordered_non_unique<bmi::tag<by_distance>, bmi::identity<Contact>, rel_distance<> >,
+        bmi::ordered_non_unique<bmi::tag<by_age>, bmi::identity<Contact>, rel_index<> >,
+        bmi::ordered_non_unique<bmi::tag<by_value>, bmi::identity<Contact> >
     >>;
 
 public:
@@ -82,7 +118,7 @@ public:
     using const_iterator = typename ContactIndex::const_iterator;
 
     enum { LEVELS = K };
-    enum class probe_result { IS_NEW, IS_ORIGIN, IS_FULL, IS_EXPIRED };
+    enum class probe_result { IS_NEW, IS_ORIGIN, IS_FULL, IS_EXPIRED, IS_WILD };
 
     iterator end() const { return contacts.end(); }
     iterator begin() const { return contacts.begin(); }
@@ -90,59 +126,44 @@ public:
     const_iterator cend() const { return contacts.cend(); }
     const_iterator cbegin() const { return contacts.cbegin(); }
 
-    KBucket() : origin{} {}
-    KBucket(const Contact &origin_) : origin{origin_} {}
-    KBucket(Contact &&origin_) : origin{std::move(origin_)} {}
+    KBucket(const Contact &origin_ = {}) :
+        origin{origin_},
+        contacts{boost::make_tuple(
+                     boost::make_tuple(bmi::identity<Contact>{}, rel_distance<>{origin}),
+                     boost::make_tuple(bmi::identity<Contact>{}, rel_index<>{origin}),
+                     typename ContactIndex::template index<by_value>::type::ctor_args()
+                                 )}
+
+    {}
     KBucket<Contact, K> rebase(const Contact &new_origin, bool include_origin = true) const;
 
     probe_result probe(const Contact &) const;
 
-    bool insert(const std::shared_ptr<const Contact>& contact);
-    bool insert(Contact contact);
+    bool insert(const Contact &contact);
 
     iterator erase(const iterator& pos);
     iterator erase(const iterator& first, const iterator &last);
     iterator erase(const Contact &contact);
 
-    void clear() { ContactIndex{}.swap(contacts); }
+    void clear() { ContactIndex{boost::make_tuple(
+                        boost::make_tuple(bmi::identity<Contact>{}, rel_distance<>{origin}),
+                        boost::make_tuple(bmi::identity<Contact>{}, rel_index<>{origin}),
+                        typename ContactIndex::template index<by_value>::type::ctor_args()
+                        )}.swap(contacts); }
 
-    bool replace(const Contact& contact);
+    bool replace(const iterator &it, const Contact& contact);
+    bool replace(const Contact& contact) { auto const & it = find(contact); return replace(it, contact); }
 
-    void print_list(std::ostream& out);
-    iterator find(const Contact& contact);
+    void print_list(std::ostream &os);
+    iterator find(const Contact& contact) const;
+
     std::vector<Contact> list_nearests_to(const Contact &contact, bool prefer_same_index = false) const;
     std::vector<Contact> list_closests() const;
     const Contact& operator[](const distance_type& key) const;
 
 private:
-    ContactIndex contacts;
     Contact origin;
-
-    class ContactHandle
-    {
-        KBucket *self;
-        std::shared_ptr<const Contact> contact;
-        distance_type distance_;
-        index_type index_;
-        age_type age_;
-
-    public:
-        distance_type distance() const { return distance_; }
-        index_type index() const { return index_; }
-        age_type age() const { return age_; }
-
-        ContactHandle(KBucket* self, std::shared_ptr<const Contact> contact):
-            self{self},
-            contact{contact},
-            distance_{actions::distance(self->origin, *contact)},
-            index_{actions::index_from_distance(distance_)},
-            age_{actions::age(*contact)}
-        {}
-
-        operator const Contact&() const { return *contact; }
-        distance_type value() const { return contact->get_id(); }
-    };
-
+    ContactIndex contacts;
 };
 
 
@@ -157,10 +178,10 @@ KBucket<Contact, K> KBucket<Contact, K>::rebase(const Contact &new_origin, bool 
     if(include_origin)
         result.insert(this->origin);
 
-    for(auto c = cbegin(); c != cend(); ++c)
+    for(auto const & it : contacts)
     {
-        if (c->value() != new_origin.get_id())
-            result.insert(*c);
+        if (it != new_origin)
+            result.insert(it);
     }
 
     return result;
@@ -169,13 +190,16 @@ KBucket<Contact, K> KBucket<Contact, K>::rebase(const Contact &new_origin, bool 
 template <class Contact, int K>
 typename KBucket<Contact, K>::probe_result KBucket<Contact, K>::probe(const Contact& contact) const
 {
+    if ( contact == Contact{} )
+        return probe_result::IS_WILD;
+
     auto distance = actions::distance(origin, contact);
     if ( distance == actions::zero())
         return probe_result::IS_ORIGIN;
 
     auto index = actions::index_from_distance(distance);
 
-    auto eq_index = [&index](const ContactHandle& c) { return c.index() == index; };
+    auto eq_index = [&](const Contact& c) { return actions::index(origin, c) == index; };
 
     auto index_count = std::count_if(cbegin(), cend(), eq_index);
     if (index_count >= K)
@@ -191,9 +215,9 @@ typename KBucket<Contact, K>::probe_result KBucket<Contact, K>::probe(const Cont
 }
 
 template <class Contact, int K>
-bool KBucket<Contact, K>::insert(const std::shared_ptr<const Contact>& contact)
+bool KBucket<Contact, K>::insert(const Contact & contact)
 {
-    switch (probe(*contact))
+    switch (probe(contact))
     {
     case probe_result::IS_ORIGIN:
         throw(std::logic_error{"Trying to insert contact with 0 distance from the origin, i.e. self"});
@@ -201,46 +225,14 @@ bool KBucket<Contact, K>::insert(const std::shared_ptr<const Contact>& contact)
     case probe_result::IS_FULL:
         return false;
     case probe_result::IS_EXPIRED:
-        return replace(ContactHandle{this, contact->get_ptr()});
+        return replace(contact);
+    case probe_result::IS_WILD:
+        return false;
     case probe_result::IS_NEW:
     default:
-        return contacts.insert(ContactHandle{this, contact->get_ptr()}).second;
-    }
-    /*
-    auto distance = actions::distance(origin, *contact);
-    if ( distance == actions::zero())
-        throw(std::logic_error{"Trying to insert contact with 0 distance from the origin, i.e. self"});
-
-    auto index = actions::index_from_distance(distance);
-
-    auto eq_index = [&index](const ContactHandle& c) { return c.index() == index; };
-
-//    auto &contacts_by_age = contacts.template get<by_age>();
-
-    auto index_count = std::count_if(begin(), end(), eq_index);
-
-    if (index_count < K)
-    {
-        contacts.insert(ContactHandle{this, contact->get_ptr()});
+        contacts.insert(contact);
         return true;
     }
-
-    auto it = std::find_if(begin(), end(), eq_index);
-
-    if (actions::age(*it) == actions::not_accessible())
-    {
-        contacts.replace(it, ContactHandle{this, contact->get_ptr()});
-        return true;
-    }
-
-    return false;
-    */
-}
-
-template <class Contact, int K>
-bool KBucket<Contact, K>::insert(Contact contact)
-{
-    return insert(std::make_shared<const Contact>(std::move(contact)));
 }
 
 template <class Contact, int K>
@@ -287,7 +279,7 @@ std::vector<Contact> KBucket<Contact, K>::list_nearests_to(const Contact& contac
     {
         auto index_ = actions::index(origin, contact);
         it = std::find_if(std::begin(contacts_by_distance), std::end(contacts_by_distance),
-                         [&index_](const ContactHandle &a){ return index_ == a.index(); } );
+                         [&](const Contact &a){ return index_ == actions::index(origin, a); } );
     }
     auto result_end = loop_copy(it, std::begin(contacts_by_distance), std::end(contacts_by_distance),
                    std::begin(result), std::end(result));
@@ -303,34 +295,26 @@ std::vector<Contact> KBucket<Contact, K>::list_closests() const
 }
 
 template <class Contact, int K>
-void KBucket<Contact, K>::print_list(std::ostream& out)
+void KBucket<Contact, K>::print_list(std::ostream &os)
 {
     auto & contacts_by_distance = contacts.template get<by_distance>();
     for(auto &it : contacts_by_distance)
     {
-        out<<"index: "<<it.index()<<", id: "<<Contact::to_string(it.value()).substr(0, 5) << std::endl;//<<", dist: "<<it.distance()<<"\n";
+        auto const & distance = actions::distance(origin, it);
+        auto const & index = actions::index_from_distance(distance);
+        os<<"index: "<<index<<", id: "<<static_cast<std::string>(it).substr(0, 5) << std::endl;
     };
 }
 
 template <class Contact, int K>
-const Contact& KBucket<Contact, K>::operator[](const distance_type& key) const
-{
-    auto & contacts_by_distance = contacts.template get<by_distance>();
-    return contacts_by_distance.at(key);
-}
-
-template <class Contact, int K>
-typename KBucket<Contact, K>::iterator KBucket<Contact, K>::find(const Contact& contact)
+typename KBucket<Contact, K>::iterator KBucket<Contact, K>::find(const Contact& contact) const
 {
     return std::find_if(begin(), end(),
                         [&contact](const Contact& c){ return actions::distance(contact, c) == actions::zero(); });
 }
 
 template <class Contact, int K>
-bool KBucket<Contact, K>::replace(const Contact& contact)
+bool KBucket<Contact, K>::replace(iterator const & it, const Contact& contact)
 {
-    auto it = find(contact);
-    if (it != end())
-        return contacts.replace(it, ContactHandle{this, std::make_shared<const Contact>(std::move(contact))});
-    return false;
+    return contacts.replace(it, contact);
 }
