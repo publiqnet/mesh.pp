@@ -33,7 +33,7 @@ class file_loader
 public:
     using value_type = T;
     file_loader(boost::filesystem::path const& path)
-        : committed(false)
+        : modified(false)
         , file_path(path)
         , ptr()
     {
@@ -44,7 +44,7 @@ public:
             boost::filesystem::ofstream ofl;
             ofl.open(path, std::ios_base::trunc);
             if (!ofl)
-                throw std::runtime_error("cannot open: " + path.string());
+                throw std::runtime_error("file_loader(): cannot open: " + path.string());
         }
 
         ptr.reset(new T);
@@ -62,33 +62,28 @@ public:
     }
     ~file_loader()
     {
-        _commit();
+        _save();
     }
 
-    void commit()
+    void save()
     {
-        if (false == _commit())
-            throw std::runtime_error("unable to write to the file: "
+        if (false == _save())
+            throw std::runtime_error("file_loader::save(): unable to write to the file: "
                                      + file_path.string());
     }
 
-    T const* operator -> () const { return ptr.get(); }
-    T* operator -> () { clean_commited(); return ptr.get(); }
+    file_loader const& as_const() const { return *this; }
 
-    T const& last_layer() const { return *ptr.get(); }
-    T& last_layer() { clean_commited(); return *ptr.get(); }
-    T const& next_layer() const { return *ptr.get(); }
-    T& next_layer() { clean_commited(); return *ptr.get(); }
+    T const& operator * () const { return *ptr.get(); }
+    T& operator * () { modified = true; return *ptr.get(); }
+
+    T const* operator -> () const { return ptr.get(); }
+    T* operator -> () { modified = true; return ptr.get(); }
 private:
-    inline void clean_commited()
+    bool _save()
     {
-        committed = false;
-    }
-    bool _commit()
-    {
-        if (committed)
+        if (false == modified)
             return true;
-        committed = true;
         boost::filesystem::ofstream fl;
         fl.open(file_path,
                 std::ios_base::binary |
@@ -97,10 +92,11 @@ private:
             return false;
 
         fl << string_saver(*ptr);
+        modified = false;
         return true;
     }
 private:
-    bool committed;
+    bool modified;
     boost::filesystem::path file_path;
     std::unique_ptr<T> ptr;
 };
@@ -138,108 +134,22 @@ public:
     }
     ~file_locker()
     {
+        ptr.reset();
         detail::delete_lock_file(native_handle, lock_path);
     }
+
+    file_locker const& as_const() const { return *this; }
+
+    value_type const& operator * () const { return *(*ptr.get()); }
+    value_type& operator * () { return *(*ptr.get()); }
 
     T const& operator -> () const { return *ptr.get(); }
     T& operator -> () { return *ptr.get(); }
 
-    typename T::value_type const& last_layer() const { return ptr->last_layer(); }
-    typename T::value_type& last_layer() { return ptr->last_layer(); }
-    T const& next_layer() const { return *ptr.get(); }
-    T& next_layer() { return *ptr.get(); }
+    void save() { return ptr->save(); }
 private:
     int native_handle;
     boost::filesystem::path lock_path;
-    std::unique_ptr<T> ptr;
-};
-
-template <typename T,
-          typename T_toggle_on,
-          typename T_toggle_off,
-          T_toggle_on toggle_on,
-          T_toggle_off toggle_off,
-          void(*string_loader)(T&,std::string const&),
-          std::string(*string_saver)(T const&),
-          typename... T_args
-          >
-class file_toggler
-{
-public:
-    using value_type = T;
-    file_toggler(boost::filesystem::path const& path, T_args... args)
-        : committed(false)
-        , file_path(path)
-        , ptr()
-    {
-        using file_loader_simple = file_loader<T, string_loader, string_saver>;
-        using file_loader_locked = file_locker<file_loader_simple>;
-        file_loader_locked fl(path);
-
-        ptr.reset(new T);
-        beltpp::assign(*ptr, std::move(fl.last_layer()));
-
-        toggle_on(*ptr, args...);
-
-        beltpp::assign(fl.last_layer(), std::move(*ptr));
-
-        toggle_off_holder = [args...](T& ob){toggle_off(ob, args...);};
-    }
-    ~file_toggler()
-    {
-        _commit();
-    }
-
-    void commit()
-    {
-        if (false == _commit())
-            throw std::runtime_error("unable to write to the file: "
-                                     + file_path.string());
-    }
-
-    T const* operator -> () const { return ptr.get(); }
-    T* operator -> () { clean_commited(); return ptr.get(); }
-
-    T const& last_layer() const { return *ptr.get(); }
-    T& last_layer() { clean_commited(); return *ptr.get(); }
-    T const& next_layer() const { return *ptr.get(); }
-    T& next_layer() { clean_commited(); return *ptr.get(); }
-
-private:
-    inline void clean_commited()
-    {
-        committed = false;
-    }
-    bool _commit()
-    {
-        if (committed)
-            return true;
-        committed = true;
-
-        using file_loader_simple = file_loader<T, string_loader, string_saver>;
-        using file_loader_locked = file_locker<file_loader_simple>;
-        file_loader_locked fl(file_path);
-        beltpp::assign(*ptr, std::move(fl.last_layer()));
-
-        toggle_off_holder(*ptr);
-
-        beltpp::assign(fl.last_layer(), std::move(*ptr));
-
-        try
-        {
-            fl.next_layer().commit();
-        }
-        catch (...)
-        {
-            return false;
-        }
-
-        return true;
-    }
-private:
-    bool committed;
-    boost::filesystem::path file_path;
-    std::function<void(T&)> toggle_off_holder;
     std::unique_ptr<T> ptr;
 };
 
