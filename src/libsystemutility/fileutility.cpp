@@ -27,7 +27,7 @@ namespace detail
 bool create_lock_file(boost::filesystem::path& path, intptr_t& native_handle)
 {
 #ifdef B_OS_WINDOWS
-    HANDLE fd = CreateFile(path.native().c_str(), GENERIC_READ, 0, NULL, CREATE_NEW, 0, NULL);
+    HANDLE fd = CreateFile(path.native().c_str(), GENERIC_READ, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
     
     if (fd == INVALID_HANDLE_VALUE || !LockFile(fd, 0, 0, 1, 0))
     {
