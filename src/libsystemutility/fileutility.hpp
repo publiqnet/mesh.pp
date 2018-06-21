@@ -17,10 +17,10 @@ namespace meshpp
 {
 namespace detail
 {
-SYSTEMUTILITYSHARED_EXPORT int create_lock_file(boost::filesystem::path& path);
-SYSTEMUTILITYSHARED_EXPORT bool write_to_lock_file(int native_handle, std::string const& value);
-SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(int native_handle, boost::filesystem::path& path);
-SYSTEMUTILITYSHARED_EXPORT void dostuff(int native_handle, boost::filesystem::path const& path);
+SYSTEMUTILITYSHARED_EXPORT bool create_lock_file(boost::filesystem::path& path, intptr_t& native_handle);
+SYSTEMUTILITYSHARED_EXPORT bool write_to_lock_file(intptr_t native_handle, std::string const& value);
+SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(intptr_t native_handle, boost::filesystem::path& path);
+SYSTEMUTILITYSHARED_EXPORT void dostuff(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
 }
 
@@ -117,7 +117,8 @@ public:
         {
             if (0 < index)
                 detail::small_random_sleep();
-            native_handle = detail::create_lock_file(lock_path);
+
+            /*bool*/ detail::create_lock_file(lock_path, native_handle);
         }
         if (native_handle < 0)
             throw std::runtime_error("unable to create lock file: " + lock_path.string());
@@ -148,7 +149,7 @@ public:
 
     void save() { return ptr->save(); }
 private:
-    int native_handle;
+    intptr_t native_handle;
     boost::filesystem::path lock_path;
     std::unique_ptr<T> ptr;
 };

@@ -6,14 +6,14 @@
 #include <belt.pp/utility.hpp>
 
 #ifdef B_OS_WINDOWS
-//TODO
+#include <windows.h>
 #else
 #include <sys/file.h>
 #include <unistd.h>
-#endif
-
 #include <sys/types.h>
 #include <sys/stat.h>
+#endif
+
 #include <fcntl.h>
 #include <chrono>
 #include <thread>
@@ -23,10 +23,21 @@ namespace meshpp
 {
 namespace detail
 {
-int create_lock_file(boost::filesystem::path& path)
+
+bool create_lock_file(boost::filesystem::path& path, intptr_t& native_handle)
 {
 #ifdef B_OS_WINDOWS
-    return 0;//TODO
+    HANDLE fd = CreateFile(path.native().c_str(), GENERIC_READ, 0, NULL, CREATE_NEW, 0, NULL);
+    
+    if (fd == INVALID_HANDLE_VALUE || !LockFile(fd, 0, 0, 1, 0))
+    {
+        CloseHandle(fd);
+        fd = INVALID_HANDLE_VALUE;
+    }
+
+    native_handle = intptr_t(fd);
+
+    return fd != INVALID_HANDLE_VALUE;
 #else
     int fd = ::open(path.native().c_str(), O_RDWR | O_CREAT, 0666);
     if (fd >= 0 && flock(fd, LOCK_EX | LOCK_NB))
@@ -37,22 +48,35 @@ int create_lock_file(boost::filesystem::path& path)
     return fd;
 #endif
 }
-bool write_to_lock_file(int native_handle, std::string const& value)
+
+bool write_to_lock_file(intptr_t native_handle, std::string const& value)
 {
 #ifdef B_OS_WINDOWS
-    return false;//TODO
-#else
-    if (value.length() !=
-        (size_t)::write(native_handle, value.c_str(), value.length()))
-        return false;
+    LPDWORD len = 0;
+    LPOVERLAPPED lpOver = 0;
+ 
+    if (WriteFile(HANDLE(native_handle), value.c_str(), DWORD(value.length()), len, lpOver))
+        if (len == LPDWORD(value.length()))
+            return true;
 
-    return true;
+    return false;
+#else
+    if (value.length() ==
+        (size_t)::write(native_handle, value.c_str(), value.length()))
+        return true;
+
+    return false;
 #endif
 }
-void delete_lock_file(int native_handle, boost::filesystem::path& path)
+
+void delete_lock_file(intptr_t native_handle, boost::filesystem::path& path)
 {
 #ifdef B_OS_WINDOWS
-    //TODO
+    if (native_handle < 0)
+        return;
+
+    DeleteFile(path.native().c_str());
+    CloseHandle(HANDLE(native_handle));
 #else
     if (native_handle < 0)
         return;
@@ -60,6 +84,7 @@ void delete_lock_file(int native_handle, boost::filesystem::path& path)
     ::close(native_handle);
 #endif
 }
+
 void small_random_sleep()
 {
     std::random_device rd;
@@ -69,7 +94,8 @@ void small_random_sleep()
     uint64_t random_sleep = uint64_t(dist(mt) * 10);
     std::this_thread::sleep_for(std::chrono::milliseconds(random_sleep));
 }
-void dostuff(int native_handle, boost::filesystem::path const& path)
+
+void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
 {
     FileAttributes::LockedByPID attr_lock;
     attr_lock.owner = current_process_id();
@@ -84,6 +110,7 @@ void dostuff(int native_handle, boost::filesystem::path const& path)
         throw std::runtime_error("unable to write to lock file: " +
                                  path.string());
 }
+
 }
 }
 
