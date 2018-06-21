@@ -17,7 +17,7 @@ namespace meshpp
 {
 namespace detail
 {
-SYSTEMUTILITYSHARED_EXPORT bool create_lock_file(boost::filesystem::path& path, intptr_t& native_handle);
+SYSTEMUTILITYSHARED_EXPORT bool create_lock_file(intptr_t& native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT bool write_to_lock_file(intptr_t native_handle, std::string const& value);
 SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(intptr_t native_handle, boost::filesystem::path& path);
 SYSTEMUTILITYSHARED_EXPORT void dostuff(intptr_t native_handle, boost::filesystem::path const& path);
@@ -112,15 +112,16 @@ public:
         lock_path = path;
         lock_path.remove_filename() /= fn;
 
-        native_handle = -1;
-        for (size_t index = 0; index < 10 && native_handle < 0; ++index)
+        native_handle = 0;
+        bool succeeded = false;
+        for (size_t index = 0; index < 10 && false == succeeded; ++index)
         {
             if (0 < index)
                 detail::small_random_sleep();
 
-            /*bool*/ detail::create_lock_file(lock_path, native_handle);
+            succeeded = detail::create_lock_file(native_handle, lock_path);
         }
-        if (native_handle < 0)
+        if (false == succeeded)
             throw std::runtime_error("unable to create lock file: " + lock_path.string());
 
         beltpp::scope_helper guard_lock_file(

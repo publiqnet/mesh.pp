@@ -12,9 +12,12 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+
+static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
+
 #endif
 
-#include <fcntl.h>
 #include <chrono>
 #include <thread>
 #include <random>
@@ -24,7 +27,7 @@ namespace meshpp
 namespace detail
 {
 
-bool create_lock_file(boost::filesystem::path& path, intptr_t& native_handle)
+bool create_lock_file(intptr_t& native_handle, boost::filesystem::path const& path)
 {
 #ifdef B_OS_WINDOWS
     HANDLE fd = CreateFile(path.native().c_str(), GENERIC_READ, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -45,7 +48,8 @@ bool create_lock_file(boost::filesystem::path& path, intptr_t& native_handle)
         ::close(fd);
         fd = -1;
     }
-    return fd;
+    native_handle = intptr_t(fd);
+    return fd != -1;
 #endif
 }
 
@@ -55,14 +59,14 @@ bool write_to_lock_file(intptr_t native_handle, std::string const& value)
     LPDWORD len = 0;
     LPOVERLAPPED lpOver = 0;
  
-    if (WriteFile(HANDLE(native_handle), value.c_str(), DWORD(value.length()), len, lpOver))
-        if (len == LPDWORD(value.length()))
-            return true;
+    if (WriteFile(HANDLE(native_handle), value.c_str(), DWORD(value.length()), len, lpOver) &&
+        len == LPDWORD(value.length()))
+        return true;
 
     return false;
 #else
     if (value.length() ==
-        (size_t)::write(native_handle, value.c_str(), value.length()))
+        (size_t)::write(int(native_handle), value.c_str(), value.length()))
         return true;
 
     return false;
@@ -72,16 +76,16 @@ bool write_to_lock_file(intptr_t native_handle, std::string const& value)
 void delete_lock_file(intptr_t native_handle, boost::filesystem::path& path)
 {
 #ifdef B_OS_WINDOWS
-    if (native_handle < 0)
+    if (HANDLE(native_handle) == INVALID_HANDLE_VALUE)
         return;
 
     DeleteFile(path.native().c_str());
     CloseHandle(HANDLE(native_handle));
 #else
-    if (native_handle < 0)
+    if (int(native_handle) < 0)
         return;
     ::remove(path.native().c_str());
-    ::close(native_handle);
+    ::close(int(native_handle));
 #endif
 }
 
