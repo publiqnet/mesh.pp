@@ -1,16 +1,17 @@
 #include "words.hpp"
 
-#include "cryptopp/eccrypto.h"
-#include "cryptopp/ecp.h"
+#include <cryptopp/eccrypto.h>
+#include <cryptopp/ecp.h>
 #include <cryptopp/hex.h>
-#include "cryptopp/oids.h"
-#include "cryptopp/osrng.h"
-#include "cryptopp/ripemd.h"
-#include "cryptopp/sha.h"
+#include <cryptopp/oids.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/ripemd.h>
+#include <cryptopp/sha.h>
 
 #include <iostream>
 #include <random>
 #include <string>
+#include <cassert>
 
 #define BRAIN_KEY_WORD_COUNT 16
 

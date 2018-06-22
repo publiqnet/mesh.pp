@@ -13,6 +13,7 @@
 #include <cryptopp/pssr.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/whrlpool.h>
+#include <mesh.pp/cryptopp_byte.hpp>
 
 #include <string>
 
