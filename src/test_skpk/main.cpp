@@ -151,6 +151,73 @@ std::string EncodeBase58(const unsigned char* pbegin, const size_t sz)
     return str;
 }
 
+//bitcoin
+bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch)
+{
+    static const int8_t mapBase58[256] = {
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1, 0, 1, 2, 3, 4, 5, 6,  7, 8,-1,-1,-1,-1,-1,-1,
+        -1, 9,10,11,12,13,14,15, 16,-1,17,18,19,20,21,-1,
+        22,23,24,25,26,27,28,29, 30,31,32,-1,-1,-1,-1,-1,
+        -1,33,34,35,36,37,38,39, 40,41,42,43,-1,44,45,46,
+        47,48,49,50,51,52,53,54, 55,56,57,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
+    };
+    // Skip leading spaces.
+    while (*psz && isspace(*psz))
+        psz++;
+    // Skip and count leading '1's.
+    int zeroes = 0;
+    int length = 0;
+    for ( ; *psz == '1'; psz++)
+        zeroes++;
+
+    // Allocate enough space in big-endian base256 representation.
+    int size = strlen(psz) * 733 /1000 + 1; // log(58) / log(256), rounded up.
+    std::vector<unsigned char> b256(size);
+    // Process the characters.
+    static_assert(sizeof(mapBase58)/sizeof(mapBase58[0]) == 256, "mapBase58.size() should be 256"); // guarantee not out of range
+    for ( ; *psz && !isspace(*psz); psz++)
+    {
+        // Decode base58 character
+        int carry = mapBase58[(uint8_t)*psz];
+        if (carry == -1)  // Invalid b58 character
+            return false;
+        int i = 0;
+        for (std::vector<unsigned char>::reverse_iterator it = b256.rbegin(); (carry != 0 || i < length) && (it != b256.rend()); ++it, ++i) {
+            carry += 58 * (*it);
+            *it = carry % 256;
+            carry /= 256;
+        }
+        assert(carry == 0);
+        length = i;
+    }
+    // Skip trailing spaces.
+    while (isspace(*psz))
+        psz++;
+    if (*psz != 0)
+        return false;
+    // Skip leading zeroes in b256.
+    std::vector<unsigned char>::iterator it = b256.begin() + (size - length);
+    while (it != b256.end() && *it == 0)
+        it++;
+    // Copy result into output vector.
+    vch.reserve(zeroes + (b256.end() - it));
+    vch.assign(zeroes, 0x00);
+    while (it != b256.end())
+        vch.push_back(*(it++));
+    return true;
+}
+
 
 std::string sk_to_wif(const std::string & secret)
 {
@@ -164,10 +231,35 @@ std::string sk_to_wif(const std::string & secret)
     return EncodeBase58((uint8_t *)wif_str.data(), wif_str.size());
 }
 
+std::string wif_to_sk(const std::string & wif_str)
+{
+    CryptoPP::SHA256 sha256;
+    std::vector<unsigned char> vch;
+    char z{0};
+    DecodeBase58(wif_str.c_str(), vch);
+
+    if (*vch.begin() != 0x80)
+        return {};
+
+    std::string result(vch.size() - 1 - 4, z), chk_str_(4, z);
+    std::copy(vch.begin() + 1, vch.end() - 4, result.begin());
+    std::copy(vch.end() - 4, vch.end(), chk_str_.begin());
+    std::string chk_str{};
+
+    CryptoPP::StringSource ss(std::string("\x80") + result, true, new CryptoPP::HashFilter(sha256, new CryptoPP::HashFilter(sha256, new CryptoPP::StringSink(chk_str))));
+    chk_str.resize(4);
+
+    if(chk_str != chk_str_)
+        return {};
+
+    return result;
+}
+
+#define HASH_VER 1
 
 std::string pk_to_base58(std::string key)
 {
-#if 1
+#if HASH_VER
     CryptoPP::RIPEMD160 hash;
 #else
     CryptoPP::SHA256 hash;
@@ -180,6 +272,32 @@ std::string pk_to_base58(std::string key)
     return EncodeBase58((uint8_t *)key.data(), key.size());
 }
 
+std::string base58_to_pk(const std::string & b58_str)
+{
+#if HASH_VER
+    CryptoPP::RIPEMD160 hash;
+#else
+    CryptoPP::SHA256 hash;
+#endif
+    std::vector<unsigned char> vch;
+    char z{0};
+    DecodeBase58(b58_str.c_str(), vch);
+
+    std::string result(vch.size() - 4, z), chk_str_(4, z);
+    std::copy(vch.begin(), vch.end() - 4, result.begin());
+    std::copy(vch.end() - 4, vch.end(), chk_str_.begin());
+    std::string chk_str{};
+
+    CryptoPP::StringSource ss(result, true, new CryptoPP::HashFilter(hash,  new CryptoPP::StringSink(chk_str)));
+    chk_str.resize(4);
+
+    if(chk_str != chk_str_)
+        return {};
+
+    return result;
+}
+
+
 std::string ECPoint_to_zstr(const CryptoPP::ECP::Point &P)
 {
     char z{0};
@@ -191,20 +309,23 @@ std::string ECPoint_to_zstr(const CryptoPP::ECP::Point &P)
     return Px;
 }
 
+#define INVERT 1
+
 int main(int argc, char **argv)
 {
     auto bk = suggest_brain_key();
 
     std::cout<<bk<<std::endl;
     auto sk = bk_to_sk(bk, 0);
-    std::cout << "sk/wif b58: " << sk_to_wif(sk) << std::endl;
+    auto wif = sk_to_wif(sk);
+    std::cout << "sk/wif b58: " << wif << std::endl;
 
     CryptoPP::Integer sk_i{(uint8_t*)sk.data(), sk.size()};
 
-#if 0
+#if INVERT
     std::string hex_str{};
-    CryptoPP::StringSource ss(sk, true, new CryptoPP::HexEncoder(new CryptoPP::StringSink(hex_str)));
-    std::cout<<hex_str<<std::endl;
+    CryptoPP::StringSource ss1(wif_to_sk(wif), true, new CryptoPP::HexEncoder(new CryptoPP::StringSink(hex_str), false, 2));
+    std::cout<< "sk hex: " << hex_str << std::endl;
 #endif
 
     auto secp256k1 = CryptoPP::ASN1::secp256k1();
@@ -214,8 +335,14 @@ int main(int argc, char **argv)
     private_key.MakePublicKey(public_key);
 
     auto pk_i = public_key.GetPublicElement();
+    auto pk_b58 = pk_to_base58(ECPoint_to_zstr(pk_i));
+    std::cout << "pk b58: " << pk_b58 << std::endl;
 
-    std::cout << "pk b58: " << pk_to_base58(ECPoint_to_zstr(pk_i)) << std::endl;
+#if INVERT
+    hex_str.clear();
+    CryptoPP::StringSource ss2(base58_to_pk(pk_b58), true, new CryptoPP::HexEncoder(new CryptoPP::StringSink(hex_str), false, 2));
+    std::cout<< "pk hex: " << hex_str << std::endl;
+#endif
 
     return 0;
 }
