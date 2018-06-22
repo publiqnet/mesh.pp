@@ -32,8 +32,8 @@ namespace detail
 bool create_lock_file(intptr_t& native_handle, boost::filesystem::path const& path)
 {
 #ifdef B_OS_WINDOWS
-    HANDLE fd = CreateFile(path.native().c_str(), GENERIC_READ, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    
+    HANDLE fd = CreateFile(path.native().c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+
     if (fd == INVALID_HANDLE_VALUE || !LockFile(fd, 0, 0, 1, 0))
     {
         CloseHandle(fd);
@@ -58,13 +58,13 @@ bool create_lock_file(intptr_t& native_handle, boost::filesystem::path const& pa
 bool write_to_lock_file(intptr_t native_handle, std::string const& value)
 {
 #ifdef B_OS_WINDOWS
-    LPDWORD len = 0;
+    DWORD len = -1;
     LPOVERLAPPED lpOver = 0;
  
-    if (WriteFile(HANDLE(native_handle), value.c_str(), DWORD(value.length()), len, lpOver) &&
-        len == LPDWORD(value.length()))
-        return true;
-
+    if (WriteFile(HANDLE(native_handle), value.c_str(), DWORD(value.length()), &len, lpOver) &&
+        len == value.length())
+            return true;
+ 
     return false;
 #else
     if (value.length() ==
@@ -75,14 +75,16 @@ bool write_to_lock_file(intptr_t native_handle, std::string const& value)
 #endif
 }
 
-void delete_lock_file(intptr_t native_handle, boost::filesystem::path& path)
+void delete_lock_file(intptr_t native_handle, boost::filesystem::path const& path)
 {
 #ifdef B_OS_WINDOWS
     if (HANDLE(native_handle) == INVALID_HANDLE_VALUE)
         return;
 
-    DeleteFile(path.native().c_str());
+    UnlockFile(HANDLE(native_handle), 0, 0, 1, 0);
+
     CloseHandle(HANDLE(native_handle));
+    DeleteFile(path.native().c_str());
 #else
     if (int(native_handle) < 0)
         return;
@@ -113,8 +115,7 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
             detail::write_to_lock_file(native_handle,
                                        FileAttributes::detail::saver(attrs));
     if (false == success)
-        throw std::runtime_error("unable to write to lock file: " +
-                                 path.string());
+        throw std::runtime_error("unable to write to lock file: " + path.string());
 }
 
 }
