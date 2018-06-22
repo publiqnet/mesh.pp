@@ -7,6 +7,7 @@
 
 #ifdef B_OS_WINDOWS
 #include <windows.h>
+static_assert(sizeof(intptr_t) == sizeof(HANDLE), "check the sizes");
 #else
 #include <sys/file.h>
 #include <unistd.h>
@@ -14,6 +15,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+static_assert(intptr_t(-1) == int(-1), "be sure it works");
 static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
 
 #endif
