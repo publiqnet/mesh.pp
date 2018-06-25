@@ -73,6 +73,7 @@ target_link_libraries(mesh.pp INTERFACE
     #boost
     cryptopp
     ${Boost_LIBRARIES}
+    belt.pp
     )
 
 # what to do on make install
@@ -82,6 +83,7 @@ install(TARGETS mesh.pp
 
 set(SRC_FILES
     cryptopp_byte.hpp
+    cryptoutility.hpp
     global.hpp
     fileutility.hpp
     processutility.hpp

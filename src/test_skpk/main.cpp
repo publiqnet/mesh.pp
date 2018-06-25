@@ -1,5 +1,7 @@
 #include "words.hpp"
 
+#include <mesh.pp/cryptopp_byte.hpp>
+
 #include <cryptopp/eccrypto.h>
 #include <cryptopp/ecp.h>
 #include <cryptopp/hex.h>
