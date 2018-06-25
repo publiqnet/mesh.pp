@@ -323,9 +323,9 @@ int main(int argc, char **argv)
     CryptoPP::Integer sk_i{(uint8_t*)sk.data(), sk.size()};
 
 #if INVERT
-    std::string hex_str{};
-    CryptoPP::StringSource ss1(wif_to_sk(wif), true, new CryptoPP::HexEncoder(new CryptoPP::StringSink(hex_str), false, 2));
-    std::cout<< "sk hex: " << hex_str << std::endl;
+    auto sk_str = wif_to_sk(wif);
+    CryptoPP::Integer sk_{(CryptoPP::byte*)sk_str.data(), sk_str.size()};
+    std::cout<< "sk hex: " << std::hex << sk_ << std::endl;
 #endif
 
     auto secp256k1 = CryptoPP::ASN1::secp256k1();
@@ -339,9 +339,9 @@ int main(int argc, char **argv)
     std::cout << "pk b58: " << pk_b58 << std::endl;
 
 #if INVERT
-    hex_str.clear();
-    CryptoPP::StringSource ss2(base58_to_pk(pk_b58), true, new CryptoPP::HexEncoder(new CryptoPP::StringSink(hex_str), false, 2));
-    std::cout<< "pk hex: " << hex_str << std::endl;
+    auto pk_str = base58_to_pk(pk_b58);
+    CryptoPP::Integer pk_{(CryptoPP::byte*)pk_str.data(), pk_str.size()};
+    std::cout<< "pk hex: " << std::hex << pk_ << std::endl;
 #endif
 
     return 0;

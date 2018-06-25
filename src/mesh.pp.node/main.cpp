@@ -698,7 +698,7 @@ int main(int argc, char* argv[])
 
         string option_bind, option_connect, option_query;
 
-        const string SelfID(Konnection<>::to_string(iNodeID));
+        const string SelfID(Konnection::to_string(iNodeID));
 
         if (SelfID.empty())
             throw std::runtime_error("something wrong with nodeid");
@@ -749,8 +749,8 @@ int main(int argc, char* argv[])
             cout << "Using default remote address " << connect.remote.address << " and port " << connect.remote.port << endl;
         }
 
-        Konnection<> self {iNodeID};
-        KBucket<Konnection<>> kbucket{self};
+        Konnection self {iNodeID};
+        KBucket<Konnection> kbucket{self};
 
 
         std::unique_ptr<NodeLookup> node_lookup;
@@ -791,7 +791,7 @@ int main(int argc, char* argv[])
             auto iter_remove_kb = to_remove.first.begin();
             for (; iter_remove_kb != to_remove.first.end(); ++iter_remove_kb)
             {
-                kbucket.erase(Konnection<>(*iter_remove_kb));
+                kbucket.erase(Konnection(*iter_remove_kb));
             }
             auto iter_remove_sk = to_remove.second.begin();
             for (; iter_remove_sk != to_remove.second.end(); ++iter_remove_sk)
@@ -941,7 +941,7 @@ int main(int argc, char* argv[])
                     message_ping msg;
                     packet.get(msg);
 
-                    Konnection<> k{msg.nodeid, current_peer, {}};
+                    Konnection k{msg.nodeid, {}, current_peer};
                     if (kbucket.find(k) != kbucket.end() ||
                         kbucket.insert(k))
                     {
@@ -970,7 +970,7 @@ int main(int argc, char* argv[])
                     if (SelfID == msg.nodeid)
                         break;
 
-                    Konnection<> k(msg.nodeid, current_peer, t_now);
+                    Konnection k(msg.nodeid, t_now, current_peer);
                     kbucket.replace(k);
 
                     if(node_lookup)
@@ -989,11 +989,11 @@ int main(int argc, char* argv[])
                     message_find_node msg;
                     packet.get(msg);
 
-                    Konnection<> k(msg.nodeid);
+                    Konnection k(msg.nodeid);
                     auto konnections = kbucket.list_nearests_to(k, false);
                     message_node_details response;
                     response.origin = SelfID;
-                    for (Konnection<> const& konnection_item : konnections)
+                    for (Konnection const& konnection_item : konnections)
                         response.nodeid.push_back(string(konnection_item));
 
 
@@ -1007,14 +1007,14 @@ int main(int argc, char* argv[])
                     message_node_details msg;
                     packet.get(msg);
 
-                    Konnection<> from{msg.origin, current_peer, t_now};
-                    std::vector<Konnection<>> _konnections;
+                    Konnection from{msg.origin, t_now, current_peer};
+                    std::vector<Konnection> _konnections;
                     for (auto const & nodeid : msg.nodeid)
                     {
                         if (nodeid == SelfID)   // skip ourself if it happens the we are one of the closest nodes
                             continue;
-                        Konnection<> _konnection{nodeid};
-                        if (KBucket<Konnection<>>::probe_result::IS_NEW == kbucket.probe(_konnection))
+                        Konnection _konnection{nodeid};
+                        if (KBucket<Konnection>::probe_result::IS_NEW == kbucket.probe(_konnection))
                         {
                             message_introduce_to msg_intro;
                             msg_intro.nodeid = static_cast<std::string>(_konnection);
@@ -1046,11 +1046,11 @@ int main(int argc, char* argv[])
                     message_introduce_to msg;
                     packet.get(msg);
 
-                    Konnection<> msg_konnection(msg.nodeid);
+                    Konnection msg_konnection(msg.nodeid);
                     auto it_find = kbucket.find(msg_konnection);
                     if (it_find != kbucket.end())
                     {
-                        msg_konnection = Konnection<>(*it_find);
+                        msg_konnection = Konnection(*it_find);
                         auto msg_peer_id = msg_konnection.get_peer();
 
                         ip_address msg_konnection_addr = sk.info(msg_peer_id);
@@ -1088,7 +1088,7 @@ int main(int argc, char* argv[])
 
             if(! option_query.empty()) // command to find some node)
             {
-                Konnection<> konnection {option_query};
+                Konnection konnection {option_query};
 
                 if(node_lookup)
                 {

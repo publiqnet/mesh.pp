@@ -76,8 +76,7 @@ public:
 
     packets receive(peer_id& peer) override;
 
-    void send(peer_id const& peer,
-              packet&& pack) override;
+    void send(peer_id const& peer, packet&& pack) override;
 
     void timer_action() override;
 
