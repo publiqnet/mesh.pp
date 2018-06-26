@@ -7,7 +7,7 @@ add_library(cryptoutility
     cryptoutility.hpp)
 
 # libraries this module links to
-target_link_libraries(cryptoutility PRIVATE
+target_link_libraries(cryptoutility PUBLIC
     mesh.pp)
 
 # what to do on make install
