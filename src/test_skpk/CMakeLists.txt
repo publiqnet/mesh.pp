@@ -6,7 +6,8 @@ add_executable(test_skpk
 
 # libraries this module links to
 target_link_libraries(test_skpk PRIVATE
-    mesh.pp)
+    mesh.pp
+    cryptoutility)
 
 # what to do on make install
 install(TARGETS test_skpk

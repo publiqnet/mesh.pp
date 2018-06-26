@@ -4,7 +4,9 @@ add_definitions(-DCRYPTOUTILITY_LIBRARY)
 add_library(cryptoutility
     global.hpp
     cryptoutility.cpp
-    cryptoutility.hpp)
+    cryptoutility.hpp
+    words.cpp
+    words.hpp)
 
 # libraries this module links to
 target_link_libraries(cryptoutility PUBLIC

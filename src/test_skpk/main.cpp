@@ -10,6 +10,8 @@
 #include <cryptopp/ripemd.h>
 #include <cryptopp/sha.h>
 
+#include <mesh.pp/cryptoutility.hpp>
+
 #include <iostream>
 #include <random>
 #include <string>
@@ -315,7 +317,7 @@ std::string ECPoint_to_zstr(const CryptoPP::ECP::Point &P)
 
 int main(int argc, char **argv)
 {
-    auto bk = suggest_brain_key();
+    std::string bk = suggest_brain_key();
 
     std::cout<<bk<<std::endl;
     auto sk = bk_to_sk(bk, 0);
@@ -345,6 +347,21 @@ int main(int argc, char **argv)
     CryptoPP::Integer pk_{(CryptoPP::byte*)pk_str.data(), pk_str.size()};
     std::cout<< "pk hex: " << std::hex << pk_ << std::endl;
 #endif
+
+    meshpp::random_seed m_rs(bk);
+    meshpp::private_key m_pvk = m_rs.get_private_key();
+    meshpp::public_key m_pbk = m_pvk.get_public_key();
+
+    std::cout << std::endl << m_rs.get_brain_key() << std::endl;
+    std::cout << m_pvk.get_base58_wif() << std::endl;
+    std::cout << m_pbk.get_base58() << std::endl;
+
+    std::string msg = "tigran";
+    std::vector<char> msg_buf(msg.begin(), msg.end());
+
+    meshpp::signature m_sgn = m_pvk.sign(msg_buf);
+    std::cout << m_sgn.base64 << std::endl;
+    //std::cout << m_sgn.verify() << std::endl;
 
     return 0;
 }
