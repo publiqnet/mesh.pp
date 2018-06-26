@@ -96,7 +96,7 @@ class KBucket
 
         if ( ia < ib )
             return true;
-        else if ( ia == ib and actions::age(a) < actions::age(b) )
+        else if ( ia == ib && actions::age(a) < actions::age(b) )
             return true;
         else
             return false;

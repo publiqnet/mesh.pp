@@ -137,7 +137,7 @@ std::set<Konnection> NodeLookup::drop_list() const
             continue;
 
         if ( _kbucket_.probe(konnection) == KBucket<Konnection>::probe_result::IS_NEW &&
-             not konnection.get_peer().empty()
+             false == konnection.get_peer().empty()
              )
             result.insert(konnection);
     }
