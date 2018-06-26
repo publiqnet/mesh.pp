@@ -1,0 +1,17 @@
+module meshpp_message
+{
+    type message_join {}
+    type message_drop {}
+    type message_error {}
+
+    class Sum
+    {
+        Float64 first
+        Float64 second
+    }
+
+    class SumResult
+    {
+        Float64 value
+    }
+}
