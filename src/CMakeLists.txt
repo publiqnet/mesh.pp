@@ -38,6 +38,8 @@ add_subdirectory(kbucket)
 add_subdirectory(test_app)
 add_subdirectory(test_cryptopp)
 add_subdirectory(test_skpk)
+add_subdirectory(test_socket)
+
 
 # following is used for find_package functionality
 install(FILES mesh.pp-config.cmake DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
