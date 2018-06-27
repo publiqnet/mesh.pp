@@ -24,6 +24,27 @@ SYSTEMUTILITYSHARED_EXPORT void dostuff(intptr_t native_handle, boost::filesyste
 SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
 }
 
+inline void load_file(boost::filesystem::path const& path,
+                      boost::filesystem::ifstream& fl,
+                      std::istream_iterator<char>& begin,
+                      std::istream_iterator<char>& end)
+{
+    fl.open(path, std::ios_base::binary);
+    if (!fl)
+    {
+        boost::filesystem::ofstream ofl;
+        ofl.open(path, std::ios_base::trunc);
+        if (!ofl)
+            throw std::runtime_error("load_file(): cannot open: " + path.string());
+    }
+
+    if (fl)
+    {
+        end = std::istream_iterator<char>();
+        begin = std::istream_iterator<char>(fl);
+    }
+}
+
 template <typename T,
           void(*string_loader)(T&,std::string const&),
           std::string(*string_saver)(T const&)
@@ -37,27 +58,17 @@ public:
         , file_path(path)
         , ptr()
     {
+        std::istream_iterator<char> end, begin;
         boost::filesystem::ifstream fl;
-        fl.open(path, std::ios_base::binary);
-        if (!fl)
-        {
-            boost::filesystem::ofstream ofl;
-            ofl.open(path, std::ios_base::trunc);
-            if (!ofl)
-                throw std::runtime_error("file_loader(): cannot open: " + path.string());
-        }
+        load_file(path, fl, begin, end);
 
         ptr.reset(new T);
 
-        if (fl)
+        if (fl && begin != end)
         {
-            std::istream_iterator<char> end, begin(fl);
-            if (begin != end)
-            {
-                T ob;
-                string_loader(ob, std::string(begin, end));
-                beltpp::assign(*ptr, std::move(ob));
-            }
+            T ob;
+            string_loader(ob, std::string(begin, end));
+            beltpp::assign(*ptr, std::move(ob));
         }
     }
     ~file_loader()
