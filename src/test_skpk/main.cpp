@@ -302,15 +302,26 @@ std::string base58_to_pk(const std::string & b58_str)
 }
 
 
-std::string ECPoint_to_zstr(const CryptoPP::ECP::Point &P)
+std::string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point & P)
 {
-    char z{0};
-    std::string Px(P.x.ByteCount() + 1, z);
-    P.x.Encode((uint8_t*)Px.data() + 1, Px.size() - 1);
+    auto ecgp = CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(oid);
+    auto ecc = ecgp.GetCurve();
 
-    Px[0] = (P.y.IsOdd()) ? 0x03 : 0x02;
+    std::string z_str(ecc.EncodedPointSize(true), '\x00');
+    ecc.EncodePoint((CryptoPP::byte*)z_str.data(), P, true);
 
-    return Px;
+    return z_str;
+}
+
+CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str)
+{
+    CryptoPP::ECP::Point P;
+
+    auto ecgp = CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(oid);
+    auto ecc = ecgp.GetCurve();
+
+    ecc.DecodePoint(P, (CryptoPP::byte*)z_str.data(), z_str.size());
+    return P;
 }
 
 #define INVERT 1
@@ -339,13 +350,19 @@ int main(int argc, char **argv)
     private_key.MakePublicKey(public_key);
 
     auto pk_i = public_key.GetPublicElement();
-    auto pk_b58 = pk_to_base58(ECPoint_to_zstr(pk_i));
+    auto pk_b58 = pk_to_base58(ECPoint_to_zstr(secp256k1, pk_i));
     std::cout << "pk b58: " << pk_b58 << std::endl;
 
 #if INVERT
     auto pk_str = base58_to_pk(pk_b58);
-    CryptoPP::Integer pk_{(CryptoPP::byte*)pk_str.data(), pk_str.size()};
-    std::cout<< "pk hex: " << std::hex << pk_ << std::endl;
+    auto P = zstr_to_ECPoint(secp256k1, pk_str);
+    decltype(public_key) public_key_;
+    public_key_.Initialize(secp256k1, P);
+
+    CryptoPP::AutoSeededRandomPool arng;
+    std::cout<< private_key.Validate(arng, 3)<<public_key.Validate(arng, 3)<<public_key_.Validate(arng, 3)<< std::endl;
+    std::cout<< "public_key_ hex: " << std::hex << public_key_.GetPublicElement().x << " " << public_key_.GetPublicElement().y << std::endl;
+    std::cout<< "public_key  hex: " << std::hex << public_key.GetPublicElement().x << " " << public_key.GetPublicElement().y << std::endl;
 #endif
 
     meshpp::random_seed m_rs(bk);
@@ -361,7 +378,8 @@ int main(int argc, char **argv)
 
     meshpp::signature m_sgn = m_pvk.sign(msg_buf);
     std::cout << m_sgn.base64 << std::endl;
-    //std::cout << m_sgn.verify() << std::endl;
+
+    std::cout << m_sgn.verify() << std::endl;
 
     return 0;
 }

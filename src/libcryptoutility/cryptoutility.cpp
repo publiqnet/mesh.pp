@@ -32,8 +32,9 @@ std::string suggest_brain_key();
 string bk_to_wif_sk(string const& bk_str, int sequence_number);
 string pk_to_base58(std::string const& key);
 bool base58_to_pk_hex(string const& b58_str, string& pk);
-bool base58_to_pk(string const& b58_str, CryptoPP::Integer& pk);
-string ECPoint_to_zstr(const CryptoPP::ECP::Point &P);
+bool base58_to_pk(string const& b58_str, CryptoPP::ECP::Point &pk);
+string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point &P);
+CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str);
 }
 
 random_seed::random_seed(string const& brain_key_)
@@ -90,7 +91,8 @@ public_key private_key::get_public_key() const
     pv_key.MakePublicKey(pb_key);
 
     auto pk_i = pb_key.GetPublicElement();
-    auto pk_b58 = detail::pk_to_base58(detail::ECPoint_to_zstr(pk_i));
+
+    auto pk_b58 = detail::pk_to_base58(detail::ECPoint_to_zstr(secp256k1, pk_i));
 
     return public_key(pk_b58);
 }
@@ -121,7 +123,7 @@ signature private_key::sign(std::vector<char> message) const
 public_key::public_key(string const& base58_)
     : base58(base58_)
 {
-    CryptoPP::Integer pk;
+    CryptoPP::ECP::Point pk;
     if (false == detail::base58_to_pk(base58, pk))
         throw std::runtime_error("invalid public key: \"" + base58 + "\"");
 }
@@ -152,19 +154,16 @@ bool signature::verify() const
     detail::base58_to_pk_hex(pb_key.get_base58(), pub_key_hex);
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PublicKey pub_key;
-    pub_key.Load(CryptoPP::StringSource(pub_key_hex, true,
-                                          new CryptoPP::HexDecoder()).Ref());
+
+    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+    const CryptoPP::ECP::Point P = detail::zstr_to_ECPoint(secp256k1, pub_key_hex);
+    pub_key.Initialize(secp256k1, P);
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Verifier verifier(pub_key);
+
     bool result = false;
-
-    std::vector<char> test(decodedSignature.begin(), decodedSignature.end());
-    std::copy(message.begin(), message.end(), std::back_inserter(test));
-
-    CryptoPP::StringSource ss2((CryptoPP::byte*)test.data(), test.size(), true,
-                               new CryptoPP::SignatureVerificationFilter(verifier,
-                                        new CryptoPP::ArraySink((CryptoPP::byte*)&result,
-                                                                sizeof(result))));
+    result = verifier.VerifyMessage((CryptoPP::byte*) message.data(), message.size(),
+                                    (CryptoPP::byte*) decodedSignature.data(), decodedSignature.size());
 
     return result;
 }
@@ -480,25 +479,37 @@ bool base58_to_pk_hex(string const& b58_str, string& pk)
     return code;
 }
 
-bool base58_to_pk(string const& b58_str, CryptoPP::Integer& pk)
+bool base58_to_pk(string const& b58_str, CryptoPP::ECP::Point& pk)
 {
     string result;
     bool code = base58_to_pk_hex(b58_str, result);
+    auto secp256k1 = CryptoPP::ASN1::secp256k1();
     if (code)
-        pk = CryptoPP::Integer{(CryptoPP::byte*)result.data(), result.size()};
+        pk = detail::zstr_to_ECPoint(secp256k1, result);
 
     return code;
 }
 
-string ECPoint_to_zstr(const CryptoPP::ECP::Point &P)
+std::string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point & P)
 {
-    char z{0};
-    std::string Px(P.x.ByteCount() + 1, z);
-    P.x.Encode((uint8_t*)Px.data() + 1, Px.size() - 1);
+    auto ecgp = CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(oid);
+    auto ecc = ecgp.GetCurve();
 
-    Px[0] = (P.y.IsOdd()) ? 0x03 : 0x02;
+    std::string z_str(ecc.EncodedPointSize(true), '\x00');
+    ecc.EncodePoint((CryptoPP::byte*)z_str.data(), P, true);
 
-    return Px;
+    return z_str;
+}
+
+CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str)
+{
+    CryptoPP::ECP::Point P;
+
+    auto ecgp = CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(oid);
+    auto ecc = ecgp.GetCurve();
+
+    ecc.DecodePoint(P, (CryptoPP::byte*)z_str.data(), z_str.size());
+    return P;
 }
 
 }   //  end detail
