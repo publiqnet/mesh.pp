@@ -21,9 +21,6 @@
 
 using std::string;
 
-static CryptoPP::SHA256 sha256;
-static CryptoPP::SHA512 sha512;
-static CryptoPP::RIPEMD160 rmd160;
 
 namespace meshpp
 {
@@ -176,29 +173,15 @@ bool signature::verify() const
 
 string hash(const string & message)
 {
+    CryptoPP::SHA256 sha256;
     string _hash;
+
     CryptoPP::StringSource ss(message, true,
                               new CryptoPP::HashFilter(sha256,
                               new CryptoPP::StringSink(_hash)
                             ));
     return detail::EncodeBase58((CryptoPP::byte*)_hash.data(), _hash.size());
 }
-
-string hash(const char * const c_str)
-{
-    return hash(string(c_str));
-}
-
-template <typename T>
-string hash(const T & message)
-{
-    string message_(std::distance(message.begin(), message.end()), '\00');
-    std::copy(message.begin(), message.end(), message_.begin());
-    return hash(message_);
-}
-
-template string hash<std::vector<unsigned char>> (std::vector<unsigned char> const &);
-template string hash<std::vector<char>> (std::vector<char> const &);
 
 #define HASH_VER 1
 #define BRAIN_KEY_WORD_COUNT 16
@@ -233,6 +216,9 @@ bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch);
 
 std::string bk_to_sk(std::string const& bk_str, int sequence_number )
 {
+    CryptoPP::SHA256 sha256;
+    CryptoPP::SHA512 sha512;
+
     std::string sk_str{};
 
     CryptoPP::StringSource ss(bk_str + " " + std::to_string(sequence_number),
@@ -242,6 +228,7 @@ std::string bk_to_sk(std::string const& bk_str, int sequence_number )
 
 std::string sk_to_wif(const std::string & secret)
 {
+    CryptoPP::SHA256 sha256;
     std::string chk_str{}, wif_str{"\x80", 1};
     wif_str += secret;
 
@@ -259,6 +246,7 @@ string bk_to_wif_sk(string const& bk_str, int sequence_number)
 
 bool wif_to_sk(const std::string & wif_str, CryptoPP::Integer& sk)
 {
+    CryptoPP::SHA256 sha256;
     bool code = true;
 
     std::vector<unsigned char> vch;
@@ -459,10 +447,11 @@ bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch)
 
 string pk_to_base58(std::string const& key)
 {
+
 #if HASH_VER
-    auto & hash = rmd160;
+    CryptoPP::RIPEMD160 hash;
 #else
-    auto & hash = sha256;
+    CryptoPP::SHA256 hash;
 #endif
     std::string chk_str{};
     CryptoPP::StringSource ss(key, true, new CryptoPP::HashFilter(hash,  new CryptoPP::StringSink(chk_str)));
@@ -477,9 +466,9 @@ bool base58_to_pk_hex(string const& b58_str, string& pk)
     bool code = true;
 
 #if HASH_VER
-    auto & hash = rmd160;
+    CryptoPP::RIPEMD160 hash;
 #else
-    auto & hash = sha256;
+    CryptoPP::SHA256 hash;
 #endif
     std::vector<unsigned char> vch;
     char z{0};

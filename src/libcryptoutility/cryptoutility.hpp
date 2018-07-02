@@ -66,9 +66,9 @@ public:
     std::string base64;
 };
 
-template <typename T>
-std::string hash(const T & );
-std::string hash(const char * const);
 std::string hash(const std::string &);
+template <typename InputIt>
+std::string hash(InputIt first, InputIt last) { return hash(std::string(first, last)); }
+
 
 }

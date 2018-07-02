@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     std::cout << m_pvk.get_base58_wif() << std::endl;
     std::cout << m_pbk.get_base58() << std::endl;
 
-    std::string msg = "tigran";
+    std::string msg = "";
     std::vector<char> msg_buf(msg.begin(), msg.end());
 
     meshpp::signature m_sgn = m_pvk.sign(msg_buf);
@@ -36,9 +36,8 @@ int main(int argc, char **argv)
 
     std::cout<<R"(hash256("") -> b58:GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn -> 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)"<<std::endl;
     std::cout << meshpp::hash("") << std::endl;
-    std::cout << meshpp::hash(std::string("")) << std::endl;
-    std::cout << meshpp::hash(std::vector<unsigned char>()) << std::endl;
-    std::cout << meshpp::hash(std::vector<char>()) << std::endl;
+    std::cout << meshpp::hash(msg) << std::endl;
+    std::cout << meshpp::hash(msg_buf.begin(), msg_buf.end()) << std::endl;
     std::cout << m_sgn.verify() << std::endl;
 
     return 0;
