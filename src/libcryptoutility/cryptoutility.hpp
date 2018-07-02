@@ -66,4 +66,9 @@ public:
     std::string base64;
 };
 
+template <typename T>
+std::string hash(const T & );
+std::string hash(const char * const);
+std::string hash(const std::string &);
+
 }
