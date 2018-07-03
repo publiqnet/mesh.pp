@@ -199,7 +199,10 @@ void p2psocket::prepare_wait()
 
     auto to_remove = state.remove_pending();
     for (auto const& remove_sk : to_remove)
+    {
+        m_pimpl->writeln("sending drop");
         sk.send(remove_sk, Drop());
+    }
 
     auto to_listen = state.get_to_listen();
     for (auto& item : to_listen)
@@ -479,6 +482,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         }
         case Other::rtt:
         {
+            m_pimpl->writeln("sending extension data");
+
             peer = state.get_nodeid(current_peer);
             if (false == peer.empty())
             {
@@ -581,9 +586,14 @@ void p2psocket::send(peer_id const& peer,
 
     if (state.get_peer_id(peer, p2p_peerid))
     {
-        Other wrapper;
-        wrapper.contents = std::move(pack);
-        m_pimpl->m_ptr_socket->send(p2p_peerid, std::move(wrapper));
+        if (pack.type() == m_pimpl->m_rtt_drop)
+            state.remove_later(p2p_peerid, 0, true);
+        else
+        {
+            Other wrapper;
+            wrapper.contents = std::move(pack);
+            m_pimpl->m_ptr_socket->send(p2p_peerid, std::move(wrapper));
+        }
     }
     else
         throw std::runtime_error("no such node: " + peer);
