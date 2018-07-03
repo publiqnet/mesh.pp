@@ -66,9 +66,12 @@ public:
     std::string base64;
 };
 
-std::string CRYPTOUTILITYSHARED_EXPORT hash(const std::string &);
+CRYPTOUTILITYSHARED_EXPORT std::string hash(const std::string &);
 template <typename InputIt>
-std::string CRYPTOUTILITYSHARED_EXPORT hash(InputIt first, InputIt last) { return hash(std::string(first, last)); }
+std::string hash(InputIt first, InputIt last)
+{
+    return hash(std::string(first, last));
+}
 
 
 }
