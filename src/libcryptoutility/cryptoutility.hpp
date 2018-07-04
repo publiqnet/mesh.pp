@@ -45,8 +45,10 @@ public:
     ~public_key();
 
     std::string get_base58() const;
+    std::string get_data() const;
 private:
     std::string base58;
+    std::string _data;
 };
 
 class CRYPTOUTILITYSHARED_EXPORT signature
@@ -59,7 +61,7 @@ public:
         , message(message_)
         , base64(base64_) {}
 
-    bool verify() const;
+    bool verify(/*bool encoded = false*/) const;
 
     public_key pb_key;
     std::vector<char> message;
