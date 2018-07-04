@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include <exception>
 
 namespace meshpp
 {
@@ -32,7 +33,7 @@ public:
 
     std::string get_base58_wif() const;
     public_key get_public_key() const;
-    signature sign(std::vector<char> message) const;
+    signature sign(std::vector<char> const& message) const;
 private:
     std::string base58_wif;
 };
@@ -64,6 +65,19 @@ public:
     public_key pb_key;
     std::vector<char> message;
     std::string base64;
+};
+
+class CRYPTOUTILITYSHARED_EXPORT exception_public_key : public std::runtime_error
+{
+public:
+    explicit exception_public_key(std::string const& str_public_key);
+
+    exception_public_key(exception_public_key const&) noexcept;
+    exception_public_key& operator=(exception_public_key const&) noexcept;
+
+    virtual ~exception_public_key() noexcept;
+
+    std::string pub_key;
 };
 
 CRYPTOUTILITYSHARED_EXPORT std::string hash(const std::string &);

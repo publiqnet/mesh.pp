@@ -20,7 +20,9 @@
 #include <random>
 
 using std::string;
+using std::runtime_error;
 
+string g_public_key_prefix = "PBQ";
 
 namespace meshpp
 {
@@ -100,7 +102,7 @@ public_key private_key::get_public_key() const
     return public_key(pk_b58);
 }
 
-signature private_key::sign(std::vector<char> message) const
+signature private_key::sign(std::vector<char> const& message) const
 {
     CryptoPP::Integer sk;
     detail::wif_to_sk(base58_wif, sk);
@@ -128,7 +130,7 @@ public_key::public_key(string const& base58_)
 {
     CryptoPP::ECP::Point pk;
     if (false == detail::base58_to_pk(base58, pk))
-        throw std::runtime_error("invalid public key: \"" + base58 + "\"");
+        throw exception_public_key(base58);
 }
 
 public_key::public_key(public_key const& other)
@@ -170,6 +172,26 @@ bool signature::verify() const
 
     return result;
 }
+
+exception_public_key::exception_public_key(string const& str_public_key)
+    : runtime_error("invalid public key: \"" + str_public_key + "\"")
+    , pub_key(str_public_key)
+{}
+
+exception_public_key::exception_public_key(exception_public_key const& other) noexcept
+    : runtime_error(other)
+    , pub_key(other.pub_key)
+{}
+
+exception_public_key& exception_public_key::operator=(exception_public_key const& other) noexcept
+{
+    dynamic_cast<runtime_error*>(this)->operator =(other);
+    pub_key = other.pub_key;
+    return *this;
+}
+
+exception_public_key::~exception_public_key()
+{}
 
 string hash(const string & message)
 {
