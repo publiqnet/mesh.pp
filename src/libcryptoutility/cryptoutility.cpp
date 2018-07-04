@@ -12,6 +12,7 @@
 #include <cryptopp/ripemd.h>
 #include <cryptopp/sha.h>
 #include <cryptopp/base64.h>
+#include <cryptopp/dsa.h>
 
 #include <string>
 #include <cassert>
@@ -36,7 +37,7 @@ string bk_to_wif_sk(string const& bk_str, int sequence_number);
 string pk_to_base58(std::string const& key);
 bool base58_to_pk_hex(string const& b58_str, string& pk);
 bool base58_to_pk(string const& b58_str, CryptoPP::ECP::Point &pk);
-string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point &P);
+string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point &P, bool compressed = true);
 CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str);
 string EncodeBase58(const unsigned char* pbegin, const size_t sz);
 bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch);
@@ -112,17 +113,27 @@ signature private_key::sign(std::vector<char> const& message) const
     pv_key.Initialize(secp256k1, sk);
 
     // sign message
-    string message_signature;
+
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Signer signer(pv_key);
 
     CryptoPP::AutoSeededRandomPool rng;
 
-    CryptoPP::StringSource ss((CryptoPP::byte*) message.data(), message.size(), true,
-                              new CryptoPP::SignerFilter(rng, signer,
-                                        new CryptoPP::Base64Encoder(
-                                                    new CryptoPP::StringSink(message_signature))));
+    std::string message_str(message.begin(), message.end());
+    std::string signature_raw;
+    CryptoPP::StringSource ss(message_str, true,
+                              new CryptoPP::SignerFilter(rng, signer, new CryptoPP::StringSink(signature_raw)));
 
-    return signature(get_public_key(), message, message_signature);
+    string signature_der(signature_raw.size()*2, '\x00');
+    auto sz_ = CryptoPP::DSAConvertSignatureFormat(
+                (CryptoPP::byte*) signature_der.data(), signature_der.size(), CryptoPP::DSA_DER,
+                (const CryptoPP::byte*)signature_raw.data(), signature_raw.size(), CryptoPP::DSA_P1363
+                );
+    signature_der.resize(sz_);
+
+    string signature_der_b64;
+    CryptoPP::StringSource ss2(signature_der, true, new CryptoPP::Base64Encoder(
+                new CryptoPP::StringSink(signature_der_b64)));
+    return signature(get_public_key(), message, signature_der_b64);
 }
 
 public_key::public_key(string const& base58_)
@@ -131,10 +142,14 @@ public_key::public_key(string const& base58_)
     CryptoPP::ECP::Point pk;
     if (false == detail::base58_to_pk(base58, pk))
         throw exception_public_key(base58);
+
+    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+    auto raw_ = detail::ECPoint_to_zstr(secp256k1, pk, false);
+    _data = detail::EncodeBase58((CryptoPP::byte*)raw_.data(), raw_.size());
 }
 
 public_key::public_key(public_key const& other)
-    : base58(other.base58)
+    : base58(other.base58), _data(other._data)
 {
 
 }
@@ -146,29 +161,44 @@ string public_key::get_base58() const
     return base58;
 }
 
-bool signature::verify() const
+string public_key::get_data() const
 {
-    // decode base64 signature
-    string decodedSignature;
-    CryptoPP::StringSource ss(base64, true,
-                              new CryptoPP::Base64Decoder(
-                                    new CryptoPP::StringSink(decodedSignature)));
+    return _data;
+}
 
-    // verify message
-    string pub_key_hex;
-    detail::base58_to_pk_hex(pb_key.get_base58(), pub_key_hex);
+bool signature::verify(/*bool encoded*/) const
+{
+    auto secp256k1 = CryptoPP::ASN1::secp256k1();
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PublicKey pub_key;
+    string pub_key_hex;
 
-    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+    // decode base64 signature
+    string signature_der;
+
+    CryptoPP::StringSource ss(base64, true,
+                              new CryptoPP::Base64Decoder(
+                                    new CryptoPP::StringSink(signature_der)));
+
+
+    // verify message
+
+    detail::base58_to_pk_hex(pb_key.get_base58(), pub_key_hex);
+
     const CryptoPP::ECP::Point P = detail::zstr_to_ECPoint(secp256k1, pub_key_hex);
     pub_key.Initialize(secp256k1, P);
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Verifier verifier(pub_key);
 
+    string signature_raw(verifier.MaxSignatureLength(), '\x00');
+    CryptoPP::DSAConvertSignatureFormat(
+                (CryptoPP::byte*) signature_raw.data(), signature_raw.size(), CryptoPP::DSA_P1363,
+                (const CryptoPP::byte*)signature_der.data(), signature_der.size(), CryptoPP::DSA_DER
+                );
+
     bool result = false;
     result = verifier.VerifyMessage((CryptoPP::byte*) message.data(), message.size(),
-                                    (CryptoPP::byte*) decodedSignature.data(), decodedSignature.size());
+                                    (CryptoPP::byte*) signature_raw.data(), signature_raw.size());
 
     return result;
 }
@@ -528,13 +558,13 @@ bool base58_to_pk(string const& b58_str, CryptoPP::ECP::Point& pk)
     return code;
 }
 
-std::string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point & P)
+std::string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point & P, bool compressed)
 {
     auto ecgp = CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(oid);
     auto ecc = ecgp.GetCurve();
 
-    std::string z_str(ecc.EncodedPointSize(true), '\x00');
-    ecc.EncodePoint((CryptoPP::byte*)z_str.data(), P, true);
+    std::string z_str(ecc.EncodedPointSize(compressed), '\x00');
+    ecc.EncodePoint((CryptoPP::byte*)z_str.data(), P, compressed);
 
     return z_str;
 }
