@@ -23,7 +23,7 @@
 using std::string;
 using std::runtime_error;
 
-string g_public_key_prefix = "PBQ";
+string g_public_key_prefix = string();
 
 namespace meshpp
 {
@@ -41,6 +41,11 @@ string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point &P, 
 CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str);
 string EncodeBase58(const unsigned char* pbegin, const size_t sz);
 bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch);
+}
+
+void config::set_public_key_prefix(std::string const& prefix)
+{
+    g_public_key_prefix = prefix;
 }
 
 random_seed::random_seed(string const& brain_key_)
@@ -100,7 +105,7 @@ public_key private_key::get_public_key() const
 
     auto pk_b58 = detail::pk_to_base58(detail::ECPoint_to_zstr(secp256k1, pk_i));
 
-    return public_key(pk_b58);
+    return public_key(g_public_key_prefix + pk_b58);
 }
 
 signature private_key::sign(std::vector<char> const& message) const
@@ -136,34 +141,42 @@ signature private_key::sign(std::vector<char> const& message) const
     return signature(get_public_key(), message, signature_der_b64);
 }
 
-public_key::public_key(string const& base58_)
-    : base58(base58_)
+public_key::public_key(string const& str_base58_)
+    : str_base58(str_base58_)
+    //, raw_base58()
 {
-    CryptoPP::ECP::Point pk;
-    if (false == detail::base58_to_pk(base58, pk))
-        throw exception_public_key(base58);
+    if (false == g_public_key_prefix.empty() &&
+        0 != str_base58.find(g_public_key_prefix))
+        throw exception_public_key(str_base58);
 
-    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+    str_base58.erase(0, g_public_key_prefix.length());
+
+    CryptoPP::ECP::Point pk;
+    if (false == detail::base58_to_pk(str_base58, pk))
+        throw exception_public_key(g_public_key_prefix + str_base58);
+
+    /*auto secp256k1 = CryptoPP::ASN1::secp256k1();
     auto raw_ = detail::ECPoint_to_zstr(secp256k1, pk, false);
-    _data = detail::EncodeBase58((CryptoPP::byte*)raw_.data(), raw_.size());
+    raw_base58 = detail::EncodeBase58((CryptoPP::byte*)raw_.data(), raw_.size());*/
 }
 
 public_key::public_key(public_key const& other)
-    : base58(other.base58), _data(other._data)
+    : str_base58(other.str_base58)
+    //, raw_base58(other.raw_base58)
 {
 
 }
 
 public_key::~public_key() {}
 
-string public_key::get_base58() const
+string public_key::to_string() const
 {
-    return base58;
+    return g_public_key_prefix + str_base58;
 }
 
-string public_key::get_data() const
+string public_key::get_base58() const
 {
-    return _data;
+    return str_base58;
 }
 
 bool signature::verify(/*bool encoded*/) const

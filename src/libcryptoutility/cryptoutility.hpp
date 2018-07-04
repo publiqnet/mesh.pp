@@ -12,6 +12,12 @@ class private_key;
 class public_key;
 class signature;
 
+class CRYPTOUTILITYSHARED_EXPORT config
+{
+public:
+    static void set_public_key_prefix(std::string const& prefix);
+};
+
 class CRYPTOUTILITYSHARED_EXPORT random_seed
 {
 public:
@@ -41,15 +47,15 @@ private:
 class CRYPTOUTILITYSHARED_EXPORT public_key
 {
 public:
-    public_key(std::string const& base58);
+    public_key(std::string const& str_base58);
     public_key(public_key const& other);
     ~public_key();
 
+    std::string to_string() const;
     std::string get_base58() const;
-    std::string get_data() const;
 private:
-    std::string base58;
-    std::string _data;
+    std::string str_base58;
+    //std::string raw_base58;
 };
 
 class CRYPTOUTILITYSHARED_EXPORT signature

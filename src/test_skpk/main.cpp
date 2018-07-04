@@ -20,6 +20,8 @@
 
 int main(int argc, char **argv)
 {
+    meshpp::config::set_public_key_prefix("PBQ");
+
     meshpp::random_seed m_rs;
     meshpp::private_key m_pvk = m_rs.get_private_key();
     meshpp::public_key m_pbk = m_pvk.get_public_key();
@@ -27,7 +29,7 @@ int main(int argc, char **argv)
     std::cout << std::endl << m_rs.get_brain_key() << std::endl;
     std::cout << m_pvk.get_base58_wif() << std::endl;
     std::cout << m_pbk.get_base58() << std::endl;
-    std::cout << m_pbk.get_data() << std::endl;
+    std::cout << m_pbk.to_string() << std::endl;
 
     std::string msg = "";
     std::vector<char> msg_buf(msg.begin(), msg.end());
@@ -42,8 +44,10 @@ int main(int argc, char **argv)
     std::cout << meshpp::hash(msg_buf.begin(), msg_buf.end()) << std::endl;
     std::cout << m_sgn.verify() << std::endl;
 
+    meshpp::public_key pbk("PBQ6zzxdGvmw249FwS8s1QcTRbDvrY9S6ShfBuV7ixQBwXWbZPbeE");
+    meshpp::public_key pbk2 = pbk; // check that copy constructor functions ok
     meshpp::signature imported_signature(
-                meshpp::public_key("6zzxdGvmw249FwS8s1QcTRbDvrY9S6ShfBuV7ixQBwXWbZPbeE"),
+                pbk2,
                 msg_buf,
                 "MEUCIQDcwRin+sYPy6f+drEGx8TKHDuxhKqqgOKtVhblA1MYrQIgEiUipL4bQijSFjLQwSDPM5QzH79U7gYh9I4gqj3zGo4="
                 );
