@@ -536,15 +536,13 @@ bool base58_to_pk_hex(string const& b58_str, string& pk)
     CryptoPP::SHA256 hash;
 #endif
     std::vector<unsigned char> vch;
-    char z{0};
     code = DecodeBase58(b58_str.c_str(), vch);
 
     if (code &&
         vch.size() > 4)
     {
-        std::string result(vch.size() - 4, z), chk_str_(4, z);
-        std::copy(vch.begin(), vch.end() - 4, result.begin());
-        std::copy(vch.end() - 4, vch.end(), chk_str_.begin());
+        std::string result(vch.begin(), vch.end() - 4);
+        std::string chk_str_(vch.end() - 4, vch.end());
         std::string chk_str{};
 
         CryptoPP::StringSource ss(result, true,
