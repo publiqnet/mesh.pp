@@ -233,7 +233,7 @@ exception_public_key& exception_public_key::operator=(exception_public_key const
     return *this;
 }
 
-exception_public_key::~exception_public_key()
+exception_public_key::~exception_public_key() noexcept
 {}
 
 string hash(const string & message)
