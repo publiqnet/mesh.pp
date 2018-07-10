@@ -135,15 +135,14 @@ public:
         if (false == succeeded)
             throw std::runtime_error("unable to create lock file: " + lock_path.string());
 
-        beltpp::scope_helper guard_lock_file(
-                    []{},
+        beltpp::on_failure guard_lock_file(
                     [this]{detail::delete_lock_file(native_handle, lock_path);});
 
         detail::dostuff(native_handle, lock_path);
 
         ptr.reset(new T(path, args...));
 
-        guard_lock_file.commit();
+        guard_lock_file.dismiss();
     }
     ~file_locker()
     {

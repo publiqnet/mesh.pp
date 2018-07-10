@@ -1,8 +1,6 @@
 # define the executable
 add_executable(test_skpk
-    main.cpp
-    words.cpp
-    words.hpp)
+    main.cpp)
 
 # libraries this module links to
 target_link_libraries(test_skpk PRIVATE
