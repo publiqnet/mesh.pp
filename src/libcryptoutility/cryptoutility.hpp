@@ -95,5 +95,6 @@ std::string hash(InputIt first, InputIt last)
     return hash(std::string(first, last));
 }
 
+CRYPTOUTILITYSHARED_EXPORT std::string base64_to_hex(const std::string & b64_str);
 
 }
