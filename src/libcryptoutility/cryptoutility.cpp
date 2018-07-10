@@ -248,6 +248,18 @@ string hash(const string & message)
     return detail::EncodeBase58((CryptoPP::byte*)_hash.data(), _hash.size());
 }
 
+
+string base64_to_hex(const string & b64_str)
+{
+    string hex_str;
+    CryptoPP::StringSource ss(b64_str, true,
+                              new CryptoPP::Base64Decoder(
+                              new CryptoPP::HexEncoder(
+                              new CryptoPP::StringSink(hex_str)
+    )));
+    return hex_str;
+}
+
 #define HASH_VER 1
 #define BRAIN_KEY_WORD_COUNT 16
 
