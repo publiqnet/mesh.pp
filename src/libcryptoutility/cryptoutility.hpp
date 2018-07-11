@@ -25,7 +25,7 @@ public:
     ~random_seed();
 
     std::string get_brain_key() const;
-    private_key get_private_key() const;
+    private_key get_private_key(uint64_t index) const;
 private:
     std::string brain_key;
 };
@@ -61,18 +61,29 @@ private:
 class CRYPTOUTILITYSHARED_EXPORT signature
 {
 public:
-    signature(public_key const& pb_key_,
-              std::vector<char> const& message_,
-              std::string const& base64_)
-        : pb_key(pb_key_)
-        , message(message_)
-        , base64(base64_) {}
+    signature(public_key const& pb_key,
+              std::vector<char> const& message,
+              std::string const& base64);
 
-    bool verify(/*bool encoded = false*/) const;
+    bool verify() const;
+    void check() const;
 
     public_key pb_key;
     std::vector<char> message;
     std::string base64;
+};
+
+class CRYPTOUTILITYSHARED_EXPORT exception_private_key : public std::runtime_error
+{
+public:
+    explicit exception_private_key(std::string const& str_private_key);
+
+    exception_private_key(exception_private_key const&) noexcept;
+    exception_private_key& operator=(exception_private_key const&) noexcept;
+
+    virtual ~exception_private_key() noexcept;
+
+    std::string priv_key;
 };
 
 class CRYPTOUTILITYSHARED_EXPORT exception_public_key : public std::runtime_error
@@ -86,6 +97,19 @@ public:
     virtual ~exception_public_key() noexcept;
 
     std::string pub_key;
+};
+
+class CRYPTOUTILITYSHARED_EXPORT exception_signature : public std::runtime_error
+{
+public:
+    explicit exception_signature(signature const& sgn);
+
+    exception_signature(exception_signature const&) noexcept;
+    exception_signature& operator=(exception_signature const&) noexcept;
+
+    virtual ~exception_signature() noexcept;
+
+    signature sgn;
 };
 
 CRYPTOUTILITYSHARED_EXPORT std::string hash(const std::string &);

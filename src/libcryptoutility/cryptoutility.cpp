@@ -65,9 +65,9 @@ string random_seed::get_brain_key() const
     return brain_key;
 }
 
-private_key random_seed::get_private_key() const
+private_key random_seed::get_private_key(uint64_t index) const
 {
-    return private_key(detail::bk_to_wif_sk(brain_key, 0));
+    return private_key(detail::bk_to_wif_sk(brain_key, int(index)));
 }
 
 private_key::private_key(string const& base58_wif_)
@@ -179,7 +179,15 @@ string public_key::get_base58() const
     return str_base58;
 }
 
-bool signature::verify(/*bool encoded*/) const
+signature::signature(public_key const& pb_key_,
+                     std::vector<char> const& message_,
+                     std::string const& base64_)
+    : pb_key(pb_key_)
+    , message(message_)
+    , base64(base64_)
+{}
+
+bool signature::verify() const
 {
     auto secp256k1 = CryptoPP::ASN1::secp256k1();
 
@@ -216,6 +224,32 @@ bool signature::verify(/*bool encoded*/) const
     return result;
 }
 
+void signature::check() const
+{
+    if (false == verify())
+        throw exception_signature(*this);
+}
+
+exception_private_key::exception_private_key(string const& str_private_key)
+    : runtime_error("invalid private key: \"" + str_private_key + "\"")
+    , priv_key(str_private_key)
+{}
+
+exception_private_key::exception_private_key(exception_private_key const& other) noexcept
+    : runtime_error(other)
+    , priv_key(other.priv_key)
+{}
+
+exception_private_key& exception_private_key::operator=(exception_private_key const& other) noexcept
+{
+    dynamic_cast<runtime_error*>(this)->operator =(other);
+    priv_key = other.priv_key;
+    return *this;
+}
+
+exception_private_key::~exception_private_key() noexcept
+{}
+
 exception_public_key::exception_public_key(string const& str_public_key)
     : runtime_error("invalid public key: \"" + str_public_key + "\"")
     , pub_key(str_public_key)
@@ -234,6 +268,29 @@ exception_public_key& exception_public_key::operator=(exception_public_key const
 }
 
 exception_public_key::~exception_public_key() noexcept
+{}
+
+exception_signature::exception_signature(signature const& sgn_)
+    : runtime_error("invalid signature: "
+                    "\"" + sgn_.pb_key.to_string() + "\", "
+                    "\"" + std::string(sgn_.message.begin(), sgn_.message.end()) + "\", "
+                    "\"" + sgn_.base64 + "\"")
+    , sgn(sgn_)
+{}
+
+exception_signature::exception_signature(exception_signature const& other) noexcept
+    : runtime_error(other)
+    , sgn(other.sgn)
+{}
+
+exception_signature& exception_signature::operator=(exception_signature const& other) noexcept
+{
+    dynamic_cast<runtime_error*>(this)->operator =(other);
+    sgn = other.sgn;
+    return *this;
+}
+
+exception_signature::~exception_signature() noexcept
 {}
 
 string hash(const string & message)

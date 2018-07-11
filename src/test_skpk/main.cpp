@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     meshpp::config::set_public_key_prefix("PBQ");
 
     meshpp::random_seed m_rs;
-    meshpp::private_key m_pvk = m_rs.get_private_key();
+    meshpp::private_key m_pvk = m_rs.get_private_key(0);
     //  1)  Generate Public/Private key pair
     //
     //  go to https://kjur.github.io/jsrsasign/sample/sample-ecdsa.html
