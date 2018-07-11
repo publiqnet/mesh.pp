@@ -273,7 +273,10 @@ std::string suggest_brain_key()
     uint8_t seed[sizeof(std::mt19937_64::result_type)];
     CryptoPP::OS_GenerateRandomBlock(true , seed, sizeof(seed));
 
-    std::mt19937_64 mt64_engine(reinterpret_cast<std::mt19937_64::result_type>(seed));
+    std::mt19937_64::result_type mt64_seed;
+    memcpy(&mt64_seed, seed, sizeof(seed));
+
+    std::mt19937_64 mt64_engine(mt64_seed);
     std::uniform_int_distribution<> uni_int_dist(0, words::word_list_size - 1);
 
     for( int i=0; i<BRAIN_KEY_WORD_COUNT; i++ )
