@@ -137,7 +137,7 @@ signature private_key::sign(std::vector<char> const& message) const
 
     string signature_der_b64;
     CryptoPP::StringSource ss2(signature_der, true, new CryptoPP::Base64Encoder(
-                new CryptoPP::StringSink(signature_der_b64)));
+                new CryptoPP::StringSink(signature_der_b64), false));
     return signature(get_public_key(), message, signature_der_b64);
 }
 
