@@ -18,12 +18,13 @@ add_library(systemutility
     processutility.hpp)
 
 # libraries this module links to
-target_link_libraries(systemutility PUBLIC
-    mesh.pp
-    belt.pp
-    packet
+target_link_libraries(systemutility
+    PUBLIC
+        mesh.pp
+        belt.pp
+        packet
     PRIVATE
-    utility)
+        utility)
 
 # what to do on make install
 install(TARGETS systemutility
