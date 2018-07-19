@@ -207,10 +207,6 @@ void p2psocket::prepare_wait()
     auto to_listen = state.get_to_listen();
     for (auto& item : to_listen)
     {
-        state.remove_later(item, 0, false);
-        //  so that will not try to listen on this, over and over
-        //  because the below "add_active" is not always able to replace this
-
         assert(state.get_fixed_local_port());
         if (0 == state.get_fixed_local_port())
             throw std::runtime_error("impossible to listen without fixed local port");
@@ -235,10 +231,6 @@ void p2psocket::prepare_wait()
     auto to_connect = state.get_to_connect();
     for (auto const& item : to_connect)
     {
-        state.remove_later(item, 0, false);
-        //  so that will not try to connect to this, over and over
-        //  because the corresponding "add_active" is not always able to replace this
-
         size_t attempts = state.get_open_attempts(item);
 
         m_pimpl->write("connect to");

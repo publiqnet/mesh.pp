@@ -448,17 +448,23 @@ public:
         return result;
     }
 
-    vector<ip_address> get_to_listen() const
+    vector<ip_address> get_to_listen()
     {
         vector<ip_address> result;
 
-        for (size_t index : set_to_listen)
+        auto it = set_to_listen.begin();
+        while (it != set_to_listen.end())
         {
+            auto index = *it;
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
                 iter_remove->second.first == 0)
+            {
+                ++it;
                 continue;
+            }
 
+            it = set_to_listen.erase(it);
             state_item const& item = peers[index];
             result.push_back(item.get_address());
         }
@@ -466,17 +472,23 @@ public:
         return result;
     }
 
-    vector<ip_address> get_to_connect() const
+    vector<ip_address> get_to_connect()
     {
         vector<ip_address> result;
 
-        for (size_t index : set_to_connect)
+        auto it = set_to_connect.begin();
+        while (it != set_to_connect.end())
         {
+            auto index = *it;
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
                 iter_remove->second.first == 0)
+            {
+                ++it;
                 continue;
+            }
 
+            it = set_to_connect.erase(it);
             state_item const& item = peers[index];
             result.push_back(item.get_address());
         }
@@ -692,11 +704,11 @@ public:
     {
         return static_cast<update_code>(program_state.add_active(addr, p));
     }
-    vector<ip_address> get_to_listen() const override
+    vector<ip_address> get_to_listen() override
     {
         return program_state.get_to_listen();
     }
-    vector<ip_address> get_to_connect() const override
+    vector<ip_address> get_to_connect() override
     {
         return program_state.get_to_connect();
     }

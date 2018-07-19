@@ -43,8 +43,8 @@ public:
     virtual insert_code add_passive(beltpp::ip_address const& addr, size_t open_attempts) = 0;
     virtual update_code add_active(beltpp::ip_address const& addr,
                                    beltpp::socket::peer_id const& p) = 0;
-    virtual std::vector<beltpp::ip_address> get_to_listen() const = 0;
-    virtual std::vector<beltpp::ip_address> get_to_connect() const = 0;
+    virtual std::vector<beltpp::ip_address> get_to_listen() = 0;
+    virtual std::vector<beltpp::ip_address> get_to_connect() = 0;
 
     virtual size_t get_open_attempts(beltpp::ip_address const& addr) const = 0;
 
