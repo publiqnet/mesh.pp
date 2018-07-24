@@ -189,7 +189,7 @@ public:
         , overlay()
         , overlay_order()
     {
-        index = detail::map_loader_internals_get_index(dir_path / "index." + name);
+        index = detail::map_loader_internals_get_index(dir_path / ("index." + name));
     }
     ~map_loader()
     {
