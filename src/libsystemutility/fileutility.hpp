@@ -1,6 +1,7 @@
 #pragma once
 
 #include "global.hpp"
+#include "data.hpp"
 
 #include <belt.pp/scope_helper.hpp>
 
@@ -12,6 +13,10 @@
 #include <iterator>
 #include <string>
 #include <functional>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <utility>
 
 namespace meshpp
 {
@@ -22,6 +27,9 @@ SYSTEMUTILITYSHARED_EXPORT bool write_to_lock_file(intptr_t native_handle, std::
 SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void dostuff(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
+
+
+SYSTEMUTILITYSHARED_EXPORT std::unordered_set<std::string> map_loader_internals_get_index(boost::filesystem::path const& path);
 }
 
 inline void load_file(boost::filesystem::path const& path,
@@ -33,6 +41,7 @@ inline void load_file(boost::filesystem::path const& path,
     if (!fl)
     {
         boost::filesystem::ofstream ofl;
+        //  ofstream will also create a new file if needed
         ofl.open(path, std::ios_base::trunc);
         if (!ofl)
             throw std::runtime_error("load_file(): cannot open: " + path.string());
@@ -56,13 +65,11 @@ public:
     file_loader(boost::filesystem::path const& path)
         : modified(false)
         , file_path(path)
-        , ptr()
+        , ptr(new T)
     {
         std::istream_iterator<char> end, begin;
         boost::filesystem::ifstream fl;
         load_file(path, fl, begin, end);
-
-        ptr.reset(new T);
 
         if (fl && begin != end)
         {
@@ -163,6 +170,70 @@ private:
     intptr_t native_handle;
     boost::filesystem::path lock_path;
     std::unique_ptr<T> ptr;
+};
+
+template <typename T,
+          void(*string_loader)(T&,std::string const&),
+          std::string(*string_saver)(T const&)
+          >
+class map_loader
+{
+public:
+    using value_type = T;
+    map_loader(std::string const& name,
+               boost::filesystem::path const& path)
+        : cache_size(0)
+        , name(name)
+        , dir_path(path)
+        , index()
+        , overlay()
+        , overlay_order()
+    {
+        index = detail::map_loader_internals_get_index(dir_path / "index." + name);
+    }
+    ~map_loader()
+    {
+    }
+
+    T const& at(std::string const& key) const
+    {
+        auto it_overlay = overlay.find(key);
+
+        if (it_overlay != overlay.end() &&
+            it_overlay->second->second == status::deleted)
+            throw std::out_of_range("key not found in container: \"" + key + "\", \"" + name + "\"");
+
+        if (it_overlay != overlay.end() &&
+            it_overlay->second->second != status::deleted)
+            return it_overlay->second;
+
+        //if (index.)
+
+
+
+    }
+    T& at(std::string const& key);
+
+    bool insert(std::string const& key, T const& value);
+    void erase(std::string const& key);
+
+    map_loader const& as_const() const { return *this; }
+private:
+private:
+    class status
+    {
+    public:
+        enum ecode {none, deleted, modified};
+        bool locked = false;
+        ecode code;
+    };
+
+    size_t cache_size;
+    std::string name;
+    boost::filesystem::path dir_path;
+    std::unordered_set<std::string> index;
+    std::unordered_map<std::string, std::pair<T, status>> overlay;
+    std::vector<std::string> overlay_order;
 };
 
 }

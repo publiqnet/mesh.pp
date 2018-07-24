@@ -5,10 +5,19 @@ add_custom_command (
   COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.idl ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.gen.hpp
 )
 
+# generate data.gen.hpp from data.idl
+add_custom_command (
+  OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/data.gen.hpp
+  MAIN_DEPENDENCY data.idl
+  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/data.idl ${CMAKE_CURRENT_SOURCE_DIR}/data.gen.hpp
+)
+
 add_definitions(-DSYSTEMUTILITY_LIBRARY)
 
 # define the library
 add_library(systemutility
+    data.hpp
+    data.gen.hpp
     global.hpp
     file_attributes.hpp
     file_attributes.gen.hpp

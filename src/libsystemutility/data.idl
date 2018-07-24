@@ -1,0 +1,12 @@
+module Data2
+{
+    class Number
+    {
+        UInt64 value
+    }
+
+    class StringSet
+    {
+        Set String index
+    }
+}
