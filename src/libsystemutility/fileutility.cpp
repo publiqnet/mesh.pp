@@ -114,17 +114,6 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
         throw std::runtime_error("unable to write to lock file: " + path.string());
 }
 
-class map_loader_internals
-{
-public:
-};
-
-
-std::unique_ptr<map_loader_internals> map_loader_internals_create()
-{
-    return std::unique_ptr<map_loader_internals>(new map_loader_internals);
-}
-
 std::unordered_set<std::string> map_loader_internals_get_index(boost::filesystem::path const& path)
 {
     file_loader<Data2::StringSet, &Data2::StringSet::string_loader, &Data2::StringSet::string_saver> temp(path);

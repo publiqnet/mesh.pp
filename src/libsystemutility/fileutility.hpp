@@ -200,21 +200,41 @@ public:
         auto it_overlay = overlay.find(key);
 
         if (it_overlay != overlay.end() &&
-            it_overlay->second->second == status::deleted)
-            throw std::out_of_range("key not found in container: \"" + key + "\", \"" + name + "\"");
+            it_overlay->second.second.code == status::deleted)
+            throw std::out_of_range("key is deleted in container overlay: \"" + key + "\", \"" + name + "\"");
 
         if (it_overlay != overlay.end() &&
-            it_overlay->second->second != status::deleted)
+            it_overlay->second.second.code != status::deleted)
             return it_overlay->second;
 
-        //if (index.)
+        auto it_index = index.find(key);
+        if (it_index == index.end())
+            throw std::out_of_range("key not found in container index: \"" + key + "\", \"" + name + "\"");
 
+        //detail::map_loader_internals_load(key, overlay, overlay_order);
 
+        it_overlay = overlay.find(key);
+        if (it_overlay == overlay.end() ||
+            it_overlay->second.second.code == status::deleted)
+        {
+            assert(false);
+            throw std::runtime_error("key must have just been loaded to overlay: \"" + key + "\", \"" + name + "\"");
+        }
 
+        it_overlay->second.second.code = status::none;
+
+        return it_overlay->second.first;
     }
     T& at(std::string const& key);
 
-    bool insert(std::string const& key, T const& value);
+    bool insert(std::string const& key, T const& value)
+    {
+        auto it_overlay = overlay.find(key);
+        if (it_overlay != overlay.end() &&
+            it_overlay->second.second.code != status::deleted)
+            return false;
+    }
+
     void erase(std::string const& key);
 
     map_loader const& as_const() const { return *this; }

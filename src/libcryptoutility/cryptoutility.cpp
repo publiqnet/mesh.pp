@@ -108,7 +108,7 @@ public_key private_key::get_public_key() const
     return public_key(g_public_key_prefix + pk_b58);
 }
 
-signature private_key::sign(std::vector<char> const& message) const
+signature private_key::sign(std::string const& message) const
 {
     CryptoPP::Integer sk;
     detail::wif_to_sk(base58_wif, sk);
@@ -180,7 +180,7 @@ string public_key::get_base58() const
 }
 
 signature::signature(public_key const& pb_key_,
-                     std::vector<char> const& message_,
+                     std::string const& message_,
                      std::string const& base64_)
     : pb_key(pb_key_)
     , message(message_)

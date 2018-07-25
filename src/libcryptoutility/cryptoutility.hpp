@@ -39,7 +39,7 @@ public:
 
     std::string get_base58_wif() const;
     public_key get_public_key() const;
-    signature sign(std::vector<char> const& message) const;
+    signature sign(std::string const& message) const;
 private:
     std::string base58_wif;
 };
@@ -62,14 +62,14 @@ class CRYPTOUTILITYSHARED_EXPORT signature
 {
 public:
     signature(public_key const& pb_key,
-              std::vector<char> const& message,
+              std::string const& message,
               std::string const& base64);
 
     bool verify() const;
     void check() const;
 
     public_key pb_key;
-    std::vector<char> message;
+    std::string message;
     std::string base64;
 };
 

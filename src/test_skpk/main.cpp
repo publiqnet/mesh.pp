@@ -68,25 +68,22 @@ int main(int argc, char **argv)
     std::cout << m_pbk.to_string() << std::endl;
 
     std::string msg = "";
-    std::vector<char> msg_buf(msg.begin(), msg.end());
 
-    meshpp::signature m_sgn = m_pvk.sign(msg_buf);
+    meshpp::signature m_sgn = m_pvk.sign(msg);
     std::cout << m_sgn.base64 << std::endl;
 
 
     std::cout<<R"(hash256("") -> b58:GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn -> 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)"<<std::endl;
     std::cout << meshpp::hash("") << std::endl;
     std::cout << meshpp::hash(msg) << std::endl;
-    std::cout << meshpp::hash(msg_buf.begin(), msg_buf.end()) << std::endl;
     std::cout << m_sgn.verify() << std::endl;
 
     std::string signed_message = "a test message 42!";
-    std::vector<char> signed_message_buffer(signed_message.begin(), signed_message.end());
     meshpp::public_key pbk("PBQ7reDm5xbd2HPyvZiiJmknJ8YLG2eusATc7gKYM8z931krCUEoQ");
     meshpp::public_key pbk2 = pbk; // check that copy constructor functions ok
     meshpp::signature imported_signature(
                 pbk2,
-                signed_message_buffer,
+                signed_message,
                 "MEUCIADINLbtQqmp5jhLdqfLYVSYPoK9vrhW5A7H8d5ctOLqAiEA5gBBmQKu+HB9nR07X75oBHy76ISqzcNpwOmq1za7/fI="
                 );
     std::cout << imported_signature.verify() << std::endl;
