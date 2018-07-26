@@ -116,7 +116,7 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
 
 std::unordered_set<std::string> map_loader_internals_get_index(boost::filesystem::path const& path)
 {
-    file_loader<Data2::StringSet, &Data2::StringSet::string_loader, &Data2::StringSet::string_saver> temp(path);
+    file_loader<Data2::StringSet, &Data2::StringSet::from_string, &Data2::StringSet::to_string> temp(path);
     return temp.as_const()->index;
 }
 

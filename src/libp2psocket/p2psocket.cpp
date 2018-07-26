@@ -37,27 +37,14 @@ using sf = beltpp::socket_family_t<
     &beltpp::new_void_unique_ptr<Error>,
     &beltpp::new_void_unique_ptr<Join>,
     &beltpp::new_void_unique_ptr<Drop>,
-    &Error::saver,
-    &Join::saver,
-    &Drop::saver,
+    &Error::pvoid_saver,
+    &Join::pvoid_saver,
+    &Drop::pvoid_saver,
     &message_list_load
 >;
 
 namespace meshpp
 {
-
-using sf = beltpp::socket_family_t<
-    Error::rtt,
-    Join::rtt,
-    Drop::rtt,
-    &beltpp::new_void_unique_ptr<Error>,
-    &beltpp::new_void_unique_ptr<Join>,
-    &beltpp::new_void_unique_ptr<Drop>,
-    &Error::saver,
-    &Join::saver,
-    &Drop::saver,
-    &message_list_load
->;
 
 namespace detail
 {

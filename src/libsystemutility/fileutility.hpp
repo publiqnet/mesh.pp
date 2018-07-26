@@ -55,8 +55,8 @@ inline void load_file(boost::filesystem::path const& path,
 }
 
 template <typename T,
-          void(*string_loader)(T&,std::string const&),
-          std::string(*string_saver)(T const&)
+          void(T::*from_string)(std::string const&),
+          std::string(T::*to_string)()const
           >
 class file_loader
 {
@@ -74,7 +74,7 @@ public:
         if (fl && begin != end)
         {
             T ob;
-            string_loader(ob, std::string(begin, end));
+            ob.from_string(std::string(begin, end));
             beltpp::assign(*ptr, std::move(ob));
         }
     }
@@ -109,7 +109,7 @@ private:
         if (!fl)
             return false;
 
-        fl << string_saver(*ptr);
+        fl << ptr->to_string();
         modified = false;
         return true;
     }

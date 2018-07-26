@@ -35,9 +35,9 @@ using sf = beltpp::socket_family_t<
     &beltpp::new_void_unique_ptr<message_error>,
     &beltpp::new_void_unique_ptr<message_join>,
     &beltpp::new_void_unique_ptr<message_drop>,
-    &message_error::saver,
-    &message_join::saver,
-    &message_drop::saver,
+    &message_error::pvoid_saver,
+    &message_join::pvoid_saver,
+    &message_drop::pvoid_saver,
     &message_list_load
 >;
 
