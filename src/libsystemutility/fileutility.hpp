@@ -4,6 +4,7 @@
 #include "data.hpp"
 
 #include <belt.pp/scope_helper.hpp>
+#include <belt.pp/packet.hpp>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -27,9 +28,6 @@ SYSTEMUTILITYSHARED_EXPORT bool write_to_lock_file(intptr_t native_handle, std::
 SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void dostuff(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
-
-
-SYSTEMUTILITYSHARED_EXPORT std::unordered_set<std::string> map_loader_internals_get_index(boost::filesystem::path const& path);
 }
 
 inline void load_file(boost::filesystem::path const& path,
@@ -55,17 +53,18 @@ inline void load_file(boost::filesystem::path const& path,
 }
 
 template <typename T,
-          void(T::*from_string)(std::string const&),
+          void(T::*from_string)(std::string const&, void*),
           std::string(T::*to_string)()const
           >
 class file_loader
 {
 public:
     using value_type = T;
-    file_loader(boost::filesystem::path const& path)
+    file_loader(boost::filesystem::path const& path, void* putl = nullptr)
         : modified(false)
         , file_path(path)
         , ptr(new T)
+        , putl(putl)
     {
         std::istream_iterator<char> end, begin;
         boost::filesystem::ifstream fl;
@@ -74,7 +73,7 @@ public:
         if (fl && begin != end)
         {
             T ob;
-            ob.from_string(std::string(begin, end));
+            ob.from_string(std::string(begin, end), putl);
             beltpp::assign(*ptr, std::move(ob));
         }
     }
@@ -88,6 +87,10 @@ public:
         if (false == _save())
             throw std::runtime_error("file_loader::save(): unable to write to the file: "
                                      + file_path.string());
+    }
+    void discard()
+    {
+        modified = false;
     }
 
     file_loader const& as_const() const { return *this; }
@@ -117,6 +120,7 @@ private:
     bool modified;
     boost::filesystem::path file_path;
     std::unique_ptr<T> ptr;
+    void* putl;
 };
 
 template <typename T, typename... T_args>
@@ -166,94 +170,149 @@ public:
     T& operator -> () { return *ptr.get(); }
 
     void save() { return ptr->save(); }
+    void discard() { return ptr->discard(); }
 private:
     intptr_t native_handle;
     boost::filesystem::path lock_path;
     std::unique_ptr<T> ptr;
 };
 
-template <typename T,
-          void(*string_loader)(T&,std::string const&),
-          std::string(*string_saver)(T const&)
-          >
+namespace detail
+{
+class SYSTEMUTILITYSHARED_EXPORT map_loader_internals
+{
+public:
+    map_loader_internals(std::string const& name,
+                         boost::filesystem::path const& path,
+                         beltpp::void_unique_ptr&& ptr_utl);
+
+    void load(std::string const& key);
+    void save();
+
+    enum ecode {none, deleted, modified};
+
+    std::string name;
+    boost::filesystem::path dir_path;
+    std::unordered_set<std::string> index;
+    std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
+    beltpp::void_unique_ptr ptr_utl;
+};
+}
+
+template <typename T>
 class map_loader
 {
+    using internal = detail::map_loader_internals;
 public:
     using value_type = T;
     map_loader(std::string const& name,
-               boost::filesystem::path const& path)
-        : cache_size(0)
-        , name(name)
-        , dir_path(path)
-        , index()
-        , overlay()
-        , overlay_order()
-    {
-        index = detail::map_loader_internals_get_index(dir_path / ("index." + name));
-    }
+               boost::filesystem::path const& path,
+               beltpp::void_unique_ptr&& ptr_utl)
+        : data(name, path, std::move(ptr_utl))
+    {}
     ~map_loader()
-    {
-    }
+    {}
 
     T const& at(std::string const& key) const
     {
-        auto it_overlay = overlay.find(key);
+        T const* presult = nullptr;
 
-        if (it_overlay != overlay.end() &&
-            it_overlay->second.second.code == status::deleted)
-            throw std::out_of_range("key is deleted in container overlay: \"" + key + "\", \"" + name + "\"");
+        auto it_overlay = data.overlay.find(key);
 
-        if (it_overlay != overlay.end() &&
-            it_overlay->second.second.code != status::deleted)
-            return it_overlay->second;
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second == internal::deleted)
+            throw std::out_of_range("key is deleted in container overlay: \"" + key + "\", \"" + data.name + "\"");
 
-        auto it_index = index.find(key);
-        if (it_index == index.end())
-            throw std::out_of_range("key not found in container index: \"" + key + "\", \"" + name + "\"");
-
-        //detail::map_loader_internals_load(key, overlay, overlay_order);
-
-        it_overlay = overlay.find(key);
-        if (it_overlay == overlay.end() ||
-            it_overlay->second.second.code == status::deleted)
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second != internal::deleted)
         {
-            assert(false);
-            throw std::runtime_error("key must have just been loaded to overlay: \"" + key + "\", \"" + name + "\"");
+            it_overlay->second.first.get(presult);
+            return *presult;
         }
 
-        it_overlay->second.second.code = status::none;
+        auto it_index = data.index.find(key);
+        if (it_index == data.index.end())
+            throw std::out_of_range("key not found in container index: \"" + key + "\", \"" + data.name + "\"");
 
-        return it_overlay->second.first;
+        data.load(key);
+
+        it_overlay = data.overlay.find(key);
+        if (it_overlay == data.overlay.end() ||
+            it_overlay->second.second == internal::deleted)
+        {
+            assert(false);
+            throw std::runtime_error("key must have just been loaded to overlay: \"" + key + "\", \"" + data.name + "\"");
+        }
+
+        it_overlay->second.first.get(presult);
+        return *presult;
     }
     T& at(std::string const& key);
 
     bool insert(std::string const& key, T const& value)
     {
-        auto it_overlay = overlay.find(key);
-        if (it_overlay != overlay.end() &&
-            it_overlay->second.second.code != status::deleted)
+        auto it_overlay = data.overlay.find(key);
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second != internal::deleted)
             return false;
+
+        if (it_overlay == data.overlay.end())
+        {
+            auto it_index = data.index.find(key);
+            if (it_index != data.index.end())
+                return false;
+
+            beltpp::packet package(value);
+
+            data.overlay.insert(std::make_pair(key, std::make_pair(std::move(package), internal::modified)));
+        }
+        else
+        {
+            it_overlay->second.first.set(value);
+            it_overlay->second.second = internal::modified;
+        }
+
+        return true;
     }
 
-    void erase(std::string const& key);
+    void erase(std::string const& key)
+    {
+        auto it_overlay = data.overlay.find(key);
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second == internal::deleted)
+            throw std::runtime_error("already erased in overlay: \"" + key + "\", \"" + data.name + "\"");
+
+        auto it_index = data.index.find(key);
+
+        if (it_overlay == data.overlay.end())
+        {
+            if (it_index == data.index.end())
+                throw std::runtime_error("no element to remove: \"" + key + "\", \"" + data.name + "\"");
+
+            data.overlay.insert(std::make_pair(key, std::make_pair(beltpp::packet(), internal::deleted)));
+        }
+        else
+        {
+            if (it_index == data.index.end())
+                data.overlay.erase(it_overlay);
+            else
+                it_overlay->second.second = internal::deleted;
+        }
+    }
+
+    void save()
+    {
+        data.save();
+    }
+
+    void discard()
+    {
+        data.overlay.clear();
+    }
 
     map_loader const& as_const() const { return *this; }
 private:
-private:
-    class status
-    {
-    public:
-        enum ecode {none, deleted, modified};
-        bool locked = false;
-        ecode code;
-    };
-
-    size_t cache_size;
-    std::string name;
-    boost::filesystem::path dir_path;
-    std::unordered_set<std::string> index;
-    std::unordered_map<std::string, std::pair<T, status>> overlay;
-    std::vector<std::string> overlay_order;
+    detail::map_loader_internals data;
 };
 
 }

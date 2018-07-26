@@ -9,5 +9,9 @@ module Data2
     {
         Set String index
     }
+
+    class FileData
+    {
+        Hash String Extension block
+    }
 }
-///

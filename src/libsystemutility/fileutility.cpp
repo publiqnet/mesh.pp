@@ -114,11 +114,70 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
         throw std::runtime_error("unable to write to lock file: " + path.string());
 }
 
-std::unordered_set<std::string> map_loader_internals_get_index(boost::filesystem::path const& path)
+map_loader_internals::map_loader_internals(std::string const& name,
+                                           boost::filesystem::path const& path,
+                                           beltpp::void_unique_ptr&& ptr_utl)
+    : name(name)
+    , dir_path(path)
+    , index()
+    , overlay()
+    , ptr_utl(std::move(ptr_utl))
 {
-    file_loader<Data2::StringSet, &Data2::StringSet::from_string, &Data2::StringSet::to_string> temp(path);
-    return temp.as_const()->index;
+    file_loader<Data2::StringSet, &Data2::StringSet::from_string, &Data2::StringSet::to_string> temp(dir_path / ("index." + name), ptr_utl.get());
+    index = temp.as_const()->index;
 }
+
+void map_loader_internals::load(std::string const& key)
+{
+    file_loader<Data2::FileData, &Data2::FileData::from_string, &Data2::FileData::to_string> temp(dir_path / (key.substr(0, 4) + "." + name + ".item"), ptr_utl.get());
+    std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
+
+    auto it_block = block.find(key);
+    if (it_block != block.end())
+    {
+        overlay.insert(std::make_pair(key, std::make_pair(std::move(it_block->second), map_loader_internals::none)));
+    }
+    temp.discard();
+}
+
+void map_loader_internals::save()
+{
+    auto it_overlay = overlay.begin();
+    while (it_overlay != overlay.end())
+    {
+        if (it_overlay->second.second == map_loader_internals::deleted)
+        {
+            file_loader<Data2::FileData, &Data2::FileData::from_string, &Data2::FileData::to_string> temp(dir_path / (it_overlay->first.substr(0, 4) + "." + name + ".item"), ptr_utl.get());
+            std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
+            auto it_block = block.find(it_overlay->first);
+            if (it_block != block.end())
+            {
+                block.erase(it_block);
+                temp.save();
+            }
+            else
+                temp.discard();
+
+            index.erase(it_overlay->first);
+        }
+        else if (it_overlay->second.second == map_loader_internals::modified)
+        {
+            file_loader<Data2::FileData, &Data2::FileData::from_string, &Data2::FileData::to_string> temp(dir_path / (it_overlay->first.substr(0, 4) + "." + name + ".item"), ptr_utl.get());
+            std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
+            block[it_overlay->first] = std::move(it_overlay->second.first);
+            temp.save();
+
+            index.insert(it_overlay->first);
+        }
+
+        it_overlay = overlay.erase(it_overlay);
+    }
+
+    file_loader<Data2::StringSet, &Data2::StringSet::from_string, &Data2::StringSet::to_string> temp(dir_path / ("index." + name), ptr_utl.get());
+    temp->index = index;
+    temp.save();
+}
+
 
 }   //  end namespace detail
 }
