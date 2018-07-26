@@ -179,15 +179,9 @@ string public_key::get_base58() const
     return str_base58;
 }
 
-signature::signature(public_key const& pb_key_,
-                     std::string const& message_,
-                     std::string const& base64_)
-    : pb_key(pb_key_)
-    , message(message_)
-    , base64(base64_)
-{}
-
-bool signature::verify() const
+bool verify_signature(public_key const& pb_key,
+                      std::string const& message,
+                      std::string const& base64)
 {
     auto secp256k1 = CryptoPP::ASN1::secp256k1();
 
@@ -224,9 +218,14 @@ bool signature::verify() const
     return result;
 }
 
-void signature::check() const
+signature::signature(public_key const& pb_key_,
+                     std::string const& message_,
+                     std::string const& base64_)
+    : pb_key(pb_key_)
+    , message(message_)
+    , base64(base64_)
 {
-    if (false == verify())
+    if (false == verify_signature(pb_key, message, base64))
         throw exception_signature(*this);
 }
 

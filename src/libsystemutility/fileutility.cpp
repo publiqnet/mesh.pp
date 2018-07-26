@@ -109,7 +109,7 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
 
     bool success =
             detail::write_to_lock_file(native_handle,
-                                       FileAttributes::detail::saver(attrs));
+                                       attrs.to_string());
     if (false == success)
         throw std::runtime_error("unable to write to lock file: " + path.string());
 }

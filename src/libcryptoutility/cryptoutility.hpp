@@ -58,15 +58,16 @@ private:
     //std::string raw_base58;
 };
 
+CRYPTOUTILITYSHARED_EXPORT bool verify_signature(public_key const& pb_key,
+                                                 std::string const& message,
+                                                 std::string const& base64);
+
 class CRYPTOUTILITYSHARED_EXPORT signature
 {
 public:
     signature(public_key const& pb_key,
               std::string const& message,
               std::string const& base64);
-
-    bool verify() const;
-    void check() const;
 
     public_key pb_key;
     std::string message;

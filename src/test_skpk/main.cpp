@@ -76,7 +76,7 @@ int main(int argc, char **argv)
     std::cout<<R"(hash256("") -> b58:GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn -> 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)"<<std::endl;
     std::cout << meshpp::hash("") << std::endl;
     std::cout << meshpp::hash(msg) << std::endl;
-    std::cout << m_sgn.verify() << std::endl;
+    std::cout << "m_sgn is verified since it's already constructed" << std::endl;
 
     std::string signed_message = "a test message 42!";
     meshpp::public_key pbk("PBQ7reDm5xbd2HPyvZiiJmknJ8YLG2eusATc7gKYM8z931krCUEoQ");
@@ -86,7 +86,7 @@ int main(int argc, char **argv)
                 signed_message,
                 "MEUCIADINLbtQqmp5jhLdqfLYVSYPoK9vrhW5A7H8d5ctOLqAiEA5gBBmQKu+HB9nR07X75oBHy76ISqzcNpwOmq1za7/fI="
                 );
-    std::cout << imported_signature.verify() << std::endl;
+    std::cout << "imported_signature is verified since it's already constructed" << std::endl;
 
 
     return 0;
