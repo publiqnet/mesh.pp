@@ -213,7 +213,7 @@ public:
     ~map_loader()
     {}
 
-    T const& at(std::string const& key) const
+    T& at(std::string const& key)
     {
         T const* presult = nullptr;
 
@@ -247,7 +247,6 @@ public:
         it_overlay->second.first.get(presult);
         return *presult;
     }
-    T& at(std::string const& key);
 
     bool insert(std::string const& key, T const& value)
     {
