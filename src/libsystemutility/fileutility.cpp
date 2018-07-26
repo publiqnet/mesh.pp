@@ -123,20 +123,27 @@ map_loader_internals::map_loader_internals(std::string const& name,
     , overlay()
     , ptr_utl(std::move(ptr_utl))
 {
-    file_loader<Data2::StringSet, &Data2::StringSet::from_string, &Data2::StringSet::to_string> temp(dir_path / ("index." + name), ptr_utl.get());
-    index = temp.as_const()->index;
+    file_loader<Data2::Index,
+                &Data2::Index::from_string,
+                &Data2::Index::to_string>
+            temp(dir_path / (name + ".index"), ptr_utl.get());
+    index = temp.as_const()->dictionary;
 }
 
-void map_loader_internals::load(std::string const& key)
+void map_loader_internals::load(std::string const& key) const
 {
-    file_loader<Data2::FileData, &Data2::FileData::from_string, &Data2::FileData::to_string> temp(dir_path / (key.substr(0, 4) + "." + name + ".item"), ptr_utl.get());
+    file_loader<Data2::FileData,
+                &Data2::FileData::from_string,
+                &Data2::FileData::to_string>
+            temp(dir_path / filename(key, name), ptr_utl.get());
     std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
 
     auto it_block = block.find(key);
     if (it_block != block.end())
-    {
-        overlay.insert(std::make_pair(key, std::make_pair(std::move(it_block->second), map_loader_internals::none)));
-    }
+        overlay.insert(std::make_pair(key,
+                                      std::make_pair(std::move(it_block->second),
+                                                     map_loader_internals::none)));
+
     temp.discard();
 }
 
@@ -147,7 +154,11 @@ void map_loader_internals::save()
     {
         if (it_overlay->second.second == map_loader_internals::deleted)
         {
-            file_loader<Data2::FileData, &Data2::FileData::from_string, &Data2::FileData::to_string> temp(dir_path / (it_overlay->first.substr(0, 4) + "." + name + ".item"), ptr_utl.get());
+            file_loader<Data2::FileData,
+                        &Data2::FileData::from_string,
+                        &Data2::FileData::to_string>
+                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
+
             std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
             auto it_block = block.find(it_overlay->first);
             if (it_block != block.end())
@@ -162,20 +173,39 @@ void map_loader_internals::save()
         }
         else if (it_overlay->second.second == map_loader_internals::modified)
         {
-            file_loader<Data2::FileData, &Data2::FileData::from_string, &Data2::FileData::to_string> temp(dir_path / (it_overlay->first.substr(0, 4) + "." + name + ".item"), ptr_utl.get());
+            file_loader<Data2::FileData,
+                        &Data2::FileData::from_string,
+                        &Data2::FileData::to_string>
+                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
+
             std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
             block[it_overlay->first] = std::move(it_overlay->second.first);
             temp.save();
 
-            index.insert(it_overlay->first);
+            index.insert(std::make_pair(it_overlay->first, filename(it_overlay->first, name)));
         }
 
         it_overlay = overlay.erase(it_overlay);
     }
 
-    file_loader<Data2::StringSet, &Data2::StringSet::from_string, &Data2::StringSet::to_string> temp(dir_path / ("index." + name), ptr_utl.get());
-    temp->index = index;
+    file_loader<Data2::Index,
+                &Data2::Index::from_string,
+                &Data2::Index::to_string>
+            temp(dir_path / (name + ".index"), ptr_utl.get());
+    temp->dictionary = index;
     temp.save();
+}
+
+std::string map_loader_internals::filename(std::string const& key, std::string const& name)
+{
+    std::hash<std::string> hasher;
+    size_t h = hasher(key) % 10000;
+
+    std::string strh = std::to_string(h);
+    while (strh.length() < 4)
+        strh = "0" + strh;
+
+    return name + "." + strh;
 }
 
 

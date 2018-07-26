@@ -186,15 +186,17 @@ public:
                          boost::filesystem::path const& path,
                          beltpp::void_unique_ptr&& ptr_utl);
 
-    void load(std::string const& key);
+    void load(std::string const& key) const;
     void save();
+
+    static std::string filename(std::string const& key, std::string const& name);
 
     enum ecode {none, deleted, modified};
 
     std::string name;
     boost::filesystem::path dir_path;
-    std::unordered_set<std::string> index;
-    std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
+    std::unordered_map<std::string, std::string> index;
+    mutable std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
 };
 }
@@ -215,7 +217,7 @@ public:
 
     T& at(std::string const& key)
     {
-        T const* presult = nullptr;
+        T* presult = nullptr;
 
         auto it_overlay = data.overlay.find(key);
 
@@ -274,19 +276,21 @@ public:
         return true;
     }
 
-    void erase(std::string const& key)
+    size_t erase(std::string const& key)
     {
         auto it_overlay = data.overlay.find(key);
         if (it_overlay != data.overlay.end() &&
             it_overlay->second.second == internal::deleted)
-            throw std::runtime_error("already erased in overlay: \"" + key + "\", \"" + data.name + "\"");
+            //  already erased in overlay
+            return 0;
 
         auto it_index = data.index.find(key);
 
         if (it_overlay == data.overlay.end())
         {
             if (it_index == data.index.end())
-                throw std::runtime_error("no element to remove: \"" + key + "\", \"" + data.name + "\"");
+                //  no element to remove
+                return 0;
 
             data.overlay.insert(std::make_pair(key, std::make_pair(beltpp::packet(), internal::deleted)));
         }
@@ -297,6 +301,32 @@ public:
             else
                 it_overlay->second.second = internal::deleted;
         }
+
+        return 1;
+    }
+
+    std::unordered_set<std::string> keys() const
+    {
+        std::unordered_set<std::string> all_keys;
+
+        for (auto const& item : data.index)
+        {
+            auto insert_res = all_keys.insert(item.first);
+            assert(insert_res.second);
+        }
+
+        for (auto const& item : data.overlay)
+        {
+            if (item.second.second == detail::map_loader_internals::deleted)
+            {
+                size_t count = all_keys.erase(item.first);
+                assert(1 == count);
+            }
+            else
+                all_keys.insert(item.first);
+        }
+
+        return all_keys;
     }
 
     void save()
