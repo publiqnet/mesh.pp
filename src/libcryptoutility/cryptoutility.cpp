@@ -21,6 +21,7 @@
 #include <random>
 
 using std::string;
+using std::vector;
 using std::runtime_error;
 
 string g_public_key_prefix = string();
@@ -40,7 +41,7 @@ bool base58_to_pk(string const& b58_str, CryptoPP::ECP::Point &pk);
 string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point &P, bool compressed = true);
 CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str);
 string EncodeBase58(const unsigned char* pbegin, const size_t sz);
-bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch);
+bool DecodeBase58(const char* psz, vector<unsigned char>& vch);
 }
 
 void config::set_public_key_prefix(std::string const& prefix)
@@ -75,7 +76,7 @@ private_key::private_key(string const& base58_wif_)
 {
     CryptoPP::Integer sk;
     if (false == detail::wif_to_sk(base58_wif, sk))
-        throw std::runtime_error("invalid private key: \"" + base58_wif + "\"");
+        throw runtime_error("invalid private key: \"" + base58_wif + "\"");
 }
 
 private_key::private_key(private_key const& other)
@@ -304,6 +305,55 @@ string hash(const string & message)
     return detail::EncodeBase58((CryptoPP::byte*)_hash.data(), _hash.size());
 }
 
+uint64_t distance(string const& hash58_first, string const& hash58_second)
+{
+    vector<unsigned char> vec_first, vec_second;
+    string hash_hex_first, hash_hex_second;
+    if (false == detail::DecodeBase58(hash58_first.c_str(), vec_first))
+        throw runtime_error("invalid base58 string: " + hash58_first);
+    if (false == detail::DecodeBase58(hash58_second.c_str(), vec_second))
+        throw runtime_error("invalid base58 string: " + hash58_second);
+
+    if (vec_first.size() != 32)
+        throw runtime_error("not a valid hash: " + hash58_first);
+    if (vec_second.size() != 32)
+        throw runtime_error("not a valid hash: " + hash58_second);
+
+    auto setbitcount = [](unsigned char ch)
+    {
+        size_t res = 0;
+        unsigned char test = 1;
+        for (size_t index = 0; index < 8; ++index)
+        {
+            unsigned char temp = test & ch;
+            res += (0 != temp);
+            test *= 2;
+        }
+
+        return res;
+    };
+
+    uint32_t compress_first = 0, compress_second = 0;
+    for (size_t index = 0; index < 32; ++index)
+    {
+        if (0 < index)
+        {
+            compress_first *= 2;
+            compress_second *= 2;
+        }
+
+        uint32_t temp = 0;
+
+        temp = (4 < setbitcount(vec_first[index]));
+        compress_first |= temp;
+
+        temp = (4 < setbitcount(vec_second[index]));
+        compress_second |= temp;
+    }
+
+    return uint64_t(compress_first ^ compress_second);
+}
+
 
 string base64_to_hex(const string & b64_str)
 {
@@ -348,7 +398,7 @@ std::string suggest_brain_key()
 }
 
 string EncodeBase58(const unsigned char* pbegin, const size_t sz);
-bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch);
+bool DecodeBase58(const char* psz, vector<unsigned char>& vch);
 
 std::string bk_to_sk(std::string const& bk_str, int sequence_number )
 {
@@ -385,7 +435,7 @@ bool wif_to_sk(const std::string & wif_str, CryptoPP::Integer& sk)
     CryptoPP::SHA256 sha256;
     bool code = true;
 
-    std::vector<unsigned char> vch;
+    vector<unsigned char> vch;
     char z{0};
     code = DecodeBase58(wif_str.c_str(), vch);
 
@@ -485,14 +535,14 @@ std::string EncodeBase58(const unsigned char* pbegin, const size_t sz)
 
     // Allocate enough space in big-endian base58 representation.
     size_t size = sz * 138 / 100 + 1; // log(256) / log(58), rounded up.
-    std::vector<unsigned char> b58(size);
+    vector<unsigned char> b58(size);
     // Process the bytes.
     for ( ; pbegin != pend; pbegin++)
     {
         int carry = *pbegin;
         int i = 0;
         // Apply "b58 = b58 * 256 + ch".
-        for (std::vector<unsigned char>::reverse_iterator it = b58.rbegin(); (carry != 0 || i < length) && (it != b58.rend()); it++, i++) {
+        for (vector<unsigned char>::reverse_iterator it = b58.rbegin(); (carry != 0 || i < length) && (it != b58.rend()); it++, i++) {
             carry += 256 * (*it);
             *it = carry % 58;
             carry /= 58;
@@ -502,7 +552,7 @@ std::string EncodeBase58(const unsigned char* pbegin, const size_t sz)
         length = i;
     }
     // Skip leading zeroes in base58 result.
-    std::vector<unsigned char>::iterator it = b58.begin() + (size - length);
+    vector<unsigned char>::iterator it = b58.begin() + (size - length);
     while (it != b58.end() && *it == 0)
         it++;
     // Translate the result into a string.
@@ -515,7 +565,7 @@ std::string EncodeBase58(const unsigned char* pbegin, const size_t sz)
 }
 
 //bitcoin
-bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch)
+bool DecodeBase58(const char* psz, vector<unsigned char>& vch)
 {
     static const int8_t mapBase58[256] = {
         -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
@@ -546,7 +596,7 @@ bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch)
 
     // Allocate enough space in big-endian base256 representation.
     size_t size = strlen(psz) * 733 /1000 + 1; // log(58) / log(256), rounded up.
-    std::vector<unsigned char> b256(size);
+    vector<unsigned char> b256(size);
     // Process the characters.
     static_assert(sizeof(mapBase58)/sizeof(mapBase58[0]) == 256, "mapBase58.size() should be 256"); // guarantee not out of range
     for ( ; *psz && !isspace(*psz); psz++)
@@ -556,7 +606,7 @@ bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch)
         if (carry == -1)  // Invalid b58 character
             return false;
         int i = 0;
-        for (std::vector<unsigned char>::reverse_iterator it = b256.rbegin(); (carry != 0 || i < length) && (it != b256.rend()); ++it, ++i) {
+        for (vector<unsigned char>::reverse_iterator it = b256.rbegin(); (carry != 0 || i < length) && (it != b256.rend()); ++it, ++i) {
             carry += 58 * (*it);
             *it = carry % 256;
             carry /= 256;
@@ -570,7 +620,7 @@ bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch)
     if (*psz != 0)
         return false;
     // Skip leading zeroes in b256.
-    std::vector<unsigned char>::iterator it = b256.begin() + (size - length);
+    vector<unsigned char>::iterator it = b256.begin() + (size - length);
     while (it != b256.end() && *it == 0)
         it++;
     // Copy result into output vector.
@@ -606,7 +656,7 @@ bool base58_to_pk_hex(string const& b58_str, string& pk)
 #else
     CryptoPP::SHA256 hash;
 #endif
-    std::vector<unsigned char> vch;
+    vector<unsigned char> vch;
     code = DecodeBase58(b58_str.c_str(), vch);
 
     if (code &&
