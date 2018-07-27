@@ -213,7 +213,9 @@ public:
         : data(name, path, std::move(ptr_utl))
     {}
     ~map_loader()
-    {}
+    {
+        save();
+    }
 
     T& at(std::string const& key)
     {
