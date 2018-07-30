@@ -32,8 +32,8 @@ SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
 
 inline void load_file(boost::filesystem::path const& path,
                       boost::filesystem::ifstream& fl,
-                      std::istream_iterator<char>& begin,
-                      std::istream_iterator<char>& end)
+                      std::istreambuf_iterator<char>& begin,
+                      std::istreambuf_iterator<char>& end)
 {
     fl.open(path, std::ios_base::binary);
     if (!fl)
@@ -47,8 +47,8 @@ inline void load_file(boost::filesystem::path const& path,
 
     if (fl)
     {
-        end = std::istream_iterator<char>();
-        begin = std::istream_iterator<char>(fl);
+        end = std::istreambuf_iterator<char>();
+        begin = std::istreambuf_iterator<char>(fl);
     }
 }
 
@@ -66,7 +66,7 @@ public:
         , ptr(new T)
         , putl(putl)
     {
-        std::istream_iterator<char> end, begin;
+        std::istreambuf_iterator<char> end, begin;
         boost::filesystem::ifstream fl;
         load_file(path, fl, begin, end);
 
