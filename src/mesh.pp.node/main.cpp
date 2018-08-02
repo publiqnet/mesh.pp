@@ -757,7 +757,7 @@ int main(int argc, char* argv[])
 
         beltpp::event_handler eh;
         beltpp::socket sk = beltpp::getsocket<sf>(eh);
-        eh.set_timer(std::chrono::seconds(10));
+        eh.set_timer(std::chrono::seconds(30));
 
         //
         //  by this point either bind or connect
