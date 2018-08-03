@@ -49,24 +49,7 @@ using boost::optional;
 
 using namespace meshpp_message;
 
-//  MSVS does not instansiate template function only because its address
-//  is needed, so let's force it
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_error>();
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_join>();
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_drop>();
-
-using sf = beltpp::socket_family_t<
-    message_error::rtt,
-    message_join::rtt,
-    message_drop::rtt,
-    &beltpp::new_void_unique_ptr<message_error>,
-    &beltpp::new_void_unique_ptr<message_join>,
-    &beltpp::new_void_unique_ptr<message_drop>,
-    &message_error::pvoid_saver,
-    &message_join::pvoid_saver,
-    &message_drop::pvoid_saver,
-    &message_list_load
->;
+using sf = beltpp::socket_family_t<&message_list_load>;
 
 bool split_address_port(string const& address_port,
                         string& address,
@@ -80,14 +63,7 @@ bool split_address_port(string const& address_port,
     address = address_port.substr(0, pos);
     string str_port = address_port.substr(pos + 1);
     size_t end;
-    try
-    {
-        port = short(std::stoi(str_port, &end));
-    }
-    catch (...)
-    {
-        end = string::npos;
-    }
+    port = beltpp::stoui16(str_port, end);
 
     if (false == address.empty() &&
         end == str_port.size())
@@ -140,8 +116,8 @@ class peer_state
 public:
     using key_type = string;
     peer_state()
-        : open_attempts(-1)
-        , requested(-1)
+        : open_attempts(size_t(-1))
+        , requested(size_t(-1))
         , node_id()
         , updated(steady_clock::now())
     {}
@@ -796,7 +772,7 @@ int main(int argc, char* argv[])
             auto iter_remove_sk = to_remove.second.begin();
             for (; iter_remove_sk != to_remove.second.end(); ++iter_remove_sk)
             {
-                sk.send(*iter_remove_sk, message_drop());
+                sk.send(*iter_remove_sk, beltpp::isocket_drop());
             }
 
             auto to_listen = program_state.get_to_listen();
@@ -891,7 +867,7 @@ int main(int argc, char* argv[])
             {
                 switch (packet.type())
                 {
-                case message_join::rtt:
+                case beltpp::isocket_join::rtt:
                 {
                     if (0 == fixed_local_port ||
                         current_connection.local.port == fixed_local_port)
@@ -913,14 +889,14 @@ int main(int argc, char* argv[])
                     }
                     else
                     {
-                        sk.send(current_peer, message_drop());
+                        sk.send(current_peer, beltpp::isocket_drop());
                         current_connection.local.port = fixed_local_port;
                         program_state.add_passive(current_connection);
                     }
 
                     break;
                 }
-                case message_error::rtt:
+                case beltpp::isocket_error::rtt:
                 {
                     cout << "got error from bad guy "
                          << current_connection.to_string()
@@ -929,7 +905,7 @@ int main(int argc, char* argv[])
                     program_state.remove_later(current_peer, 0, true);
                     break;
                 }
-                case message_drop::rtt:
+                case beltpp::isocket_drop::rtt:
                 {
                     cout << "dropped " << current_peer << endl;
                     program_state.remove_later(current_peer, 0, false);
@@ -1094,10 +1070,7 @@ int main(int argc, char* argv[])
                 {
                     // cleanup peers
                     for (auto const & _konnection : node_lookup->drop_list())
-                    {
-                        message_drop msg;
-                        sk.send(_konnection.get_peer(), msg);
-                    }
+                        sk.send(_konnection.get_peer(), beltpp::isocket_drop());
                 }
                 node_lookup.reset(new NodeLookup {kbucket, konnection});
                 option_query.clear();
@@ -1125,10 +1098,7 @@ int main(int argc, char* argv[])
                     }
 
                     for (auto const & _konnection : node_lookup->drop_list())
-                    {
-                        message_drop msg;
-                        sk.send(_konnection.get_peer(), msg);
-                    }
+                        sk.send(_konnection.get_peer(), beltpp::isocket_drop());
 
                     node_lookup.reset(nullptr);
                 }

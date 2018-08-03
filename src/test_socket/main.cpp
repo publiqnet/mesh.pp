@@ -22,25 +22,7 @@ using std::unordered_set;
 
 using namespace meshpp_message;
 
-//  MSVS does not instansiate template function only because its address
-//  is needed, so let's force it
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_error>();
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_join>();
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<message_drop>();
-
-using sf = beltpp::socket_family_t<
-    message_error::rtt,
-    message_join::rtt,
-    message_drop::rtt,
-    &beltpp::new_void_unique_ptr<message_error>,
-    &beltpp::new_void_unique_ptr<message_join>,
-    &beltpp::new_void_unique_ptr<message_drop>,
-    &message_error::pvoid_saver,
-    &message_join::pvoid_saver,
-    &message_drop::pvoid_saver,
-    &message_list_load
->;
-
+using sf = beltpp::socket_family_t<&message_list_load>;
 
 int main(int argc, char* argv[])
 {
@@ -72,15 +54,15 @@ int main(int argc, char* argv[])
                     {
                         switch (received_packet.type())
                         {
-                        case message_join::rtt:
+                        case beltpp::isocket_join::rtt:
                         {
                             cout << "peer " << peer << " joined" << endl;
                             break;
                         }
-                        case message_drop::rtt:
+                        case beltpp::isocket_drop::rtt:
                             cout << "peer " << peer << " dropped" << endl;
                             break;
-                        case message_error::rtt:
+                        case beltpp::isocket_error::rtt:
                             cout << "error from peer " << peer << endl;
                             break;
                         case Sum::rtt:

@@ -24,24 +24,7 @@ using std::string;
 using std::vector;
 using std::unique_ptr;
 
-//  MSVS does not instansiate template function only because its address
-//  is needed, so let's force it
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Error>();
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Join>();
-template beltpp::void_unique_ptr beltpp::new_void_unique_ptr<Drop>();
-
-using sf = beltpp::socket_family_t<
-    Error::rtt,
-    Join::rtt,
-    Drop::rtt,
-    &beltpp::new_void_unique_ptr<Error>,
-    &beltpp::new_void_unique_ptr<Join>,
-    &beltpp::new_void_unique_ptr<Drop>,
-    &Error::pvoid_saver,
-    &Join::pvoid_saver,
-    &Drop::pvoid_saver,
-    &message_list_load
->;
+using sf = beltpp::socket_family_t<&message_list_load>;
 
 namespace meshpp
 {
@@ -54,15 +37,6 @@ public:
     p2psocket_internals(beltpp::event_handler& eh,
                         ip_address const& bind_to_address,
                         std::vector<ip_address> const& connect_to_addresses,
-                        size_t rtt_error,
-                        size_t rtt_join,
-                        size_t rtt_drop,
-                        detail::fptr_creator fcreator_error,
-                        detail::fptr_creator fcreator_join,
-                        detail::fptr_creator fcreator_drop,
-                        detail::fptr_saver fsaver_error,
-                        detail::fptr_saver fsaver_join,
-                        detail::fptr_saver fsaver_drop,
                         beltpp::void_unique_ptr&& putl,
                         beltpp::ilog* _plogger)
         : m_ptr_socket(new beltpp::socket(
@@ -71,15 +45,6 @@ public:
         , m_ptr_state(getp2pstate())
         , plogger(_plogger)
         , receive_attempt_count(0)
-        , m_rtt_error(rtt_error)
-        , m_rtt_join(rtt_join)
-        , m_rtt_drop(rtt_drop)
-        , m_fcreator_error(fcreator_error)
-        , m_fcreator_join(fcreator_join)
-        , m_fcreator_drop(fcreator_drop)
-        , m_fsaver_error(fsaver_error)
-        , m_fsaver_join(fsaver_join)
-        , m_fsaver_drop(fsaver_drop)
     {
         if (bind_to_address.local.empty() &&
             connect_to_addresses.empty())
@@ -123,16 +88,6 @@ public:
 
     beltpp::ilog* plogger;
     size_t receive_attempt_count;
-
-    size_t m_rtt_error;
-    size_t m_rtt_join;
-    size_t m_rtt_drop;
-    detail::fptr_creator m_fcreator_error;
-    detail::fptr_creator m_fcreator_join;
-    detail::fptr_creator m_fcreator_drop;
-    detail::fptr_saver m_fsaver_error;
-    detail::fptr_saver m_fsaver_join;
-    detail::fptr_saver m_fsaver_drop;
 };
 }
 
@@ -142,30 +97,12 @@ public:
 p2psocket::p2psocket(beltpp::event_handler& eh,
                      ip_address const& bind_to_address,
                      std::vector<ip_address> const& connect_to_addresses,
-                     size_t _rtt_error,
-                     size_t _rtt_join,
-                     size_t _rtt_drop,
-                     detail::fptr_creator _fcreator_error,
-                     detail::fptr_creator _fcreator_join,
-                     detail::fptr_creator _fcreator_drop,
-                     detail::fptr_saver _fsaver_error,
-                     detail::fptr_saver _fsaver_join,
-                     detail::fptr_saver _fsaver_drop,
                      beltpp::void_unique_ptr&& putl,
                      beltpp::ilog* plogger)
     : isocket(eh)
     , m_pimpl(new detail::p2psocket_internals(eh,
                                               bind_to_address,
                                               connect_to_addresses,
-                                              _rtt_error,
-                                              _rtt_join,
-                                              _rtt_drop,
-                                              _fcreator_error,
-                                              _fcreator_join,
-                                              _fcreator_drop,
-                                              _fsaver_error,
-                                              _fsaver_join,
-                                              _fsaver_drop,
                                               std::move(putl),
                                               plogger))
 {
@@ -188,7 +125,7 @@ void p2psocket::prepare_wait()
     for (auto const& remove_sk : to_remove)
     {
         m_pimpl->writeln("sending drop");
-        sk.send(remove_sk, Drop());
+        sk.send(remove_sk, beltpp::isocket_drop());
     }
 
     auto to_listen = state.get_to_listen();
@@ -261,7 +198,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
     for (auto& received_packet : received_packets)
     {
-        if (Drop::rtt != received_packet.type())
+        if (beltpp::isocket_drop::rtt != received_packet.type())
         {
             assert(false == current_peer.empty());
             try {
@@ -271,7 +208,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
         switch (received_packet.type())
         {
-        case Join::rtt:
+        case beltpp::isocket_join::rtt:
         {
             if (0 == state.get_fixed_local_port() ||
                 current_connection.local.port == state.get_fixed_local_port())
@@ -292,13 +229,13 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             else
             {
-                sk.send(current_peer, Drop());
+                sk.send(current_peer, beltpp::isocket_drop());
                 current_connection.local.port = state.get_fixed_local_port();
                 state.add_passive(current_connection);
             }
             break;
         }
-        case Error::rtt:
+        case beltpp::isocket_error::rtt:
         {
             m_pimpl->write("got error from bad guy");
             m_pimpl->writeln(current_connection.to_string());
@@ -308,16 +245,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             peer = state.get_nodeid(current_peer);
             if (false == peer.empty())
-            {
-                packet packet_error;
-                packet_error.set(m_pimpl->m_rtt_error,
-                                 m_pimpl->m_fcreator_error(),
-                                 m_pimpl->m_fsaver_error);
-                return_packets.emplace_back(std::move(packet_error));
-            }
+                return_packets.emplace_back(beltpp::isocket_error());
             break;
         }
-        case Drop::rtt:
+        case beltpp::isocket_drop::rtt:
         {
             m_pimpl->write("dropped");
             m_pimpl->writeln(current_peer);
@@ -325,13 +256,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             peer = state.get_nodeid(current_peer);
             if (false == peer.empty())
-            {
-                packet packet_drop;
-                packet_drop.set(m_pimpl->m_rtt_drop,
-                                m_pimpl->m_fcreator_drop(),
-                                m_pimpl->m_fsaver_drop);
-                return_packets.emplace_back(std::move(packet_drop));
-            }
+                return_packets.emplace_back(beltpp::isocket_drop());
 
             break;
         }
@@ -358,11 +283,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     p2pstate::contact_status::new_contact == status)
                 {
                     peer = msg.nodeid;
-                    packet packet_join;
-                    packet_join.set(m_pimpl->m_rtt_join,
-                                    m_pimpl->m_fcreator_join(),
-                                    m_pimpl->m_fsaver_join);
-                    return_packets.emplace_back(std::move(packet_join));
+                    return_packets.emplace_back(beltpp::isocket_join());
                 }
             }
             else
@@ -565,7 +486,7 @@ void p2psocket::send(peer_id const& peer,
 
     if (state.get_peer_id(peer, p2p_peerid))
     {
-        if (pack.type() == m_pimpl->m_rtt_drop)
+        if (pack.type() == beltpp::isocket_drop::rtt)
             state.remove_later(p2p_peerid, 0, true);
         else
         {

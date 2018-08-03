@@ -1,9 +1,5 @@
 module P2PMessage
 {
-    type Join {}
-    type Drop {}
-    type Error {}
-
     class IPDestination
     {
         UInt16 port
