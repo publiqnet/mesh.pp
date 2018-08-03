@@ -6,7 +6,6 @@ add_executable(test_app
 target_link_libraries(test_app PRIVATE
     mesh.pp
     packet
-    messages
     socket)
 
 # what to do on make install
