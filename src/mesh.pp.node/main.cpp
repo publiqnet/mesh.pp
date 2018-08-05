@@ -851,7 +851,7 @@ int main(int argc, char* argv[])
                 {
                     try //  this is something quick for now
                     {
-                        //  for "drop" message this will throw
+                        //  for "drop", "open_refused" and "open_error" messages this will throw
                         current_connection = sk.info(current_peer);
                     }
                     catch(...){}
@@ -896,13 +896,31 @@ int main(int argc, char* argv[])
 
                     break;
                 }
-                case beltpp::isocket_error::rtt:
+                case beltpp::isocket_protocol_error::rtt:
                 {
+                    beltpp::isocket_protocol_error msg;
+                    packet.get(msg);
+
                     cout << "got error from bad guy "
                          << current_connection.to_string()
                          << endl;
+                    cout << msg.buffer << endl;
                     cout << "dropping " << current_peer << endl;
                     program_state.remove_later(current_peer, 0, true);
+                    break;
+                }
+                case beltpp::isocket_open_refused::rtt:
+                {
+                    cout << "open refused " << current_peer << endl;
+                    break;
+                }
+                case beltpp::isocket_open_error::rtt:
+                {
+                    beltpp::isocket_protocol_error msg;
+                    packet.get(msg);
+
+                    cout << "open error " << current_peer << endl;
+                    cout << msg.buffer << endl;
                     break;
                 }
                 case beltpp::isocket_drop::rtt:

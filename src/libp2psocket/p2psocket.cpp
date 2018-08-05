@@ -198,7 +198,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
     for (auto& received_packet : received_packets)
     {
-        if (beltpp::isocket_drop::rtt != received_packet.type())
+        if (beltpp::isocket_drop::rtt != received_packet.type() &&
+            beltpp::isocket_open_error::rtt != received_packet.type() &&
+            beltpp::isocket_open_refused::rtt != received_packet.type())
         {
             assert(false == current_peer.empty());
             try {
@@ -235,17 +237,39 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             break;
         }
-        case beltpp::isocket_error::rtt:
+        case beltpp::isocket_protocol_error::rtt:
         {
+            beltpp::isocket_protocol_error msg;
+            received_packet.get(msg);
+
             m_pimpl->write("got error from bad guy");
             m_pimpl->writeln(current_connection.to_string());
+            m_pimpl->writeln(msg.buffer);
             m_pimpl->write("dropping");
             m_pimpl->writeln(current_peer);
             state.remove_later(current_peer, 0, true);
 
             peer = state.get_nodeid(current_peer);
             if (false == peer.empty())
-                return_packets.emplace_back(beltpp::isocket_error());
+                return_packets.emplace_back(std::move(msg));
+            break;
+        }
+        case beltpp::isocket_open_refused::rtt:
+        {
+            //  may change some logic later
+            beltpp::isocket_open_refused msg;
+            received_packet.get(msg);
+            peer = "p2p: " + current_peer;
+            return_packets.emplace_back(msg);
+            break;
+        }
+        case beltpp::isocket_open_error::rtt:
+        {
+            //  may change some logic later
+            beltpp::isocket_open_error msg;
+            received_packet.get(msg);
+            peer = "p2p: " + current_peer;
+            return_packets.emplace_back(msg);
             break;
         }
         case beltpp::isocket_drop::rtt:

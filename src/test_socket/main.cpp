@@ -62,9 +62,14 @@ int main(int argc, char* argv[])
                         case beltpp::isocket_drop::rtt:
                             cout << "peer " << peer << " dropped" << endl;
                             break;
-                        case beltpp::isocket_error::rtt:
+                        case beltpp::isocket_protocol_error::rtt:
+                        {
+                            beltpp::isocket_protocol_error msg;
+                            received_packet.get(msg);
                             cout << "error from peer " << peer << endl;
+                            cout << msg.buffer << endl;
                             break;
+                        }
                         case Sum::rtt:
                         {
                             Sum msg_sum;
