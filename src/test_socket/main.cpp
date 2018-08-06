@@ -96,7 +96,7 @@ int main(int argc, char* argv[])
                 }
             }
         }
-        else
+        else if (argc == 2)
         {
             sk.open(addr);
             peer_id connected_peer;
@@ -131,6 +131,59 @@ int main(int argc, char* argv[])
                 msg_sum.second = b;
                 sk.send(peer, msg_sum);};
 
+        }
+        else
+        {
+            unordered_set<string> to_open;
+
+            ip_address addr;
+            addr.from_string(argv[2]);
+            peer_ids peers_to_open = sk.open(addr);
+            cout << "will try to open" << endl;
+            for (auto const& item : peers_to_open)
+            {
+                to_open.insert(item);
+                cout << item << endl;
+            }
+
+            while (true)
+            {
+                eh.wait(set);
+                peer_id peer;
+                packets received_packets = sk.receive(peer);
+                if (received_packets.empty())
+                    continue;
+
+                assert(received_packets.size() == 1);
+                auto& packet = received_packets.front();
+
+                if (packet.type() == beltpp::isocket_join::rtt)
+                {
+                    cout << "joined: " << peer << endl;
+                    sk.send(peer, beltpp::isocket_drop());
+                }
+                else if (packet.type() == beltpp::isocket_open_refused::rtt)
+                {
+                    beltpp::isocket_open_refused msg;
+                    packet.get(msg);
+                    cout << "open refused: " << peer << ": " << msg.reason << endl;
+                }
+                else if (packet.type() == beltpp::isocket_open_error::rtt)
+                {
+                    beltpp::isocket_open_error msg;
+                    packet.get(msg);
+                    cout << "open error: " << peer << ": " << msg.reason << endl;
+                }
+                else
+                {
+                    assert(false);
+                }
+
+                to_open.erase(peer);
+
+                if (to_open.empty())
+                    break;
+            }
         }
 
 

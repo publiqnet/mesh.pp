@@ -684,7 +684,7 @@ int main(int argc, char* argv[])
         unsigned short fixed_local_port = 0;
 
         //  better to use something from boost at least
-        for (size_t arg_index = 1; arg_index < (size_t)argc; ++arg_index)
+        for (size_t arg_index = 1; arg_index < size_t(argc); ++arg_index)
         {
             string argname = argv[arg_index - 1];
             string argvalue = argv[arg_index];
@@ -911,16 +911,20 @@ int main(int argc, char* argv[])
                 }
                 case beltpp::isocket_open_refused::rtt:
                 {
+                    beltpp::isocket_open_refused msg;
+                    packet.get(msg);
+
                     cout << "open refused " << current_peer << endl;
+                    cout << msg.reason << endl;
                     break;
                 }
                 case beltpp::isocket_open_error::rtt:
                 {
-                    beltpp::isocket_protocol_error msg;
+                    beltpp::isocket_open_error msg;
                     packet.get(msg);
 
                     cout << "open error " << current_peer << endl;
-                    cout << msg.buffer << endl;
+                    cout << msg.reason << endl;
                     break;
                 }
                 case beltpp::isocket_drop::rtt:
