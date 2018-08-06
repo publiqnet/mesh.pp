@@ -143,8 +143,9 @@ int main(int argc, char* argv[])
             for (auto const& item : peers_to_open)
             {
                 to_open.insert(item);
-                cout << item << endl;
+                cout << "    " << item << endl;
             }
+            cout << endl;
 
             while (true)
             {
