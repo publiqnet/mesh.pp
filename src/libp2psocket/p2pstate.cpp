@@ -636,7 +636,7 @@ public:
         Konnection k{nodeid, {}, peerid, {}};
         if (kbucket.find(k) != kbucket.end())
             return contact_status::existing_contact;
-        else if (kbucket.insert(k))
+        else if (kbucket.insert(k).second)
             return contact_status::new_contact;
         else
             return contact_status::no_contact;
@@ -773,7 +773,7 @@ public:
             if (nodeid == SelfID)   // skip ourself if it happens the we are one of the closest nodes
                 continue;
             Konnection _konnection{nodeid};
-            if (KBucket<Konnection>::probe_result::IS_NEW == kbucket.probe(_konnection))
+            if (kbucket.end() == kbucket.find(_konnection))
                 result.push_back(static_cast<std::string>(_konnection));
 
             _konnections.push_back(_konnection);

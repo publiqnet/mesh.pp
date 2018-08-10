@@ -74,7 +74,7 @@ std::vector<bool> NodeLookup::add_konnections(Konnection const & source, std::ve
             return {};
         }
         if ( probed_set.find(konnection) == std::end(probed_set) )
-            result.push_back(kbucket.insert(konnection));
+            result.push_back(kbucket.insert(konnection).second);
     }
 
     if ( new_source && _front == kbucket.cbegin() )
@@ -136,9 +136,7 @@ std::set<Konnection> NodeLookup::drop_list() const
         if ( is_complete() && _list.find(konnection) != _list.end() )
             continue;
 
-        if ( _kbucket_.probe(konnection) == KBucket<Konnection>::probe_result::IS_NEW &&
-             false == konnection.get_peer().empty()
-             )
+        if ( false == konnection.get_peer().empty() )
             result.insert(konnection);
     }
 

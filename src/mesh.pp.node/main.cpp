@@ -941,7 +941,7 @@ int main(int argc, char* argv[])
 
                     Konnection k{msg.nodeid, {}, current_peer};
                     if (kbucket.find(k) != kbucket.end() ||
-                        kbucket.insert(k))
+                        kbucket.insert(k).second)
                     {
                         peer_state value;
                         value.node_id = msg.nodeid;
@@ -1012,7 +1012,7 @@ int main(int argc, char* argv[])
                         if (nodeid == SelfID)   // skip ourself if it happens the we are one of the closest nodes
                             continue;
                         Konnection _konnection{nodeid};
-                        if (KBucket<Konnection>::probe_result::IS_NEW == kbucket.probe(_konnection))
+                        if (kbucket.end() == kbucket.find(_konnection))
                         {
                             message_introduce_to msg_intro;
                             msg_intro.nodeid = static_cast<std::string>(_konnection);
