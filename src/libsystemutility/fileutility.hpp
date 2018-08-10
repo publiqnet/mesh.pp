@@ -231,6 +231,43 @@ public:
             it_overlay->second.second != internal::deleted)
         {
             it_overlay->second.first.get(presult);
+            it_overlay->second.second = internal::modified;
+            return *presult;
+        }
+
+        auto it_index = data.index.find(key);
+        if (it_index == data.index.end())
+            throw std::out_of_range("key not found in container index: \"" + key + "\", \"" + data.name + "\"");
+
+        data.load(key);
+
+        it_overlay = data.overlay.find(key);
+        if (it_overlay == data.overlay.end() ||
+            it_overlay->second.second == internal::deleted)
+        {
+            assert(false);
+            throw std::runtime_error("key must have just been loaded to overlay: \"" + key + "\", \"" + data.name + "\"");
+        }
+
+        it_overlay->second.second = internal::modified;
+        it_overlay->second.first.get(presult);
+        return *presult;
+    }
+
+    T const& at(std::string const& key) const
+    {
+        T* presult = nullptr;
+
+        auto it_overlay = data.overlay.find(key);
+
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second == internal::deleted)
+            throw std::out_of_range("key is deleted in container overlay: \"" + key + "\", \"" + data.name + "\"");
+
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second != internal::deleted)
+        {
+            it_overlay->second.first.get(presult);
             return *presult;
         }
 
@@ -331,6 +368,12 @@ public:
         return all_keys;
     }
 
+    bool contains (std::string const& key) const
+    {
+        auto set_keys = keys();
+        return set_keys.find(key) != set_keys.end();
+    }
+
     void save()
     {
         data.save();
@@ -343,7 +386,7 @@ public:
 
     map_loader const& as_const() const { return *this; }
 private:
-    detail::map_loader_internals data;
+    mutable detail::map_loader_internals data;
 };
 
 }
