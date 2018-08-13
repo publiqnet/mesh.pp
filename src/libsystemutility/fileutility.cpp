@@ -68,7 +68,7 @@ bool write_to_lock_file(intptr_t native_handle, std::string const& value)
     return false;
 #else
     if (value.length() ==
-        (size_t)::write(int(native_handle), value.c_str(), value.length()))
+        size_t(::write(int(native_handle), value.c_str(), value.length())))
         return true;
 
     return false;
@@ -202,6 +202,101 @@ std::string map_loader_internals::filename(std::string const& key, std::string c
     size_t h = hasher(key) % 10000;
 
     std::string strh = std::to_string(h);
+    while (strh.length() < 4)
+        strh = "0" + strh;
+
+    return name + "." + strh;
+}
+
+vector_loader_internals::vector_loader_internals(std::string const& name,
+                                                 boost::filesystem::path const& path,
+                                                 beltpp::void_unique_ptr&& ptr_utl)
+    : name(name)
+    , dir_path(path)
+    , size()
+    , overlay()
+    , ptr_utl(std::move(ptr_utl))
+{
+    file_loader<Data2::Number,
+                &Data2::Number::from_string,
+                &Data2::Number::to_string>
+            temp(dir_path / (name + ".size"));
+    size = temp.as_const()->value;
+}
+
+void vector_loader_internals::load(size_t index) const
+{
+    file_loader<Data2::FileData2,
+                &Data2::FileData2::from_string,
+                &Data2::FileData2::to_string>
+            temp(dir_path / filename(index, name), ptr_utl.get());
+    std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
+
+    auto it_block = block.find(index);
+    if (it_block != block.end())
+        overlay.insert(std::make_pair(index,
+                                      std::make_pair(std::move(it_block->second),
+                                                     vector_loader_internals::none)));
+
+    temp.discard();
+}
+
+void vector_loader_internals::save()
+{
+    size_t size = 0;
+
+    auto it_overlay = overlay.begin();
+    while (it_overlay != overlay.end())
+    {
+        if (it_overlay->second.second == vector_loader_internals::deleted)
+        {
+            file_loader<Data2::FileData2,
+                        &Data2::FileData2::from_string,
+                        &Data2::FileData2::to_string>
+                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
+
+            std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
+            auto it_block = block.find(it_overlay->first);
+            if (it_block != block.end())
+            {
+                block.erase(it_block);
+                temp.save();
+            }
+            else
+                temp.discard();
+
+            if (size > it_overlay->first)
+                size = it_overlay->first;
+        }
+        else if (it_overlay->second.second == vector_loader_internals::modified)
+        {
+            file_loader<Data2::FileData2,
+                        &Data2::FileData2::from_string,
+                        &Data2::FileData2::to_string>
+                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
+
+            std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
+            block[it_overlay->first] = std::move(it_overlay->second.first);
+            temp.save();
+
+            if (it_overlay->first > size)
+                size = it_overlay->first + 1;
+        }
+
+        it_overlay = overlay.erase(it_overlay);
+    }
+
+    file_loader<Data2::Number,
+                &Data2::Number::from_string,
+                &Data2::Number::to_string>
+            temp(dir_path / (name + ".size"), ptr_utl.get());
+    temp->value = size;
+    temp.save();
+}
+
+std::string vector_loader_internals::filename(size_t index, std::string const& name)
+{
+    std::string strh = std::to_string(index % 10000);
     while (strh.length() < 4)
         strh = "0" + strh;
 

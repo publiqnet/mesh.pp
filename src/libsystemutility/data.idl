@@ -14,5 +14,10 @@ module Data2
     {
         Hash String Extension block
     }
+
+    class FileData2
+    {
+        Hash UInt64 Extension block
+    }
 }
 ///

@@ -356,7 +356,7 @@ public:
 
         for (auto const& item : data.overlay)
         {
-            if (item.second.second == detail::map_loader_internals::deleted)
+            if (item.second.second == internal::deleted)
             {
                 size_t count = all_keys.erase(item.first);
                 assert(1 == count);
@@ -386,7 +386,188 @@ public:
 
     map_loader const& as_const() const { return *this; }
 private:
-    mutable detail::map_loader_internals data;
+    mutable internal data;
+};
+
+
+namespace detail
+{
+class SYSTEMUTILITYSHARED_EXPORT vector_loader_internals
+{
+public:
+    vector_loader_internals(std::string const& name,
+                            boost::filesystem::path const& path,
+                            beltpp::void_unique_ptr&& ptr_utl);
+
+    void load(size_t index) const;
+    void save();
+
+    static std::string filename(size_t index, std::string const& name);
+
+    enum ecode {none, deleted, modified};
+
+    std::string name;
+    boost::filesystem::path dir_path;
+    size_t size;
+    mutable std::unordered_map<size_t, std::pair<beltpp::packet, ecode>> overlay;
+    beltpp::void_unique_ptr ptr_utl;
+};
+}
+
+template <typename T>
+class vector_loader
+{
+    using internal = detail::vector_loader_internals;
+public:
+    using value_type = T;
+    vector_loader(std::string const& name,
+                  boost::filesystem::path const& path,
+                  beltpp::void_unique_ptr&& ptr_utl)
+        : data(name, path, std::move(ptr_utl))
+    {}
+    ~vector_loader()
+    {
+        save();
+    }
+
+    T& at(size_t index)
+    {
+        T* presult = nullptr;
+
+        auto it_overlay = data.overlay.find(index);
+
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second == internal::deleted)
+            throw std::out_of_range("index is deleted in container overlay: \"" + std::to_string(index) + "\", \"" + data.name + "\"");
+
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second != internal::deleted)
+        {
+            it_overlay->second.first.get(presult);
+            it_overlay->second.second = internal::modified;
+            return *presult;
+        }
+
+        if (index >= data.size)
+            throw std::out_of_range("index is out of range of container: \"" + std::to_string(index)  + "\", \"" + data.name + "\"");
+
+        data.load(index);
+
+        it_overlay = data.overlay.find(index);
+        if (it_overlay == data.overlay.end() ||
+            it_overlay->second.second == internal::deleted)
+        {
+            assert(false);
+            throw std::runtime_error("index must have just been loaded to overlay: \"" + std::to_string(index) + "\", \"" + data.name + "\"");
+        }
+
+        it_overlay->second.second = internal::modified;
+        it_overlay->second.first.get(presult);
+        return *presult;
+    }
+
+    T const& at(size_t index) const
+    {
+        T* presult = nullptr;
+
+        auto it_overlay = data.overlay.find(index);
+
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second == internal::deleted)
+            throw std::out_of_range("index is deleted in container overlay: \"" + std::to_string(index) + "\", \"" + data.name + "\"");
+
+        if (it_overlay != data.overlay.end() &&
+            it_overlay->second.second != internal::deleted)
+        {
+            it_overlay->second.first.get(presult);
+            return *presult;
+        }
+
+        if (index >= data.size)
+            throw std::out_of_range("index is out of range of container: \"" + std::to_string(index)  + "\", \"" + data.name + "\"");
+
+        data.load(index);
+
+        it_overlay = data.overlay.find(index);
+        if (it_overlay == data.overlay.end() ||
+            it_overlay->second.second == internal::deleted)
+        {
+            assert(false);
+            throw std::runtime_error("index must have just been loaded to overlay: \"" + std::to_string(index) + "\", \"" + data.name + "\"");
+        }
+
+        it_overlay->second.first.get(presult);
+        return *presult;
+    }
+
+    void push_back(T const& value)
+    {
+        size_t length = size();
+
+        auto& ref = data.overlay[length];
+        ref.first.set(value);
+        ref.second = internal::modified;
+    }
+
+    void pop_back()
+    {
+        size_t length = size();
+
+        if (0 == length)
+            throw std::runtime_error(data.name + ": container empty");
+
+        auto it_overlay = data.overlay.find(length - 1);
+
+        if (it_overlay == data.overlay.end())
+            data.overlay.insert(std::make_pair(length - 1, std::make_pair(beltpp::packet(), internal::deleted)));
+        else
+        {
+            if (data.size <= length)
+                data.overlay.erase(it_overlay);
+            else
+                it_overlay->second.second = internal::deleted;
+        }
+    }
+
+    size_t size() const
+    {
+        size_t size = data.size;
+
+        for (auto const& item : data.overlay)
+        {
+            if (item.second.second != internal::deleted &&
+                item.second.first > size)
+                size = item.second.first + 1;
+            else if (item.second.second == internal::deleted &&
+                     size > item.second.first)
+                size = item.second.first;
+        }
+
+        for (auto const& item : data.overlay)
+        {
+            if ((item.second.second != internal::deleted &&
+                 item.second.first >= size) ||
+                (item.second.second == internal::deleted &&
+                 (item.second.first < size || item.second.first >= data.size)))
+                throw std::runtime_error(data.name + ": vector loader overlay integrity check error");
+        }
+
+        return size;
+    }
+
+    void save()
+    {
+        data.save();
+    }
+
+    void discard()
+    {
+        data.overlay.clear();
+    }
+
+    vector_loader const& as_const() const { return *this; }
+private:
+    mutable internal data;
 };
 
 }
