@@ -243,7 +243,7 @@ void vector_loader_internals::load(size_t index) const
 
 void vector_loader_internals::save()
 {
-    size_t size = 0;
+    size_t size_local = size;
 
     auto it_overlay = overlay.begin();
     while (it_overlay != overlay.end())
@@ -265,8 +265,8 @@ void vector_loader_internals::save()
             else
                 temp.discard();
 
-            if (size > it_overlay->first)
-                size = it_overlay->first;
+            if (size_local > it_overlay->first)
+                size_local = it_overlay->first;
         }
         else if (it_overlay->second.second == vector_loader_internals::modified)
         {
@@ -279,12 +279,14 @@ void vector_loader_internals::save()
             block[it_overlay->first] = std::move(it_overlay->second.first);
             temp.save();
 
-            if (it_overlay->first > size)
-                size = it_overlay->first + 1;
+            if (it_overlay->first >= size_local)
+                size_local = it_overlay->first + 1;
         }
 
         it_overlay = overlay.erase(it_overlay);
     }
+
+    size = size_local;
 
     file_loader<Data2::Number,
                 &Data2::Number::from_string,

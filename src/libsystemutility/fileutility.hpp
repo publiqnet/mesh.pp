@@ -522,7 +522,7 @@ public:
             data.overlay.insert(std::make_pair(length - 1, std::make_pair(beltpp::packet(), internal::deleted)));
         else
         {
-            if (data.size <= length)
+            if (data.size <= length - 1)
                 data.overlay.erase(it_overlay);
             else
                 it_overlay->second.second = internal::deleted;
@@ -536,19 +536,19 @@ public:
         for (auto const& item : data.overlay)
         {
             if (item.second.second != internal::deleted &&
-                item.second.first > size)
-                size = item.second.first + 1;
+                item.first >= size)
+                size = item.first + 1;
             else if (item.second.second == internal::deleted &&
-                     size > item.second.first)
-                size = item.second.first;
+                     size > item.first)
+                size = item.first;
         }
 
         for (auto const& item : data.overlay)
         {
             if ((item.second.second != internal::deleted &&
-                 item.second.first >= size) ||
+                 item.first >= size) ||
                 (item.second.second == internal::deleted &&
-                 (item.second.first < size || item.second.first >= data.size)))
+                 (size > item.first || item.first >= data.size)))
                 throw std::runtime_error(data.name + ": vector loader overlay integrity check error");
         }
 
