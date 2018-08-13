@@ -5,6 +5,7 @@
 #include "data.hpp"
 
 #include <belt.pp/utility.hpp>
+#include <belt.pp/scope_helper.hpp>
 
 #ifdef B_OS_WINDOWS
 #include <windows.h>
@@ -23,6 +24,7 @@ static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
 
 #include <chrono>
 #include <thread>
+#include <vector>
 
 namespace meshpp
 {
@@ -114,6 +116,17 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
         throw std::runtime_error("unable to write to lock file: " + path.string());
 }
 
+class map_loader_internals_transaction
+{
+public:
+    std::vector<file_loader<Data2::FileData,
+                &Data2::FileData::from_string,
+                &Data2::FileData::to_string>> files;
+    std::vector<file_loader<Data2::Index,
+                &Data2::Index::from_string,
+                &Data2::Index::to_string>> index;
+};
+
 map_loader_internals::map_loader_internals(std::string const& name,
                                            boost::filesystem::path const& path,
                                            beltpp::void_unique_ptr&& ptr_utl)
@@ -122,6 +135,7 @@ map_loader_internals::map_loader_internals(std::string const& name,
     , index()
     , overlay()
     , ptr_utl(std::move(ptr_utl))
+    , ptr_tx()
 {
     file_loader<Data2::Index,
                 &Data2::Index::from_string,
@@ -129,6 +143,8 @@ map_loader_internals::map_loader_internals(std::string const& name,
             temp(dir_path / (name + ".index"), ptr_utl.get());
     index = temp.as_const()->dictionary;
 }
+
+map_loader_internals::~map_loader_internals() = default;
 
 void map_loader_internals::load(std::string const& key) const
 {
@@ -149,6 +165,15 @@ void map_loader_internals::load(std::string const& key) const
 
 void map_loader_internals::save()
 {
+    rollback();
+
+    ptr_tx.reset(new map_loader_internals_transaction());
+
+    beltpp::on_failure guard([this]
+    {
+        rollback();
+    });
+
     auto it_overlay = overlay.begin();
     while (it_overlay != overlay.end())
     {
@@ -165,6 +190,7 @@ void map_loader_internals::save()
             {
                 block.erase(it_block);
                 temp.save();
+                ptr_tx->files.push_back(std::move(temp));
             }
             else
                 temp.discard();
@@ -181,6 +207,7 @@ void map_loader_internals::save()
             std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
             block[it_overlay->first] = std::move(it_overlay->second.first);
             temp.save();
+            ptr_tx->files.push_back(std::move(temp));
 
             index.insert(std::make_pair(it_overlay->first, filename(it_overlay->first, name)));
         }
@@ -194,6 +221,48 @@ void map_loader_internals::save()
             temp(dir_path / (name + ".index"), ptr_utl.get());
     temp->dictionary = index;
     temp.save();
+
+    ptr_tx->index.push_back(std::move(temp));
+
+    guard.dismiss();
+}
+
+void map_loader_internals::discard()
+{
+    rollback();
+    overlay.clear();
+}
+
+void map_loader_internals::rollback()
+{
+    if (ptr_tx)
+    {
+        for (auto& item : ptr_tx->files)
+            item.rollback();
+        for (auto& item : ptr_tx->index)
+            item.rollback();
+
+        file_loader<Data2::Index,
+                    &Data2::Index::from_string,
+                    &Data2::Index::to_string>
+                temp(dir_path / (name + ".index"), ptr_utl.get());
+        index = temp.as_const()->dictionary;
+
+        ptr_tx.reset();
+    }
+}
+
+void map_loader_internals::commit()
+{
+    if (ptr_tx)
+    {
+        for (auto& item : ptr_tx->files)
+            item.commit();
+        for (auto& item : ptr_tx->index)
+            item.commit();
+
+        ptr_tx.reset();
+    }
 }
 
 std::string map_loader_internals::filename(std::string const& key, std::string const& name)
@@ -208,6 +277,17 @@ std::string map_loader_internals::filename(std::string const& key, std::string c
     return name + "." + strh;
 }
 
+class vector_loader_internals_transaction
+{
+public:
+    std::vector<file_loader<Data2::FileData2,
+                &Data2::FileData2::from_string,
+                &Data2::FileData2::to_string>> files;
+    std::vector<file_loader<Data2::Number,
+                &Data2::Number::from_string,
+                &Data2::Number::to_string>> size;
+};
+
 vector_loader_internals::vector_loader_internals(std::string const& name,
                                                  boost::filesystem::path const& path,
                                                  beltpp::void_unique_ptr&& ptr_utl)
@@ -216,6 +296,7 @@ vector_loader_internals::vector_loader_internals(std::string const& name,
     , size()
     , overlay()
     , ptr_utl(std::move(ptr_utl))
+    , ptr_tx()
 {
     file_loader<Data2::Number,
                 &Data2::Number::from_string,
@@ -223,6 +304,8 @@ vector_loader_internals::vector_loader_internals(std::string const& name,
             temp(dir_path / (name + ".size"));
     size = temp.as_const()->value;
 }
+
+vector_loader_internals::~vector_loader_internals() = default;
 
 void vector_loader_internals::load(size_t index) const
 {
@@ -243,6 +326,15 @@ void vector_loader_internals::load(size_t index) const
 
 void vector_loader_internals::save()
 {
+    rollback();
+
+    ptr_tx.reset(new vector_loader_internals_transaction());
+
+    beltpp::on_failure guard([this]
+    {
+        rollback();
+    });
+
     size_t size_local = size;
 
     auto it_overlay = overlay.begin();
@@ -261,6 +353,7 @@ void vector_loader_internals::save()
             {
                 block.erase(it_block);
                 temp.save();
+                ptr_tx->files.push_back(std::move(temp));
             }
             else
                 temp.discard();
@@ -278,6 +371,7 @@ void vector_loader_internals::save()
             std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
             block[it_overlay->first] = std::move(it_overlay->second.first);
             temp.save();
+            ptr_tx->files.push_back(std::move(temp));
 
             if (it_overlay->first >= size_local)
                 size_local = it_overlay->first + 1;
@@ -294,6 +388,48 @@ void vector_loader_internals::save()
             temp(dir_path / (name + ".size"), ptr_utl.get());
     temp->value = size;
     temp.save();
+
+    ptr_tx->size.push_back(std::move(temp));
+
+    guard.dismiss();
+}
+
+void vector_loader_internals::discard()
+{
+    rollback();
+    overlay.clear();
+}
+
+void vector_loader_internals::rollback()
+{
+    if (ptr_tx)
+    {
+        for (auto& item : ptr_tx->files)
+            item.rollback();
+        for (auto& item : ptr_tx->size)
+            item.rollback();
+
+        file_loader<Data2::Number,
+                    &Data2::Number::from_string,
+                    &Data2::Number::to_string>
+                temp(dir_path / (name + ".size"));
+        size = temp.as_const()->value;
+
+        ptr_tx.reset();
+    }
+}
+
+void vector_loader_internals::commit()
+{
+    if (ptr_tx)
+    {
+        for (auto& item : ptr_tx->files)
+            item.commit();
+        for (auto& item : ptr_tx->size)
+            item.commit();
+
+        ptr_tx.reset();
+    }
 }
 
 std::string vector_loader_internals::filename(size_t index, std::string const& name)

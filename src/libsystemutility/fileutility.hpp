@@ -8,6 +8,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
+#include <boost/system/error_code.hpp>
 
 #include <memory>
 #include <exception>
@@ -62,6 +63,7 @@ public:
     using value_type = T;
     file_loader(boost::filesystem::path const& path, void* putl = nullptr)
         : modified(false)
+        , commited(true)
         , file_path(path)
         , ptr(new T)
         , putl(putl)
@@ -77,20 +79,75 @@ public:
             beltpp::assign(*ptr, std::move(ob));
         }
     }
+
+    file_loader(file_loader const&) = delete;
+    file_loader(file_loader&& other)
+        : modified(other.modified)
+        , commited(other.commited)
+        , file_path(other.file_path)
+        , ptr(std::move(other.ptr))
+        , putl(std::move(other.putl))
+    {
+        other.commited = true;
+    }
+
     ~file_loader()
     {
-        _save();
+        commit();
     }
 
     void save()
     {
-        if (false == _save())
+        rollback();
+
+        if (false == modified)
+            return;
+
+        boost::filesystem::ofstream fl;
+
+        fl.open(file_path_tr(),
+                std::ios_base::binary |
+                std::ios_base::trunc);
+        if (!fl)
             throw std::runtime_error("file_loader::save(): unable to write to the file: "
                                      + file_path.string());
+
+        fl << ptr->to_string();
+        modified = false;
+        commited = false;
     }
+
     void discard()
     {
+        rollback();
+
         modified = false;
+    }
+
+    void commit()
+    {
+        if (false == commited)
+        {
+            commited = true;
+            bool res = true;
+            boost::system::error_code ec;
+            res = boost::filesystem::remove(file_path, ec);
+            assert(res);
+            if (res)
+                boost::filesystem::rename(file_path_tr(), file_path, ec);
+        }
+    }
+
+    void rollback()
+    {
+        if (false == commited)
+        {
+            commited = true;
+            boost::system::error_code ec;
+            bool res = boost::filesystem::remove(file_path_tr(), ec);
+            assert(res);
+            B_UNUSED(res);
+        }
     }
 
     file_loader const& as_const() const { return *this; }
@@ -101,23 +158,14 @@ public:
     T const* operator -> () const { return ptr.get(); }
     T* operator -> () { modified = true; return ptr.get(); }
 private:
-    bool _save()
+    boost::filesystem::path file_path_tr() const
     {
-        if (false == modified)
-            return true;
-        boost::filesystem::ofstream fl;
-        fl.open(file_path,
-                std::ios_base::binary |
-                std::ios_base::trunc);
-        if (!fl)
-            return false;
-
-        fl << ptr->to_string();
-        modified = false;
-        return true;
+        auto file_path_tr = file_path;
+        file_path_tr += ".tr";
+        return file_path_tr;
     }
-private:
     bool modified;
+    bool commited;
     boost::filesystem::path file_path;
     std::unique_ptr<T> ptr;
     void* putl;
@@ -179,15 +227,21 @@ private:
 
 namespace detail
 {
+class map_loader_internals_transaction;
+
 class SYSTEMUTILITYSHARED_EXPORT map_loader_internals
 {
 public:
     map_loader_internals(std::string const& name,
                          boost::filesystem::path const& path,
                          beltpp::void_unique_ptr&& ptr_utl);
+    ~map_loader_internals();
 
     void load(std::string const& key) const;
     void save();
+    void discard();
+    void rollback();
+    void commit();
 
     static std::string filename(std::string const& key, std::string const& name);
 
@@ -198,6 +252,7 @@ public:
     std::unordered_map<std::string, std::string> index;
     mutable std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
+    std::unique_ptr<map_loader_internals_transaction> ptr_tx;
 };
 }
 
@@ -214,7 +269,7 @@ public:
     {}
     ~map_loader()
     {
-        save();
+        commit();
     }
 
     T& at(std::string const& key)
@@ -381,7 +436,17 @@ public:
 
     void discard()
     {
-        data.overlay.clear();
+        data.discard();
+    }
+
+    void commit()
+    {
+        data.commit();
+    }
+
+    void rollback()
+    {
+        data.rollback();
     }
 
     map_loader const& as_const() const { return *this; }
@@ -392,15 +457,21 @@ private:
 
 namespace detail
 {
+class vector_loader_internals_transaction;
+
 class SYSTEMUTILITYSHARED_EXPORT vector_loader_internals
 {
 public:
     vector_loader_internals(std::string const& name,
                             boost::filesystem::path const& path,
                             beltpp::void_unique_ptr&& ptr_utl);
+    ~vector_loader_internals();
 
     void load(size_t index) const;
     void save();
+    void discard();
+    void rollback();
+    void commit();
 
     static std::string filename(size_t index, std::string const& name);
 
@@ -411,6 +482,7 @@ public:
     size_t size;
     mutable std::unordered_map<size_t, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
+    std::unique_ptr<vector_loader_internals_transaction> ptr_tx;
 };
 }
 
@@ -427,7 +499,7 @@ public:
     {}
     ~vector_loader()
     {
-        save();
+        commit();
     }
 
     T& at(size_t index)
@@ -562,7 +634,17 @@ public:
 
     void discard()
     {
-        data.overlay.clear();
+        data.discard();
+    }
+
+    void commit()
+    {
+        data.commit();
+    }
+
+    void rollback()
+    {
+        data.rollback();
     }
 
     vector_loader const& as_const() const { return *this; }
