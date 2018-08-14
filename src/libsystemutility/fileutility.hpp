@@ -98,10 +98,10 @@ public:
 
     void save()
     {
-        rollback();
-
         if (false == modified)
             return;
+
+        discard();
 
         boost::filesystem::ofstream fl;
 
@@ -113,13 +113,20 @@ public:
                                      + file_path.string());
 
         fl << ptr->to_string();
-        modified = false;
+
         commited = false;
     }
 
     void discard()
     {
-        rollback();
+        if (false == commited)
+        {
+            commited = true;
+            boost::system::error_code ec;
+            bool res = boost::filesystem::remove(file_path_tr(), ec);
+            assert(res);
+            B_UNUSED(res);
+        }
 
         modified = false;
     }
@@ -135,18 +142,6 @@ public:
             assert(res);
             if (res)
                 boost::filesystem::rename(file_path_tr(), file_path, ec);
-        }
-    }
-
-    void rollback()
-    {
-        if (false == commited)
-        {
-            commited = true;
-            boost::system::error_code ec;
-            bool res = boost::filesystem::remove(file_path_tr(), ec);
-            assert(res);
-            B_UNUSED(res);
         }
     }
 
@@ -240,7 +235,6 @@ public:
     void load(std::string const& key) const;
     void save();
     void discard();
-    void rollback();
     void commit();
 
     static std::string filename(std::string const& key, std::string const& name);
@@ -444,11 +438,6 @@ public:
         data.commit();
     }
 
-    void rollback()
-    {
-        data.rollback();
-    }
-
     map_loader const& as_const() const { return *this; }
 private:
     mutable internal data;
@@ -470,7 +459,6 @@ public:
     void load(size_t index) const;
     void save();
     void discard();
-    void rollback();
     void commit();
 
     static std::string filename(size_t index, std::string const& name);
@@ -640,11 +628,6 @@ public:
     void commit()
     {
         data.commit();
-    }
-
-    void rollback()
-    {
-        data.rollback();
     }
 
     vector_loader const& as_const() const { return *this; }

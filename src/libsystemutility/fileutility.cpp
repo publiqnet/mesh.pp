@@ -148,6 +148,9 @@ map_loader_internals::~map_loader_internals() = default;
 
 void map_loader_internals::load(std::string const& key) const
 {
+    if (ptr_tx)
+        throw std::runtime_error("need to commit or discard after previous save()");
+
     file_loader<Data2::FileData,
                 &Data2::FileData::from_string,
                 &Data2::FileData::to_string>
@@ -165,17 +168,25 @@ void map_loader_internals::load(std::string const& key) const
 
 void map_loader_internals::save()
 {
-    rollback();
+    if (ptr_tx)
+        throw std::runtime_error("need to commit or discard after previous save()");
+
+    auto local_overlay = std::move(overlay);
+    if (local_overlay.empty())
+        return;
+    auto index_backup = index;
 
     ptr_tx.reset(new map_loader_internals_transaction());
 
-    beltpp::on_failure guard([this]
+    beltpp::on_failure guard([this, &local_overlay, &index_backup]
     {
-        rollback();
+        discard();
+        overlay = std::move(local_overlay);
+        index = std::move(index_backup);
     });
 
-    auto it_overlay = overlay.begin();
-    while (it_overlay != overlay.end())
+    auto it_overlay = local_overlay.begin();
+    while (it_overlay != local_overlay.end())
     {
         if (it_overlay->second.second == map_loader_internals::deleted)
         {
@@ -212,7 +223,7 @@ void map_loader_internals::save()
             index.insert(std::make_pair(it_overlay->first, filename(it_overlay->first, name)));
         }
 
-        it_overlay = overlay.erase(it_overlay);
+        ++it_overlay;
     }
 
     file_loader<Data2::Index,
@@ -229,18 +240,12 @@ void map_loader_internals::save()
 
 void map_loader_internals::discard()
 {
-    rollback();
-    overlay.clear();
-}
-
-void map_loader_internals::rollback()
-{
     if (ptr_tx)
     {
         for (auto& item : ptr_tx->files)
-            item.rollback();
+            item.discard();
         for (auto& item : ptr_tx->index)
-            item.rollback();
+            item.discard();
 
         file_loader<Data2::Index,
                     &Data2::Index::from_string,
@@ -250,6 +255,8 @@ void map_loader_internals::rollback()
 
         ptr_tx.reset();
     }
+
+    overlay.clear();
 }
 
 void map_loader_internals::commit()
@@ -309,6 +316,9 @@ vector_loader_internals::~vector_loader_internals() = default;
 
 void vector_loader_internals::load(size_t index) const
 {
+    if (ptr_tx)
+        throw std::runtime_error("need to commit or discard after previous save()");
+
     file_loader<Data2::FileData2,
                 &Data2::FileData2::from_string,
                 &Data2::FileData2::to_string>
@@ -326,19 +336,25 @@ void vector_loader_internals::load(size_t index) const
 
 void vector_loader_internals::save()
 {
-    rollback();
+    if (ptr_tx)
+        throw std::runtime_error("need to commit or discard after previous save()");
+
+    auto local_overlay = std::move(overlay);
+    if (local_overlay.empty())
+        return;
+    size_t size_backup = size;
 
     ptr_tx.reset(new vector_loader_internals_transaction());
 
-    beltpp::on_failure guard([this]
+    beltpp::on_failure guard([this, &local_overlay, &size_backup]
     {
-        rollback();
+        discard();
+        overlay = std::move(local_overlay);
+        size = size_backup;
     });
 
-    size_t size_local = size;
-
-    auto it_overlay = overlay.begin();
-    while (it_overlay != overlay.end())
+    auto it_overlay = local_overlay.begin();
+    while (it_overlay != local_overlay.end())
     {
         if (it_overlay->second.second == vector_loader_internals::deleted)
         {
@@ -358,8 +374,8 @@ void vector_loader_internals::save()
             else
                 temp.discard();
 
-            if (size_local > it_overlay->first)
-                size_local = it_overlay->first;
+            if (size > it_overlay->first)
+                size = it_overlay->first;
         }
         else if (it_overlay->second.second == vector_loader_internals::modified)
         {
@@ -373,14 +389,12 @@ void vector_loader_internals::save()
             temp.save();
             ptr_tx->files.push_back(std::move(temp));
 
-            if (it_overlay->first >= size_local)
-                size_local = it_overlay->first + 1;
+            if (it_overlay->first >= size)
+                size = it_overlay->first + 1;
         }
 
-        it_overlay = overlay.erase(it_overlay);
+        ++it_overlay;
     }
-
-    size = size_local;
 
     file_loader<Data2::Number,
                 &Data2::Number::from_string,
@@ -396,18 +410,12 @@ void vector_loader_internals::save()
 
 void vector_loader_internals::discard()
 {
-    rollback();
-    overlay.clear();
-}
-
-void vector_loader_internals::rollback()
-{
     if (ptr_tx)
     {
         for (auto& item : ptr_tx->files)
-            item.rollback();
+            item.discard();
         for (auto& item : ptr_tx->size)
-            item.rollback();
+            item.discard();
 
         file_loader<Data2::Number,
                     &Data2::Number::from_string,
@@ -417,6 +425,8 @@ void vector_loader_internals::rollback()
 
         ptr_tx.reset();
     }
+
+    overlay.clear();
 }
 
 void vector_loader_internals::commit()
