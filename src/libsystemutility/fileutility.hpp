@@ -212,8 +212,8 @@ public:
     T const& operator -> () const { return *ptr.get(); }
     T& operator -> () { return *ptr.get(); }
 
-    void save() { return ptr->save(); }
-    void discard() { return ptr->discard(); }
+    void save() { ptr->save(); ptr->commit(); }
+    void discard() { ptr->discard(); }
 private:
     intptr_t native_handle;
     boost::filesystem::path lock_path;
