@@ -394,7 +394,7 @@ void vector_loader_internals::save()
             ref_ptransaction = std::move(temp.transaction());
         });
 
-        std::unordered_map<size_t, ::beltpp::packet>& block = temp->block;
+        std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
 
         if (item.second.second == vector_loader_internals::deleted)
         {
