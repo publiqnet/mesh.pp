@@ -116,17 +116,6 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
         throw std::runtime_error("unable to write to lock file: " + path.string());
 }
 
-class map_loader_internals_transaction
-{
-public:
-    std::vector<file_loader<Data2::FileData,
-                &Data2::FileData::from_string,
-                &Data2::FileData::to_string>> files;
-    std::vector<file_loader<Data2::Index,
-                &Data2::Index::from_string,
-                &Data2::Index::to_string>> index;
-};
-
 map_loader_internals::map_loader_internals(std::string const& name,
                                            boost::filesystem::path const& path,
                                            beltpp::void_unique_ptr&& ptr_utl)
@@ -135,7 +124,7 @@ map_loader_internals::map_loader_internals(std::string const& name,
     , index()
     , overlay()
     , ptr_utl(std::move(ptr_utl))
-    , ptr_tx()
+    , ptransaction(detail::null_ptr_transaction())
 {
     file_loader<Data2::Index,
                 &Data2::Index::from_string,
@@ -148,13 +137,37 @@ map_loader_internals::~map_loader_internals() = default;
 
 void map_loader_internals::load(std::string const& key) const
 {
-    if (ptr_tx)
-        throw std::runtime_error("need to commit or discard after previous save()");
+    ptr_transaction item_ptransaction = detail::null_ptr_transaction();
+
+    beltpp::on_failure guard1;
+
+    if (ptransaction)
+    {
+        class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+
+        auto pair_res = ref_class_transaction.overlay.insert(
+                    std::make_pair(filename(key, name),
+                                detail::null_ptr_transaction()));
+        auto& ref_ptransaction = pair_res.first->second;
+        item_ptransaction = std::move(ref_ptransaction);
+        guard1 = beltpp::on_failure([&ref_ptransaction, &item_ptransaction]
+        {
+            ref_ptransaction = std::move(item_ptransaction);
+        });
+    }
 
     file_loader<Data2::FileData,
                 &Data2::FileData::from_string,
                 &Data2::FileData::to_string>
-            temp(dir_path / filename(key, name), ptr_utl.get());
+            temp(dir_path / filename(key, name),
+                 ptr_utl.get(),
+                 std::move(item_ptransaction));
+
+    beltpp::on_failure guard2([&item_ptransaction, &temp]
+    {
+        item_ptransaction = std::move(temp.transaction());
+    });
+
     std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
 
     auto it_block = block.find(key);
@@ -163,112 +176,112 @@ void map_loader_internals::load(std::string const& key) const
                                       std::make_pair(std::move(it_block->second),
                                                      map_loader_internals::none)));
 
-    temp.discard();
+    //  guard1.dismiss();
+    //  guard2.dismiss();    // always need to get the transaction back
 }
 
 void map_loader_internals::save()
 {
-    if (ptr_tx)
-        throw std::runtime_error("need to commit or discard after previous save()");
-
-    auto local_overlay = std::move(overlay);
-    if (local_overlay.empty())
+    if (overlay.empty())
         return;
-    auto index_backup = index;
 
-    ptr_tx.reset(new map_loader_internals_transaction());
-
-    beltpp::on_failure guard([this, &local_overlay, &index_backup]
+    beltpp::on_failure guard([this]
     {
         discard();
-        overlay = std::move(local_overlay);
-        index = std::move(index_backup);
     });
 
-    auto it_overlay = local_overlay.begin();
-    while (it_overlay != local_overlay.end())
-    {
-        if (it_overlay->second.second == map_loader_internals::deleted)
-        {
-            file_loader<Data2::FileData,
-                        &Data2::FileData::from_string,
-                        &Data2::FileData::to_string>
-                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
+    if (nullptr == ptransaction)
+        ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
 
-            std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
-            auto it_block = block.find(it_overlay->first);
+    class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+
+    for (auto& item : overlay)
+    {
+        auto pair_res = ref_class_transaction.overlay.insert(
+                    std::make_pair(filename(item.first, name),
+                                   detail::null_ptr_transaction()));
+        auto& ref_ptransaction = pair_res.first->second;
+
+        file_loader<Data2::FileData,
+                    &Data2::FileData::from_string,
+                    &Data2::FileData::to_string>
+                temp(dir_path / filename(item.first, name),
+                     ptr_utl.get(),
+                     std::move(ref_ptransaction));
+
+        beltpp::on_failure guard([&ref_ptransaction, &temp]
+        {
+            ref_ptransaction = std::move(temp.transaction());
+        });
+
+        std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
+
+        if (item.second.second == map_loader_internals::deleted)
+        {
+            auto it_block = block.find(item.first);
             if (it_block != block.end())
             {
                 block.erase(it_block);
                 temp.save();
-                ptr_tx->files.push_back(std::move(temp));
             }
-            else
-                temp.discard();
 
-            index.erase(it_overlay->first);
+            index.erase(item.first);
         }
-        else if (it_overlay->second.second == map_loader_internals::modified)
+        else if (item.second.second == map_loader_internals::modified)
         {
-            file_loader<Data2::FileData,
-                        &Data2::FileData::from_string,
-                        &Data2::FileData::to_string>
-                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
-
-            std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
-            block[it_overlay->first] = std::move(it_overlay->second.first);
+            block[item.first] = std::move(item.second.first);
             temp.save();
-            ptr_tx->files.push_back(std::move(temp));
 
-            index.insert(std::make_pair(it_overlay->first, filename(it_overlay->first, name)));
+            index.insert(std::make_pair(item.first, filename(item.first, name)));
         }
-
-        ++it_overlay;
+        //  guard.dismiss();    // always need to get the transaction back
     }
 
+    overlay.clear();
+
+    auto& ref_ptransaction_index = ref_class_transaction.index;
     file_loader<Data2::Index,
                 &Data2::Index::from_string,
                 &Data2::Index::to_string>
-            temp(dir_path / (name + ".index"), ptr_utl.get());
+            temp(dir_path / (name + ".index"),
+                 ptr_utl.get(),
+                 std::move(ref_ptransaction_index));
+
+    beltpp::on_failure guard_index([&ref_ptransaction_index, &temp]
+    {
+        ref_ptransaction_index = std::move(temp.transaction());
+    });
+
     temp->dictionary = index;
     temp.save();
 
-    ptr_tx->index.push_back(std::move(temp));
+    //  guard_index.dismiss();    // always need to get the transaction back
 
     guard.dismiss();
 }
 
 void map_loader_internals::discard()
 {
-    if (ptr_tx)
+    if (ptransaction)
     {
-        for (auto& item : ptr_tx->files)
-            item.discard();
-        for (auto& item : ptr_tx->index)
-            item.discard();
-
-        file_loader<Data2::Index,
-                    &Data2::Index::from_string,
-                    &Data2::Index::to_string>
-                temp(dir_path / (name + ".index"), ptr_utl.get());
-        index = temp.as_const()->dictionary;
-
-        ptr_tx.reset();
+        ptransaction->rollback();
+        ptransaction = detail::null_ptr_transaction();
     }
 
     overlay.clear();
+    file_loader<Data2::Index,
+                &Data2::Index::from_string,
+                &Data2::Index::to_string>
+            temp(dir_path / (name + ".index"), ptr_utl.get());
+    index = temp.as_const()->dictionary;
 }
 
 void map_loader_internals::commit()
 {
-    if (ptr_tx)
+    if (ptransaction)
     {
-        for (auto& item : ptr_tx->files)
-            item.commit();
-        for (auto& item : ptr_tx->index)
-            item.commit();
-
-        ptr_tx.reset();
+        ptransaction->commit();
+        ptransaction = detail::null_ptr_transaction();
     }
 }
 
@@ -284,17 +297,6 @@ std::string map_loader_internals::filename(std::string const& key, std::string c
     return name + "." + strh;
 }
 
-class vector_loader_internals_transaction
-{
-public:
-    std::vector<file_loader<Data2::FileData2,
-                &Data2::FileData2::from_string,
-                &Data2::FileData2::to_string>> files;
-    std::vector<file_loader<Data2::Number,
-                &Data2::Number::from_string,
-                &Data2::Number::to_string>> size;
-};
-
 vector_loader_internals::vector_loader_internals(std::string const& name,
                                                  boost::filesystem::path const& path,
                                                  beltpp::void_unique_ptr&& ptr_utl)
@@ -303,7 +305,7 @@ vector_loader_internals::vector_loader_internals(std::string const& name,
     , size()
     , overlay()
     , ptr_utl(std::move(ptr_utl))
-    , ptr_tx()
+    , ptransaction(detail::null_ptr_transaction())
 {
     file_loader<Data2::Number,
                 &Data2::Number::from_string,
@@ -316,13 +318,36 @@ vector_loader_internals::~vector_loader_internals() = default;
 
 void vector_loader_internals::load(size_t index) const
 {
-    if (ptr_tx)
-        throw std::runtime_error("need to commit or discard after previous save()");
+    ptr_transaction item_ptransaction = detail::null_ptr_transaction();
+    beltpp::on_failure guard1;
+
+    if (ptransaction)
+    {
+        class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+
+        auto pair_res = ref_class_transaction.overlay.insert(
+                    std::make_pair(filename(index, name),
+                                   detail::null_ptr_transaction()));
+        auto& ref_ptransaction = pair_res.first->second;
+        item_ptransaction = std::move(ref_ptransaction);
+        guard1 = beltpp::on_failure([&ref_ptransaction, &item_ptransaction]
+        {
+            ref_ptransaction = std::move(item_ptransaction);
+        });
+    }
 
     file_loader<Data2::FileData2,
                 &Data2::FileData2::from_string,
                 &Data2::FileData2::to_string>
-            temp(dir_path / filename(index, name), ptr_utl.get());
+            temp(dir_path / filename(index, name),
+                 ptr_utl.get(),
+                 std::move(item_ptransaction));
+
+    beltpp::on_failure guard2([&item_ptransaction, &temp]
+    {
+        item_ptransaction = std::move(temp.transaction());
+    });
+
     std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
 
     auto it_block = block.find(index);
@@ -331,114 +356,114 @@ void vector_loader_internals::load(size_t index) const
                                       std::make_pair(std::move(it_block->second),
                                                      vector_loader_internals::none)));
 
-    temp.discard();
+    //  guard1.dismiss();
+    //  guard2.dismiss();    // always need to get the transaction back
 }
 
 void vector_loader_internals::save()
 {
-    if (ptr_tx)
-        throw std::runtime_error("need to commit or discard after previous save()");
-
-    auto local_overlay = std::move(overlay);
-    if (local_overlay.empty())
+    if (overlay.empty())
         return;
-    size_t size_backup = size;
 
-    ptr_tx.reset(new vector_loader_internals_transaction());
-
-    beltpp::on_failure guard([this, &local_overlay, &size_backup]
+    beltpp::on_failure guard([this]
     {
         discard();
-        overlay = std::move(local_overlay);
-        size = size_backup;
     });
 
-    auto it_overlay = local_overlay.begin();
-    while (it_overlay != local_overlay.end())
-    {
-        if (it_overlay->second.second == vector_loader_internals::deleted)
-        {
-            file_loader<Data2::FileData2,
-                        &Data2::FileData2::from_string,
-                        &Data2::FileData2::to_string>
-                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
+    if (nullptr == ptransaction)
+        ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
 
-            std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
-            auto it_block = block.find(it_overlay->first);
+    class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+
+    for (auto& item : overlay)
+    {
+        auto pair_res = ref_class_transaction.overlay.insert(
+                    std::make_pair(filename(item.first, name),
+                                   detail::null_ptr_transaction()));
+        auto& ref_ptransaction = pair_res.first->second;
+
+        file_loader<Data2::FileData2,
+                    &Data2::FileData2::from_string,
+                    &Data2::FileData2::to_string>
+                temp(dir_path / filename(item.first, name),
+                     ptr_utl.get(),
+                     std::move(ref_ptransaction));
+
+        beltpp::on_failure guard([&ref_ptransaction, &temp]
+        {
+            ref_ptransaction = std::move(temp.transaction());
+        });
+
+        std::unordered_map<size_t, ::beltpp::packet>& block = temp->block;
+
+        if (item.second.second == vector_loader_internals::deleted)
+        {
+            auto it_block = block.find(item.first);
             if (it_block != block.end())
             {
                 block.erase(it_block);
                 temp.save();
-                ptr_tx->files.push_back(std::move(temp));
             }
-            else
-                temp.discard();
 
-            if (size > it_overlay->first)
-                size = it_overlay->first;
+            if (size > item.first)
+                size = item.first;
         }
-        else if (it_overlay->second.second == vector_loader_internals::modified)
+        else if (item.second.second == vector_loader_internals::modified)
         {
-            file_loader<Data2::FileData2,
-                        &Data2::FileData2::from_string,
-                        &Data2::FileData2::to_string>
-                    temp(dir_path / filename(it_overlay->first, name), ptr_utl.get());
-
-            std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
-            block[it_overlay->first] = std::move(it_overlay->second.first);
+            block[item.first] = std::move(item.second.first);
             temp.save();
-            ptr_tx->files.push_back(std::move(temp));
 
-            if (it_overlay->first >= size)
-                size = it_overlay->first + 1;
+            if (item.first >= size)
+                size = item.first + 1;
         }
-
-        ++it_overlay;
+        //  guard.dismiss();    // always need to get the transaction back
     }
 
+    overlay.clear();
+
+    auto& ref_ptransaction_size = ref_class_transaction.size;
     file_loader<Data2::Number,
                 &Data2::Number::from_string,
                 &Data2::Number::to_string>
-            temp(dir_path / (name + ".size"), ptr_utl.get());
+            temp(dir_path / (name + ".size"),
+                 ptr_utl.get(),
+                 std::move(ref_ptransaction_size));
+
+    beltpp::on_failure guard_size([&ref_ptransaction_size, &temp]
+    {
+        ref_ptransaction_size = std::move(temp.transaction());
+    });
+
     temp->value = size;
     temp.save();
 
-    ptr_tx->size.push_back(std::move(temp));
+    //  guard_size.dismiss();    // always need to get the transaction back
 
     guard.dismiss();
 }
 
 void vector_loader_internals::discard()
 {
-    if (ptr_tx)
+    if (ptransaction)
     {
-        for (auto& item : ptr_tx->files)
-            item.discard();
-        for (auto& item : ptr_tx->size)
-            item.discard();
-
-        file_loader<Data2::Number,
-                    &Data2::Number::from_string,
-                    &Data2::Number::to_string>
-                temp(dir_path / (name + ".size"));
-        size = temp.as_const()->value;
-
-        ptr_tx.reset();
+        ptransaction->rollback();
+        ptransaction = detail::null_ptr_transaction();
     }
 
     overlay.clear();
+    file_loader<Data2::Number,
+                &Data2::Number::from_string,
+                &Data2::Number::to_string>
+            temp(dir_path / (name + ".size"));
+    size = temp.as_const()->value;
 }
 
 void vector_loader_internals::commit()
 {
-    if (ptr_tx)
+    if (ptransaction)
     {
-        for (auto& item : ptr_tx->files)
-            item.commit();
-        for (auto& item : ptr_tx->size)
-            item.commit();
-
-        ptr_tx.reset();
+        ptransaction->commit();
+        ptransaction = detail::null_ptr_transaction();
     }
 }
 

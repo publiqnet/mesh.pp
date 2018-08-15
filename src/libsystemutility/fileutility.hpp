@@ -5,6 +5,7 @@
 
 #include <belt.pp/scope_helper.hpp>
 #include <belt.pp/packet.hpp>
+#include <belt.pp/itransaction.hpp>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -29,6 +30,12 @@ SYSTEMUTILITYSHARED_EXPORT bool write_to_lock_file(intptr_t native_handle, std::
 SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void dostuff(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
+
+using ptr_transaction = beltpp::t_unique_ptr<beltpp::itransaction>;
+inline ptr_transaction null_ptr_transaction()
+{
+    return ptr_transaction(nullptr, [](beltpp::itransaction*){});
+}
 }
 
 inline void load_file(boost::filesystem::path const& path,
@@ -59,18 +66,76 @@ template <typename T,
           >
 class file_loader
 {
+    class class_transaction : public beltpp::itransaction
+    {
+    public:
+        class_transaction(boost::filesystem::path const& path,
+                          boost::filesystem::path const& path_tr)
+            : commited(false)
+            , file_path(path)
+            , file_path_tr(path_tr) {}
+        ~class_transaction() override
+        {
+            commit();
+        }
+
+        void commit() noexcept override
+        {
+            if (false == commited)
+            {
+                commited = true;
+                bool res = true;
+                boost::system::error_code ec;
+                res = boost::filesystem::remove(file_path, ec);
+                assert(res);
+                if (res)
+                    boost::filesystem::rename(file_path_tr, file_path, ec);
+            }
+        }
+
+        void rollback() noexcept override
+        {
+            if (false == commited)
+            {
+                commited = true;
+                boost::system::error_code ec;
+                bool res = boost::filesystem::remove(file_path_tr, ec);
+                assert(res);
+                B_UNUSED(res);
+            }
+        }
+    private:
+        bool commited;
+        boost::filesystem::path file_path;
+        boost::filesystem::path file_path_tr;
+    };
 public:
     using value_type = T;
-    file_loader(boost::filesystem::path const& path, void* putl = nullptr)
+    file_loader(boost::filesystem::path const& path,
+                void* putl = nullptr,
+                detail::ptr_transaction&& ptransaction_
+                    = detail::null_ptr_transaction())
         : modified(false)
-        , commited(true)
+        , ptransaction(std::move(ptransaction_))
         , file_path(path)
         , ptr(new T)
         , putl(putl)
     {
+        beltpp::on_failure guard([this, &ptransaction_]()
+        {
+            ptransaction_ = std::move(ptransaction);
+        });
+
+        if (nullptr != ptransaction &&
+            nullptr == dynamic_cast<class_transaction*>(ptransaction.get()))
+            throw std::runtime_error("not a file_loader::class_transaction");
+
         std::istreambuf_iterator<char> end, begin;
         boost::filesystem::ifstream fl;
-        load_file(path, fl, begin, end);
+        if (nullptr == ptransaction)
+            load_file(file_path, fl, begin, end);
+        else
+            load_file(file_path_tr(), fl, begin, end);
 
         if (fl && begin != end)
         {
@@ -78,17 +143,21 @@ public:
             ob.from_string(std::string(begin, end), putl);
             beltpp::assign(*ptr, std::move(ob));
         }
+
+        guard.dismiss();
     }
 
     file_loader(file_loader const&) = delete;
     file_loader(file_loader&& other)
         : modified(other.modified)
-        , commited(other.commited)
+        , ptransaction(std::move(other.ptransaction))
         , file_path(other.file_path)
         , ptr(std::move(other.ptr))
         , putl(std::move(other.putl))
     {
-        other.commited = true;
+        if (nullptr != ptransaction &&
+            nullptr == dynamic_cast<class_transaction*>(ptransaction.get()))
+            throw std::runtime_error("not a file_loader::class_transaction");
     }
 
     ~file_loader()
@@ -101,8 +170,6 @@ public:
         if (false == modified)
             return;
 
-        discard();
-
         boost::filesystem::ofstream fl;
 
         fl.open(file_path_tr(),
@@ -114,35 +181,36 @@ public:
 
         fl << ptr->to_string();
 
-        commited = false;
+        if (nullptr == ptransaction)
+            ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction,
+                                                     file_loader::class_transaction>(file_path,
+                                                                                 file_path_tr());
+        modified = false;
+    }
+
+    void commit() noexcept
+    {
+        if (ptransaction)
+        {
+            ptransaction->commit();
+            ptransaction = detail::null_ptr_transaction();
+        }
     }
 
     void discard()
     {
-        if (false == commited)
+        if (ptransaction)
         {
-            commited = true;
-            boost::system::error_code ec;
-            bool res = boost::filesystem::remove(file_path_tr(), ec);
-            assert(res);
-            B_UNUSED(res);
+            ptransaction->rollback();
+            ptransaction = detail::null_ptr_transaction();
         }
 
         modified = false;
     }
 
-    void commit()
+    detail::ptr_transaction&& transaction()
     {
-        if (false == commited)
-        {
-            commited = true;
-            bool res = true;
-            boost::system::error_code ec;
-            res = boost::filesystem::remove(file_path, ec);
-            assert(res);
-            if (res)
-                boost::filesystem::rename(file_path_tr(), file_path, ec);
-        }
+        return std::move(ptransaction);
     }
 
     file_loader const& as_const() const { return *this; }
@@ -160,7 +228,7 @@ private:
         return file_path_tr;
     }
     bool modified;
-    bool commited;
+    detail::ptr_transaction ptransaction;
     boost::filesystem::path file_path;
     std::unique_ptr<T> ptr;
     void* putl;
@@ -222,10 +290,56 @@ private:
 
 namespace detail
 {
-class map_loader_internals_transaction;
-
 class SYSTEMUTILITYSHARED_EXPORT map_loader_internals
 {
+    class class_transaction : public beltpp::itransaction
+    {
+    public:
+        class_transaction()
+            : index(detail::null_ptr_transaction())
+        {}
+        ~class_transaction() override
+        {
+            commit();
+        }
+
+        void commit() noexcept override
+        {
+            for (auto& item : overlay)
+            {
+                if (item.second)
+                    item.second->commit();
+                item.second = detail::null_ptr_transaction();
+            }
+            overlay.clear();
+            
+            if (index)
+            {
+                index->commit();
+                index = detail::null_ptr_transaction();
+            }
+        }
+
+        void rollback() noexcept override
+        {
+            for (auto& item : overlay)
+            {
+                if (item.second)
+                    item.second->rollback();
+                item.second = detail::null_ptr_transaction();
+            }
+            overlay.clear();
+
+            if (index)
+            {
+                index->rollback();
+                index = detail::null_ptr_transaction();
+            }
+        }
+
+        ptr_transaction index;
+        std::unordered_map<std::string, ptr_transaction> overlay;
+    };
 public:
     map_loader_internals(std::string const& name,
                          boost::filesystem::path const& path,
@@ -246,7 +360,7 @@ public:
     std::unordered_map<std::string, std::string> index;
     mutable std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
-    std::unique_ptr<map_loader_internals_transaction> ptr_tx;
+    ptr_transaction ptransaction;
 };
 }
 
@@ -446,10 +560,56 @@ private:
 
 namespace detail
 {
-class vector_loader_internals_transaction;
-
 class SYSTEMUTILITYSHARED_EXPORT vector_loader_internals
 {
+    class class_transaction : public beltpp::itransaction
+    {
+    public:
+        class_transaction()
+            : size(detail::null_ptr_transaction())
+        {}
+        ~class_transaction() override
+        {
+            commit();
+        }
+
+        void commit() noexcept override
+        {
+            for (auto& item : overlay)
+            {
+                if (item.second)
+                    item.second->commit();
+                item.second = detail::null_ptr_transaction();
+            }
+            overlay.clear();
+
+            if (size)
+            {
+                size->commit();
+                size = detail::null_ptr_transaction();
+            }
+        }
+
+        void rollback() noexcept override
+        {
+            for (auto& item : overlay)
+            {
+                if (item.second)
+                    item.second->rollback();
+                item.second = detail::null_ptr_transaction();
+            }
+            overlay.clear();
+
+            if (size)
+            {
+                size->rollback();
+                size = detail::null_ptr_transaction();
+            }
+        }
+
+        ptr_transaction size;
+        std::unordered_map<std::string, ptr_transaction> overlay;
+    };
 public:
     vector_loader_internals(std::string const& name,
                             boost::filesystem::path const& path,
@@ -470,7 +630,7 @@ public:
     size_t size;
     mutable std::unordered_map<size_t, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
-    std::unique_ptr<vector_loader_internals_transaction> ptr_tx;
+    ptr_transaction ptransaction;
 };
 }
 
