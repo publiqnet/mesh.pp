@@ -139,7 +139,7 @@ void map_loader_internals::load(std::string const& key) const
 {
     ptr_transaction item_ptransaction = detail::null_ptr_transaction();
 
-    beltpp::on_failure guard1;
+    beltpp::finally guard1;
 
     if (ptransaction)
     {
@@ -150,7 +150,7 @@ void map_loader_internals::load(std::string const& key) const
                                 detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
         item_ptransaction = std::move(ref_ptransaction);
-        guard1 = beltpp::on_failure([&ref_ptransaction, &item_ptransaction]
+        guard1 = beltpp::finally([&ref_ptransaction, &item_ptransaction]
         {
             ref_ptransaction = std::move(item_ptransaction);
         });
@@ -163,7 +163,7 @@ void map_loader_internals::load(std::string const& key) const
                  ptr_utl.get(),
                  std::move(item_ptransaction));
 
-    beltpp::on_failure guard2([&item_ptransaction, &temp]
+    beltpp::finally guard2([&item_ptransaction, &temp]
     {
         item_ptransaction = std::move(temp.transaction());
     });
@@ -175,9 +175,6 @@ void map_loader_internals::load(std::string const& key) const
         overlay.insert(std::make_pair(key,
                                       std::make_pair(std::move(it_block->second),
                                                      map_loader_internals::none)));
-
-    //  guard1.dismiss();
-    //  guard2.dismiss();    // always need to get the transaction back
 }
 
 void map_loader_internals::save()
@@ -209,7 +206,7 @@ void map_loader_internals::save()
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
 
-        beltpp::on_failure guard([&ref_ptransaction, &temp]
+        beltpp::finally guard_item([&ref_ptransaction, &temp]
         {
             ref_ptransaction = std::move(temp.transaction());
         });
@@ -234,7 +231,6 @@ void map_loader_internals::save()
 
             index.insert(std::make_pair(item.first, filename(item.first, name)));
         }
-        //  guard.dismiss();    // always need to get the transaction back
     }
 
     overlay.clear();
@@ -247,15 +243,13 @@ void map_loader_internals::save()
                  ptr_utl.get(),
                  std::move(ref_ptransaction_index));
 
-    beltpp::on_failure guard_index([&ref_ptransaction_index, &temp]
+    beltpp::finally guard_index([&ref_ptransaction_index, &temp]
     {
         ref_ptransaction_index = std::move(temp.transaction());
     });
 
     temp->dictionary = index;
     temp.save();
-
-    //  guard_index.dismiss();    // always need to get the transaction back
 
     guard.dismiss();
 }
@@ -319,7 +313,7 @@ vector_loader_internals::~vector_loader_internals() = default;
 void vector_loader_internals::load(size_t index) const
 {
     ptr_transaction item_ptransaction = detail::null_ptr_transaction();
-    beltpp::on_failure guard1;
+    beltpp::finally guard1;
 
     if (ptransaction)
     {
@@ -330,7 +324,7 @@ void vector_loader_internals::load(size_t index) const
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
         item_ptransaction = std::move(ref_ptransaction);
-        guard1 = beltpp::on_failure([&ref_ptransaction, &item_ptransaction]
+        guard1 = beltpp::finally([&ref_ptransaction, &item_ptransaction]
         {
             ref_ptransaction = std::move(item_ptransaction);
         });
@@ -343,7 +337,7 @@ void vector_loader_internals::load(size_t index) const
                  ptr_utl.get(),
                  std::move(item_ptransaction));
 
-    beltpp::on_failure guard2([&item_ptransaction, &temp]
+    beltpp::finally guard2([&item_ptransaction, &temp]
     {
         item_ptransaction = std::move(temp.transaction());
     });
@@ -355,9 +349,6 @@ void vector_loader_internals::load(size_t index) const
         overlay.insert(std::make_pair(index,
                                       std::make_pair(std::move(it_block->second),
                                                      vector_loader_internals::none)));
-
-    //  guard1.dismiss();
-    //  guard2.dismiss();    // always need to get the transaction back
 }
 
 void vector_loader_internals::save()
@@ -389,7 +380,7 @@ void vector_loader_internals::save()
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
 
-        beltpp::on_failure guard([&ref_ptransaction, &temp]
+        beltpp::finally guard_item([&ref_ptransaction, &temp]
         {
             ref_ptransaction = std::move(temp.transaction());
         });
@@ -416,7 +407,6 @@ void vector_loader_internals::save()
             if (item.first >= size)
                 size = item.first + 1;
         }
-        //  guard.dismiss();    // always need to get the transaction back
     }
 
     overlay.clear();
@@ -429,15 +419,13 @@ void vector_loader_internals::save()
                  ptr_utl.get(),
                  std::move(ref_ptransaction_size));
 
-    beltpp::on_failure guard_size([&ref_ptransaction_size, &temp]
+    beltpp::finally guard_size([&ref_ptransaction_size, &temp]
     {
         ref_ptransaction_size = std::move(temp.transaction());
     });
 
     temp->value = size;
     temp.save();
-
-    //  guard_size.dismiss();    // always need to get the transaction back
 
     guard.dismiss();
 }
