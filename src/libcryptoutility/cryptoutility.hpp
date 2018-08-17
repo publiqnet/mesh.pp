@@ -60,18 +60,18 @@ private:
 
 CRYPTOUTILITYSHARED_EXPORT bool verify_signature(public_key const& pb_key,
                                                  std::string const& message,
-                                                 std::string const& base64);
+                                                 std::string const& base58);
 
 class CRYPTOUTILITYSHARED_EXPORT signature
 {
 public:
     signature(public_key const& pb_key,
               std::string const& message,
-              std::string const& base64);
+              std::string const& base58_);
 
     public_key pb_key;
     std::string message;
-    std::string base64;
+    std::string base58;
 };
 
 class CRYPTOUTILITYSHARED_EXPORT exception_private_key : public std::runtime_error
@@ -120,7 +120,35 @@ std::string hash(InputIt first, InputIt last)
     return hash(std::string(first, last));
 }
 
+CRYPTOUTILITYSHARED_EXPORT std::string to_hex(const std::string &);
+template <typename InputIt>
+std::string to_hex(InputIt first, InputIt last)
+{
+    return to_hex(std::string(first, last));
+}
+
+CRYPTOUTILITYSHARED_EXPORT std::vector<unsigned char> from_hex(const std::string &);
+template <typename InputIt>
+std::vector<unsigned char> from_hex(InputIt first, InputIt last)
+{
+    return from_hex(std::string(first, last));
+}
+
+CRYPTOUTILITYSHARED_EXPORT std::string to_base58(std::string const & raw_str);
+template <typename InputIt>
+std::string to_base58(InputIt first, InputIt last)
+{
+    return to_base58(std::string(first, last));
+}
+
+CRYPTOUTILITYSHARED_EXPORT std::vector<unsigned char> from_base58(std::string const & data);
+template <typename InputIt>
+std::vector<unsigned char> from_base58(InputIt first, InputIt last)
+{
+    return from_base58(std::string(first, last));
+}
+
 CRYPTOUTILITYSHARED_EXPORT uint64_t distance(std::string const& hash58_first, std::string const& hash58_second);
-CRYPTOUTILITYSHARED_EXPORT std::string base64_to_hex(const std::string & b64_str);
+//CRYPTOUTILITYSHARED_EXPORT std::string base64_to_hex(const std::string & b64_str);
 
 }

@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     std::string msg = "";
 
     meshpp::signature m_sgn = m_pvk.sign(msg);
-    std::cout << m_sgn.base64 << std::endl;
+    std::cout << m_sgn.base58 << std::endl;
 
 
     std::cout<<R"(hash256("") -> b58:GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn -> 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)"<<std::endl;
@@ -84,7 +84,7 @@ int main(int argc, char **argv)
     meshpp::signature imported_signature(
                 pbk2,
                 signed_message,
-                "MEUCIADINLbtQqmp5jhLdqfLYVSYPoK9vrhW5A7H8d5ctOLqAiEA5gBBmQKu+HB9nR07X75oBHy76ISqzcNpwOmq1za7/fI="
+                "AN1rKoJL3wv4up9dbRjrrRuQkcCqeexuSwMsxu3eZK4f6XdtFPy8LnxSgz3q36rycGUuVGuC3ZiDYJP7Xv3tSMPmFtQQjaEfT"
                 );
     std::cout << "imported_signature is verified since it's already constructed" << std::endl;
 
