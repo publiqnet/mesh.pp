@@ -9,4 +9,3 @@ module FileAttributes
         UInt64 owner
     }
 }
-///
