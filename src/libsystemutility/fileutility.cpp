@@ -60,7 +60,7 @@ bool create_lock_file(intptr_t& native_handle, boost::filesystem::path const& pa
 bool write_to_lock_file(intptr_t native_handle, std::string const& value)
 {
 #ifdef B_OS_WINDOWS
-    DWORD len = -1;
+    DWORD len = DWORD(-1);
     LPOVERLAPPED lpOver = 0;
  
     if (WriteFile(HANDLE(native_handle), value.c_str(), DWORD(value.length()), &len, lpOver) &&

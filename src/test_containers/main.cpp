@@ -31,6 +31,9 @@ beltpp::void_unique_ptr get_putl()
 
 int main(int argc, char* argv[])
 {
+    B_UNUSED(argc);
+    B_UNUSED(argv);
+
     try
     {
         meshpp::map_loader<Value> map("map", "/Users/tigran/publiq.pp1/map", get_putl());

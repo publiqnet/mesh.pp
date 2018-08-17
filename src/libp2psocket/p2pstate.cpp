@@ -56,8 +56,8 @@ class peer_state
 public:
     using key_type = string;
     peer_state()
-        : open_attempts(-1)
-        , requested(-1)
+        : open_attempts(size_t(-1))
+        , requested(size_t(-1))
         , node_id()
         , updated(steady_clock::now())
     {}

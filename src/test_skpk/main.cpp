@@ -18,6 +18,9 @@
 
 int main(int argc, char **argv)
 {
+    B_UNUSED(argc);
+    B_UNUSED(argv);
+
     meshpp::config::set_public_key_prefix("PBQ");
 
     meshpp::random_seed m_rs;

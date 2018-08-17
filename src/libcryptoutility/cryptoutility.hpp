@@ -127,9 +127,9 @@ std::string to_hex(InputIt first, InputIt last)
     return to_hex(std::string(first, last));
 }
 
-CRYPTOUTILITYSHARED_EXPORT std::vector<unsigned char> from_hex(const std::string &);
+CRYPTOUTILITYSHARED_EXPORT std::string from_hex(const std::string &);
 template <typename InputIt>
-std::vector<unsigned char> from_hex(InputIt first, InputIt last)
+std::string from_hex(InputIt first, InputIt last)
 {
     return from_hex(std::string(first, last));
 }
@@ -141,14 +141,13 @@ std::string to_base58(InputIt first, InputIt last)
     return to_base58(std::string(first, last));
 }
 
-CRYPTOUTILITYSHARED_EXPORT std::vector<unsigned char> from_base58(std::string const & data);
+CRYPTOUTILITYSHARED_EXPORT std::string from_base58(std::string const & data);
 template <typename InputIt>
-std::vector<unsigned char> from_base58(InputIt first, InputIt last)
+std::string from_base58(InputIt first, InputIt last)
 {
     return from_base58(std::string(first, last));
 }
 
 CRYPTOUTILITYSHARED_EXPORT uint64_t distance(std::string const& hash58_first, std::string const& hash58_second);
-//CRYPTOUTILITYSHARED_EXPORT std::string base64_to_hex(const std::string & b64_str);
 
 }

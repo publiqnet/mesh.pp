@@ -41,6 +41,7 @@ bool base58_to_pk(string const& b58_str, CryptoPP::ECP::Point &pk);
 string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point &P, bool compressed = true);
 CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str);
 string hash(const string & message);
+vector<unsigned char> from_base58(std::string const & data);
 }
 
 void config::set_public_key_prefix(std::string const& prefix)
@@ -184,7 +185,7 @@ bool verify_signature(public_key const& pb_key,
     string pub_key_hex;
 
     // decode base58 signature
-    auto signature_der = from_base58(base58);
+    auto signature_der = detail::from_base58(base58);
 
     // verify message
     detail::base58_to_pk_hex(pb_key.get_base58(), pub_key_hex);
@@ -298,22 +299,28 @@ string to_hex(const string & message)
     return _hash_hex;
 }
 
-std::vector<unsigned char> from_hex(const string & hex_str)
+string from_hex(const string & hex_str)
 {
     std::string _raw_str;
     CryptoPP::StringSource ss(hex_str, true,
                               new CryptoPP::HexDecoder(
                               new CryptoPP::StringSink(_raw_str)
                             ));
-    return std::vector<unsigned char>(_raw_str.begin(), _raw_str.end());
+    return string(_raw_str.begin(), _raw_str.end());
+}
+
+string from_base58(string const& data)
+{
+    auto vec = detail::from_base58(data);
+    return string(vec.begin(), vec.end());
 }
 
 uint64_t distance(string const& hash58_first, string const& hash58_second)
 {
     vector<unsigned char> vec_first, vec_second;
     string hash_hex_first, hash_hex_second;
-    vec_first = from_base58(hash58_first.c_str());
-    vec_second = from_base58(hash58_second.c_str());
+    vec_first = detail::from_base58(hash58_first.c_str());
+    vec_second = detail::from_base58(hash58_second.c_str());
     if (vec_first.empty())
         throw runtime_error("invalid base58 string: " + hash58_first);
     if (vec_second.empty())
@@ -416,6 +423,8 @@ std::string to_base58(const std::string & raw_str)
 }
 
 //bitcoin
+namespace detail
+{
 vector<unsigned char> from_base58(string const & str_b58)
 {
     const char* psz = str_b58.c_str();
@@ -482,6 +491,7 @@ vector<unsigned char> from_base58(string const & str_b58)
     while (it != b256.end())
         vch.push_back(*(it++));
     return vch;
+}
 }
 
 #define HASH_VER 1

@@ -883,9 +883,9 @@ int main(int argc, char* argv[])
 
                         fixed_local_port = current_connection.local.port;
 
-                        ip_address to_listen(current_connection.local,
-                                             current_connection.ip_type);
-                        program_state.add_passive(to_listen);
+                        ip_address to_listen_local(current_connection.local,
+                                                   current_connection.ip_type);
+                        program_state.add_passive(to_listen_local);
                     }
                     else
                     {
@@ -1140,8 +1140,8 @@ int main(int argc, char* argv[])
             if (false == received_packets.empty())
             {
                 auto tp_now = std::chrono::system_clock::now();
-                std::time_t t_now = std::chrono::system_clock::to_time_t(tp_now);
-                std::cout << beltpp::gm_time_t_to_lc_string(t_now) << std::endl;
+                std::time_t tt_now = std::chrono::system_clock::to_time_t(tp_now);
+                std::cout << beltpp::gm_time_t_to_lc_string(tt_now) << std::endl;
                 auto connected = program_state.get_connected();
                 auto listening = program_state.get_listening();
 

@@ -13,6 +13,7 @@
 #include <cryptopp/pssr.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/whrlpool.h>
+#include <belt.pp/global.hpp>
 #include <mesh.pp/cryptopp_byte.hpp>
 
 #include <string>
@@ -103,6 +104,9 @@ inline bool RsaVerifyString(const std::string &aPublicKeyStrHex,
 
 int main(int argc, const char * argv[])
 {
+    B_UNUSED(argc);
+    B_UNUSED(argv);
+
     // insert code here..
 
     {

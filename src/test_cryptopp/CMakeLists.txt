@@ -4,7 +4,8 @@ add_executable(test_cryptopp
 
 # libraries this module links to
 target_link_libraries(test_cryptopp PRIVATE
-    mesh.pp)
+    mesh.pp
+    belt.pp)
 
 # what to do on make install
 install(TARGETS test_cryptopp

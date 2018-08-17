@@ -136,9 +136,9 @@ int main(int argc, char* argv[])
         {
             unordered_set<string> to_open;
 
-            ip_address addr;
-            addr.from_string(argv[2]);
-            peer_ids peers_to_open = sk.open(addr);
+            ip_address addr_test;
+            addr_test.from_string(argv[2]);
+            peer_ids peers_to_open = sk.open(addr_test);
             cout << "will try to open" << endl;
             for (auto const& item : peers_to_open)
             {
