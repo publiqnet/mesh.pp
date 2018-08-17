@@ -1,6 +1,5 @@
 /src/libp2psocket/message.gen.hpp
 /src/libsystemutility/file_attributes.gen.hpp
-/src/mesh.pp.node/message.gen.hpp
 /src/test_socket/message.gen.hpp
 /src/libsystemutility/data.gen.hpp
 *.DS_Store
