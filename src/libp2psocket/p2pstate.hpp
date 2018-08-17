@@ -17,7 +17,7 @@ public:
     enum class update_code {updated, added};
     enum class contact_status {no_contact, new_contact, existing_contact};
 
-    virtual ~p2pstate() {};
+    virtual ~p2pstate() {}
     virtual std::string name() const = 0;
     virtual std::string short_name() const = 0;
 
