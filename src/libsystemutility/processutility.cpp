@@ -10,12 +10,12 @@
 
 namespace meshpp
 {
-size_t current_process_id()
+uint64_t current_process_id()
 {
 #ifdef B_OS_WINDOWS
-    return _getpid();
+    return uint64_t(_getpid());
 #else
-    return getpid();
+    return uint64_t(getpid());
 #endif
 }
 }

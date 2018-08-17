@@ -4,5 +4,5 @@
 
 namespace meshpp
 {
-SYSTEMUTILITYSHARED_EXPORT size_t current_process_id();
+SYSTEMUTILITYSHARED_EXPORT uint64_t current_process_id();
 }
