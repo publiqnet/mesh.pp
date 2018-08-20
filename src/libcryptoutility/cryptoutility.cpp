@@ -422,6 +422,23 @@ std::string to_base58(const std::string & raw_str)
     return str;
 }
 
+
+string from_base64(string const& data)
+{
+    using namespace CryptoPP;
+    string result;
+    StringSource ss(data, true, new Base64Decoder(new StringSink(result)));
+    return result;
+}
+
+string to_base64(string const& data)
+{
+    using namespace CryptoPP;
+    string result;
+    StringSource ss(data, true, new Base64Encoder(new StringSink(result)));
+    return result;
+}
+
 //bitcoin
 namespace detail
 {

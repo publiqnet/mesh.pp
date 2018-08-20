@@ -148,6 +148,20 @@ std::string from_base58(InputIt first, InputIt last)
     return from_base58(std::string(first, last));
 }
 
+CRYPTOUTILITYSHARED_EXPORT std::string to_base64(std::string const & raw_str);
+template <typename InputIt>
+std::string to_base64(InputIt first, InputIt last)
+{
+    return to_base64(std::string(first, last));
+}
+
+CRYPTOUTILITYSHARED_EXPORT std::string from_base64(std::string const& data);
+template <typename InputIt>
+std::string from_base64(InputIt first, InputIt last)
+{
+    return from_base64(std::string(first, last));
+}
+
 CRYPTOUTILITYSHARED_EXPORT uint64_t distance(std::string const& hash58_first, std::string const& hash58_second);
 
 }
