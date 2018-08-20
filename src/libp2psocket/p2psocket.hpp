@@ -1,6 +1,9 @@
 #pragma once
 
 #include "global.hpp"
+
+#include <libcryptoutility/cryptoutility.hpp>
+
 #include <belt.pp/isocket.hpp>
 #include <belt.pp/packet.hpp>
 #include <belt.pp/message_global.hpp>
@@ -36,7 +39,8 @@ public:
               beltpp::ip_address const& bind_to_address,
               std::vector<beltpp::ip_address> const& connect_to_addresses,
               beltpp::void_unique_ptr&& putl,
-              beltpp::ilog* plogger);
+              beltpp::ilog* plogger,
+              meshpp::private_key const& sk);
     p2psocket(p2psocket&& other);
     ~p2psocket() override;
 
@@ -61,14 +65,16 @@ p2psocket getp2psocket(beltpp::event_handler& eh,
                        beltpp::ip_address const& bind_to_address,
                        std::vector<beltpp::ip_address> const& connect_to_addresses,
                        beltpp::void_unique_ptr&& putl,
-                       beltpp::ilog* plogger)
+                       beltpp::ilog* plogger,
+                       meshpp::private_key const& sk)
 {
     return
     p2psocket(eh,
               bind_to_address,
               connect_to_addresses,
               std::move(putl),
-              plogger);
+              plogger,
+              sk);
 }
 
 }

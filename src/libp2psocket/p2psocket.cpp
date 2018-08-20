@@ -40,11 +40,12 @@ public:
                         ip_address const& bind_to_address,
                         std::vector<ip_address> const& connect_to_addresses_,
                         beltpp::void_unique_ptr&& putl,
-                        beltpp::ilog* _plogger)
+                        beltpp::ilog* _plogger,
+                        meshpp::private_key const& sk)
         : m_ptr_socket(new beltpp::socket(
             beltpp::getsocket<sf>(eh, std::move(putl))
                                           ))
-        , m_ptr_state(getp2pstate())
+        , m_ptr_state(getp2pstate(sk.get_public_key()))
         , plogger(_plogger)
         , connect_to_addresses(connect_to_addresses_)
         , receive_attempt_count(0)
@@ -106,14 +107,19 @@ p2psocket::p2psocket(beltpp::event_handler& eh,
                      ip_address const& bind_to_address,
                      std::vector<ip_address> const& connect_to_addresses,
                      beltpp::void_unique_ptr&& putl,
-                     beltpp::ilog* plogger)
+                     beltpp::ilog* plogger,
+                     meshpp::private_key const& sk)
     : isocket(eh)
     , m_pimpl(new detail::p2psocket_internals(eh,
                                               bind_to_address,
                                               connect_to_addresses,
                                               std::move(putl),
-                                              plogger))
-{}
+                                              plogger,
+                                              sk))
+{
+
+}
+
 
 p2psocket::p2psocket(p2psocket&&) = default;
 

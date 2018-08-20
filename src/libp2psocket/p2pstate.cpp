@@ -3,10 +3,7 @@
 #include <kbucket/kbucket.hpp>
 #include <kbucket/nodelookup.hpp>
 
-#include <cryptopp/eccrypto.h>
-#include <cryptopp/oids.h>
-#include <cryptopp/osrng.h>
-#include <cryptopp/rng.h>
+#include <libcryptoutility/cryptoutility.hpp>
 
 #include <boost/optional.hpp>
 #include <boost/functional/hash.hpp>
@@ -358,7 +355,6 @@ public:
                                std::make_pair(it_find_addr->second,
                                               std::make_pair(step,
                                                              send_drop)));
-
             return true;
         }
         return false;
@@ -581,31 +577,15 @@ public:
 class p2pstate_ex : public meshpp::p2pstate
 {
 public:
-    p2pstate_ex()
+    p2pstate_ex(meshpp::public_key const& pk)
         : fixed_local_port(0)
     {
-        CryptoPP::AutoSeededRandomPool prng;
-        CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PrivateKey privateKey;
-        CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA1>::PublicKey publicKey;
-
-        privateKey.Initialize( prng, CryptoPP::ASN1::secp256k1() );
-        if( ! privateKey.Validate( prng, 3 ) )
-            throw std::runtime_error("invalid private key");
-
-        privateKey.MakePublicKey( publicKey );
-        if( ! publicKey.Validate( prng, 3 ) )
-            throw std::runtime_error("invalid public key");
-
-        auto iNodeID = publicKey.GetPublicElement().x;
-
-        std::ostringstream os;
-        os << iNodeID;
-
-        Konnection self {os.str()};
-        SelfID = self.to_string();
+        SelfID = pk.to_string();
+        Konnection self {SelfID};
 
         if (SelfID.empty())
             throw std::runtime_error("something wrong with nodeid");
+
         kbucket = KBucket<Konnection>{self};
     }
 
@@ -852,8 +832,8 @@ private:
 
 namespace meshpp
 {
-p2pstate_ptr getp2pstate()
+p2pstate_ptr getp2pstate(meshpp::public_key const& pk)
 {
-    return beltpp::new_dc_unique_ptr<p2pstate, p2pstate_ex>();
+    return beltpp::new_dc_unique_ptr<p2pstate, p2pstate_ex>(pk);
 }
 }

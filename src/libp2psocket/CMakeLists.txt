@@ -23,6 +23,7 @@ target_link_libraries(p2psocket PUBLIC
     belt.pp
     packet
     PRIVATE
+    cryptoutility
     utility
     socket
     kbucket)

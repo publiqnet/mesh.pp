@@ -2,6 +2,8 @@
 
 #include "global.hpp"
 
+#include <libcryptoutility/cryptoutility.hpp>
+
 #include <belt.pp/socket.hpp>
 
 #include <vector>
@@ -74,5 +76,5 @@ public:
 };
 
 using p2pstate_ptr = beltpp::t_unique_ptr<p2pstate>;
-p2pstate_ptr getp2pstate();
+p2pstate_ptr getp2pstate(meshpp::public_key const& pk);
 }
