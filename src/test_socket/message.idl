@@ -11,4 +11,3 @@ module meshpp_message
         Float64 value
     }
 }
-////
