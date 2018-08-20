@@ -31,4 +31,5 @@ add_custom_target(kbucket.include SOURCES
     ${SRC_FILES}
     kbucket.hpp
     konnection.hpp
-    nodelookup.hpp)
+#    nodelookup.hpp
+    )

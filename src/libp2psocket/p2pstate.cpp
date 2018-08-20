@@ -3,10 +3,10 @@
 #include <kbucket/kbucket.hpp>
 #include <kbucket/nodelookup.hpp>
 
-#include <cryptopp/integer.h>
 #include <cryptopp/eccrypto.h>
-#include <cryptopp/osrng.h>
 #include <cryptopp/oids.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/rng.h>
 
 #include <boost/optional.hpp>
 #include <boost/functional/hash.hpp>
@@ -598,13 +598,14 @@ public:
 
         auto iNodeID = publicKey.GetPublicElement().x;
 
-        SelfID = Konnection::to_string(iNodeID);
+        std::ostringstream os;
+        os << iNodeID;
+
+        Konnection self {os.str()};
+        SelfID = self.to_string();
 
         if (SelfID.empty())
             throw std::runtime_error("something wrong with nodeid");
-
-
-        Konnection self {iNodeID};
         kbucket = KBucket<Konnection>{self};
     }
 
@@ -759,7 +760,7 @@ public:
         vector<string> result;
 
         for (Konnection const& konnection_item : konnections)
-            result.push_back(string(konnection_item));
+            result.push_back(konnection_item.to_string());
 
         return result;
     }
@@ -778,7 +779,7 @@ public:
                 continue;
             Konnection _konnection{nodeid};
             if (kbucket.end() == kbucket.find(_konnection))
-                result.push_back(static_cast<std::string>(_konnection));
+                result.push_back(_konnection.to_string());
 
             _konnections.push_back(_konnection);
         }
@@ -840,6 +841,7 @@ public:
         return ss.str();
     }
 
+private:
     unsigned short fixed_local_port;
     string SelfID;
     KBucket<Konnection> kbucket;

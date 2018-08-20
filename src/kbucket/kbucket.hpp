@@ -25,8 +25,8 @@ struct contact_actions
 
     static age_type not_accessible() { return age_type{}; }
     static distance_type zero() { return distance_type{}; }
-    static distance_type one() { return zero() + 1; }
-    static distance_type two() { return one() + one(); }
+    static distance_type one() { return ++zero(); }
+    static distance_type two() { return ++one(); }
 
 
     static distance_type distance(const Contact& a, const Contact& b) { return a.distance_from(b); }
