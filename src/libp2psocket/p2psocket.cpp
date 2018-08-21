@@ -4,11 +4,13 @@
 
 #include <belt.pp/packet.hpp>
 #include <belt.pp/utility.hpp>
+#include <belt.pp/scope_helper.hpp>
 
 #include <exception>
 #include <string>
 #include <memory>
 #include <chrono>
+#include <thread>
 
 using namespace P2PMessage;
 
@@ -156,12 +158,32 @@ void p2psocket::prepare_wait()
 
     auto to_connect = state.get_to_connect();
 
+    beltpp::on_failure guard;
+
     if (to_connect.empty() &&
         state.get_connected_peerids().empty())
     {
         for (auto const& item : m_pimpl->connect_to_addresses)
             state.add_passive(item);
         to_connect = state.get_to_connect();
+
+        //  this get_to_connect is not convenient to write
+        //  exception safe code, so the guard is being rude
+        //  looping over the whole to_connect array, in case of exception
+        //  but the logic allows doing this, for now it's ok
+        guard = beltpp::on_failure([&state, &to_connect]
+        {
+            for (auto const& item : to_connect)
+                state.remove_later(item, 0, false);
+            //  since exception will force repeated attempt
+            //  better sleep for one second
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        });
+        //
+        //  other than handling connect_to_addresses
+        //  we don't really care to handle properly other addresses
+        //  in case of exception, those will remain in passive state
+        //  preventing repeated attempt to connect
     }
 
     for (auto const& item : to_connect)
@@ -172,6 +194,8 @@ void p2psocket::prepare_wait()
         m_pimpl->writeln(item.to_string());
         sk.open(item, attempts);
     }   //  for to_connect
+
+    guard.dismiss();
 
     if (0 == m_pimpl->receive_attempt_count)
     {
