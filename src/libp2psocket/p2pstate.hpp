@@ -48,10 +48,10 @@ public:
 
     virtual size_t get_open_attempts(beltpp::ip_address const& addr) const = 0;
 
-    virtual void remove_later(beltpp::socket::peer_id const& p,
+    virtual bool remove_later(beltpp::socket::peer_id const& p,
                               size_t step,
                               bool send_drop) = 0;
-    virtual void remove_later(beltpp::ip_address const& addr,
+    virtual bool remove_later(beltpp::ip_address const& addr,
                               size_t step,
                               bool send_drop) = 0;
     virtual void undo_remove(beltpp::socket::peer_id const& peer_id) = 0;

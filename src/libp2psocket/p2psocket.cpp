@@ -207,6 +207,19 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
     else
         ++m_pimpl->receive_attempt_count;
 
+    auto remove_passive = [&state](beltpp::ip_address address)
+    {
+        bool removed = false;
+        address.local = beltpp::ip_destination();
+        address.ip_type = beltpp::ip_address::e_type::any;
+        removed |= state.remove_later(address, 0, false);
+        address.ip_type = beltpp::ip_address::e_type::ipv4;
+        removed |= state.remove_later(address, 0, false);
+        address.ip_type = beltpp::ip_address::e_type::ipv6;
+        removed |= state.remove_later(address, 0, false);
+        return removed;
+    };
+
     for (auto& received_packet : received_packets)
     {
         if (beltpp::isocket_drop::rtt != received_packet.type() &&
@@ -246,6 +259,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 current_connection.local.port = state.get_fixed_local_port();
                 state.add_passive(current_connection);
             }
+
+            remove_passive(current_connection);
+
             break;
         }
         case beltpp::isocket_protocol_error::rtt:
@@ -272,6 +288,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             received_packet.get(msg);
             peer = "p2p: " + current_peer;
             return_packets.emplace_back(msg);
+
+            remove_passive(msg.address);
+            state.remove_later(msg.address, 0, false);
             break;
         }
         case beltpp::isocket_open_error::rtt:
@@ -281,6 +300,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             received_packet.get(msg);
             peer = "p2p: " + current_peer;
             return_packets.emplace_back(msg);
+
+            remove_passive(msg.address);
+            state.remove_later(msg.address, 0, false);
             break;
         }
         case beltpp::isocket_drop::rtt:

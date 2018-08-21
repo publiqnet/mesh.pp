@@ -349,7 +349,7 @@ public:
         }
     }
 
-    void remove_later(ip_address const& addr, size_t step, bool send_drop)
+    bool remove_later(ip_address const& addr, size_t step, bool send_drop)
     {
         auto it_find_addr = map_by_address.find(addr);
         if (it_find_addr != map_by_address.end())
@@ -358,10 +358,13 @@ public:
                                std::make_pair(it_find_addr->second,
                                               std::make_pair(step,
                                                              send_drop)));
+
+            return true;
         }
+        return false;
     }
 
-    void remove_later(peer_id const& p, size_t step, bool send_drop)
+    bool remove_later(peer_id const& p, size_t step, bool send_drop)
     {
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
@@ -370,7 +373,9 @@ public:
                                std::make_pair(it_find_peer_id->second,
                                               std::make_pair(step,
                                                              send_drop)));
+            return true;
         }
+        return false;
     }
 
     void undo_remove(peer_id const& p)
@@ -464,11 +469,9 @@ public:
                 continue;
             }
 
-            ++it;
-            //it = set_to_listen.erase(it);
+            it = set_to_listen.erase(it);
             state_item const& item = peers[index];
             result.push_back(item.get_address());
-            remove_later(item.get_address(), 0, false);
         }
 
         return result;
@@ -490,11 +493,9 @@ public:
                 continue;
             }
 
-            ++it;
-            //it = set_to_connect.erase(it);
+            it = set_to_connect.erase(it);
             state_item const& item = peers[index];
             result.push_back(item.get_address());
-            remove_later(item.get_address(), 0, false);
         }
 
         return result;
@@ -607,10 +608,9 @@ public:
         kbucket = KBucket<Konnection>{self};
     }
 
-    virtual ~p2pstate_ex()
-    {
+    virtual ~p2pstate_ex() override
+    {}
 
-    }
     string name() const override
     {
         return SelfID;
@@ -728,13 +728,13 @@ public:
         return attempts;
     }
 
-    void remove_later(peer_id const& p, size_t step, bool send_drop) override
+    bool remove_later(peer_id const& p, size_t step, bool send_drop) override
     {
-        program_state.remove_later(p, step, send_drop);
+        return program_state.remove_later(p, step, send_drop);
     }
-    void remove_later(ip_address const& addr, size_t step, bool send_drop) override
+    bool remove_later(ip_address const& addr, size_t step, bool send_drop) override
     {
-        program_state.remove_later(addr, step, send_drop);
+        return program_state.remove_later(addr, step, send_drop);
     }
     void undo_remove(peer_id const& peerid) override
     {
