@@ -464,9 +464,11 @@ public:
                 continue;
             }
 
-            it = set_to_listen.erase(it);
+            ++it;
+            //it = set_to_listen.erase(it);
             state_item const& item = peers[index];
             result.push_back(item.get_address());
+            remove_later(item.get_address(), 0, false);
         }
 
         return result;
@@ -488,9 +490,11 @@ public:
                 continue;
             }
 
-            it = set_to_connect.erase(it);
+            ++it;
+            //it = set_to_connect.erase(it);
             state_item const& item = peers[index];
             result.push_back(item.get_address());
+            remove_later(item.get_address(), 0, false);
         }
 
         return result;

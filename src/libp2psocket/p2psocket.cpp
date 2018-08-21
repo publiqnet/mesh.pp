@@ -36,7 +36,7 @@ class p2psocket_internals
 public:
     p2psocket_internals(beltpp::event_handler& eh,
                         ip_address const& bind_to_address,
-                        std::vector<ip_address> const& connect_to_addresses,
+                        std::vector<ip_address> const& connect_to_addresses_,
                         beltpp::void_unique_ptr&& putl,
                         beltpp::ilog* _plogger)
         : m_ptr_socket(new beltpp::socket(
@@ -44,6 +44,7 @@ public:
                                           ))
         , m_ptr_state(getp2pstate())
         , plogger(_plogger)
+        , connect_to_addresses(connect_to_addresses_)
         , receive_attempt_count(0)
     {
         if (bind_to_address.local.empty() &&
@@ -58,17 +59,21 @@ public:
             ip_address address(bind_to_address.local, bind_to_address.ip_type);
             state.add_passive(address);
         }
-
         for (auto& item : connect_to_addresses)
         {
-            if (item.local.empty())
+            if (item.local.empty() && item.remote.empty())
                 throw std::runtime_error("incorrect connect configuration");
 
-            ip_address address;
-            address.remote = item.local;
-            address.ip_type = item.ip_type;
-            state.add_passive(address);
+            if (false == item.local.empty() &&
+                item.remote.empty())
+            {
+                item.remote = item.local;
+                item.local = beltpp::ip_destination();
+            }
         }
+
+        for (auto const& item : connect_to_addresses)
+            state.add_passive(item);
     }
 
     void write(string const& value)
@@ -87,6 +92,7 @@ public:
     meshpp::p2pstate_ptr m_ptr_state;
 
     beltpp::ilog* plogger;
+    std::vector<ip_address> connect_to_addresses;
     size_t receive_attempt_count;
 };
 }
@@ -105,16 +111,12 @@ p2psocket::p2psocket(beltpp::event_handler& eh,
                                               connect_to_addresses,
                                               std::move(putl),
                                               plogger))
-{
-
-}
+{}
 
 p2psocket::p2psocket(p2psocket&&) = default;
 
 p2psocket::~p2psocket()
-{
-
-}
+{}
 
 void p2psocket::prepare_wait()
 {
@@ -153,6 +155,15 @@ void p2psocket::prepare_wait()
     }   //  for to_listen
 
     auto to_connect = state.get_to_connect();
+
+    if (to_connect.empty() &&
+        state.get_connected_peerids().empty())
+    {
+        for (auto const& item : m_pimpl->connect_to_addresses)
+            state.add_passive(item);
+        to_connect = state.get_to_connect();
+    }
+
     for (auto const& item : to_connect)
     {
         size_t attempts = state.get_open_attempts(item);
