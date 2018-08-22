@@ -49,6 +49,7 @@ public:
         , plogger(_plogger)
         , connect_to_addresses(connect_to_addresses_)
         , receive_attempt_count(0)
+        , _secret_key(sk)
     {
         if (bind_to_address.local.empty() &&
             connect_to_addresses.empty())
@@ -97,6 +98,7 @@ public:
     beltpp::ilog* plogger;
     std::vector<ip_address> connect_to_addresses;
     size_t receive_attempt_count;
+    meshpp::private_key _secret_key;
 };
 }
 
@@ -273,6 +275,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Ping ping_msg;
                 ping_msg.nodeid = state.name();
+                auto const& _sign = m_pimpl->_secret_key.sign(ping_msg.nodeid);
+                ping_msg.signature = _sign.base58;
                 m_pimpl->writeln("sending ping");
                 sk.send(current_peer, ping_msg);
                 state.remove_later(current_peer, 10, true);
@@ -353,6 +357,12 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             Ping msg;
             received_packet.get(msg);
 
+            if(!verify_signature(msg.nodeid, msg.nodeid, msg.signature))
+            {
+                m_pimpl->writeln("ping signature verification failed");
+                break;
+            }
+
             p2pstate::contact_status status =
                 state.add_contact(current_peer, msg.nodeid);
 
@@ -362,6 +372,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Pong msg_pong;
                 msg_pong.nodeid = state.name();
+                auto const& _sign = m_pimpl->_secret_key.sign(msg_pong.nodeid);
+                msg_pong.signature = _sign.base58;
                 sk.send(current_peer, msg_pong);
 
                 state.undo_remove(current_peer);
@@ -385,6 +397,12 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             if (state.name() == msg.nodeid)
                 break;
+
+            if(!verify_signature(msg.nodeid, msg.nodeid, msg.signature))
+            {
+                m_pimpl->writeln("pong signature verification failed");
+                break;
+            }
 
             state.update(current_peer, msg.nodeid);
 
@@ -598,9 +616,11 @@ void p2psocket::timer_action()
     auto connected = state.get_connected_peerids();
     for (auto const& item : connected)
     {
-        Ping msg_ping;
-        msg_ping.nodeid = state.name();
-        sk.send(item, msg_ping);
+        Ping ping_msg;
+        ping_msg.nodeid = state.name();
+        auto const& _sign = m_pimpl->_secret_key.sign(ping_msg.nodeid);
+        ping_msg.signature = _sign.base58;
+        sk.send(item, ping_msg);
     }
 }
 

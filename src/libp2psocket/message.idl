@@ -16,11 +16,13 @@ module P2PMessage
     class Ping
     {
         String nodeid
+        String signature
     }
 
     class Pong
     {
         String nodeid
+        String signature
     }
 
     class FindNode
