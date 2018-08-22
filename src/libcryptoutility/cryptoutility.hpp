@@ -60,14 +60,14 @@ private:
 
 CRYPTOUTILITYSHARED_EXPORT bool verify_signature(public_key const& pb_key,
                                                  std::string const& message,
-                                                 std::string const& base58);
+                                                 std::string const& signature_b58);
 
 class CRYPTOUTILITYSHARED_EXPORT signature
 {
 public:
     signature(public_key const& pb_key,
               std::string const& message,
-              std::string const& base58_);
+              std::string const& signature_b58_);
 
     public_key pb_key;
     std::string message;

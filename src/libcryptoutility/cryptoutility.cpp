@@ -177,43 +177,47 @@ string public_key::get_base58() const
 
 bool verify_signature(public_key const& pb_key,
                       std::string const& message,
-                      std::string const& base58)
+                      std::string const& signature_b58)
 {
-    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+    try {
+        auto secp256k1 = CryptoPP::ASN1::secp256k1();
 
-    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PublicKey pub_key;
-    string pub_key_hex;
+        CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PublicKey pub_key;
+        string pub_key_hex;
 
-    // decode base58 signature
-    auto signature_der = detail::from_base58(base58);
+        // decode base58 signature
+        auto signature_der = detail::from_base58(signature_b58);
 
-    // verify message
-    detail::base58_to_pk_hex(pb_key.get_base58(), pub_key_hex);
+        // verify message
+        detail::base58_to_pk_hex(pb_key.get_base58(), pub_key_hex);
 
-    const CryptoPP::ECP::Point P = detail::zstr_to_ECPoint(secp256k1, pub_key_hex);
-    pub_key.Initialize(secp256k1, P);
+        const CryptoPP::ECP::Point P = detail::zstr_to_ECPoint(secp256k1, pub_key_hex);
+        pub_key.Initialize(secp256k1, P);
 
-    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Verifier verifier(pub_key);
+        CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Verifier verifier(pub_key);
 
-    string signature_raw(verifier.MaxSignatureLength(), '\x00');
-    CryptoPP::DSAConvertSignatureFormat(
-                (CryptoPP::byte*) signature_raw.data(), signature_raw.size(), CryptoPP::DSA_P1363,
-                (const CryptoPP::byte*)signature_der.data(), signature_der.size(), CryptoPP::DSA_DER
-                );
+        string signature_raw(verifier.MaxSignatureLength(), '\x00');
+        CryptoPP::DSAConvertSignatureFormat(
+                    (CryptoPP::byte*) signature_raw.data(), signature_raw.size(), CryptoPP::DSA_P1363,
+                    (const CryptoPP::byte*)signature_der.data(), signature_der.size(), CryptoPP::DSA_DER
+                    );
 
-    bool result = false;
-    result = verifier.VerifyMessage((CryptoPP::byte*) message.data(), message.size(),
-                                    (CryptoPP::byte*) signature_raw.data(), signature_raw.size());
+        bool result = false;
+        result = verifier.VerifyMessage((CryptoPP::byte*) message.data(), message.size(),
+                                        (CryptoPP::byte*) signature_raw.data(), signature_raw.size());
 
-    return result;
+        return result;
+    } catch (...) {
+        return false;
+    }
 }
 
 signature::signature(public_key const& pb_key_,
                      std::string const& message_,
-                     std::string const& base58_)
+                     std::string const& signature_b58_)
     : pb_key(pb_key_)
     , message(message_)
-    , base58(base58_)
+    , base58(signature_b58_)
 {
     if (false == verify_signature(pb_key, message, base58))
         throw exception_signature(*this);
