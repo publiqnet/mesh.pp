@@ -61,11 +61,10 @@ class KBucket
     struct by_index {};
     struct by_value {};
 
-    template <class _Contact = Contact>
     struct rel_distance
     {
-        rel_distance(_Contact const & origin): _origin{origin} {}
-        bool operator()(_Contact const & a, _Contact const &b) const
+        rel_distance(Contact const & origin): _origin{origin} {}
+        bool operator()(Contact const & a, Contact const &b) const
         {
         auto const & da = actions::distance(_origin, a);
         auto const & db = actions::distance(_origin, b);
@@ -76,15 +75,14 @@ class KBucket
         }
 
     private:
-        _Contact _origin;
+        Contact _origin;
     };
 
-    template <class _Contact = Contact>
     struct rel_index
     {
-        rel_index(_Contact const & origin): _origin{origin} {}
+        rel_index(Contact const & origin): _origin{origin} {}
 
-        bool operator ()(_Contact const & a, _Contact const &b) const
+        bool operator ()(Contact const & a, Contact const &b) const
         {
         auto const & ia = actions::index(_origin, a);
         auto const & ib = actions::index(_origin, b);
@@ -98,14 +96,13 @@ class KBucket
         }
 
         private:
-            _Contact _origin;
+            Contact _origin;
     };
 
 
     using ContactIndex = bmi::multi_index_container<Contact, bmi::indexed_by<
-        bmi::ordered_unique<bmi::tag<by_distance>, bmi::identity<Contact>, rel_distance<> >,
-        bmi::ordered_non_unique<bmi::tag<by_index>, bmi::identity<Contact>, rel_index<> >,
-        bmi::ordered_unique<bmi::tag<by_value>, bmi::identity<Contact> >
+        bmi::ordered_unique<bmi::tag<by_distance>, bmi::identity<Contact>, rel_distance >,
+        bmi::ordered_non_unique<bmi::tag<by_index>, bmi::identity<Contact>, rel_index >
     >>;
 
 public:
@@ -123,9 +120,8 @@ public:
     KBucket(const Contact &origin_ = {}) :
         origin{origin_},
         contacts{boost::make_tuple(
-                     boost::make_tuple(bmi::identity<Contact>{}, rel_distance<>{origin}),
-                     boost::make_tuple(bmi::identity<Contact>{}, rel_index<>{origin}),
-                     typename ContactIndex::template index<by_value>::type::ctor_args()
+                     boost::make_tuple(bmi::identity<Contact>{}, rel_distance{origin}),
+                     boost::make_tuple(bmi::identity<Contact>{}, rel_index{origin})
                                  )}
 
     {}
@@ -138,9 +134,8 @@ public:
     iterator erase(const Contact &contact);
 
     void clear() { ContactIndex{boost::make_tuple(
-                        boost::make_tuple(bmi::identity<Contact>{}, rel_distance<>{origin}),
-                        boost::make_tuple(bmi::identity<Contact>{}, rel_index<>{origin}),
-                        typename ContactIndex::template index<by_value>::type::ctor_args()
+                        boost::make_tuple(bmi::identity<Contact>{}, rel_distance{origin}),
+                        boost::make_tuple(bmi::identity<Contact>{}, rel_index{origin})
                         )}.swap(contacts); }
 
     bool replace(const iterator &it, const Contact& contact);
