@@ -352,7 +352,7 @@ uint64_t distance(string const& hash58_first, string const& hash58_second)
     for (uint32_t index = 0; index < 32; ++index)
     {
         unsigned char ch = vec_first[index] ^ vec_second[index];
-        uint32_t k = 7 - index / 8;
+        uint32_t k = 6 - index / 8;
         uint32_t temp = (k <= setbitcount(ch));
 
         compress_int *= 2;
