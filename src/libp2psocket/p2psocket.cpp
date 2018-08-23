@@ -128,6 +128,23 @@ p2psocket::p2psocket(p2psocket&&) = default;
 p2psocket::~p2psocket()
 {}
 
+static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_internals> const& pimpl,
+                                         beltpp::ip_address const& item)
+{
+    bool configured_address = false;
+    for (auto const& it : pimpl->connect_to_addresses)
+    {
+        if (it.remote == item.remote)
+        {
+            configured_address = true;
+            break;
+        }
+    }
+
+    if (configured_address)
+        pimpl->m_ptr_state->remove_later(item, 0, false);
+}
+
 void p2psocket::prepare_wait()
 {
     p2pstate& state = *m_pimpl->m_ptr_state.get();
@@ -166,44 +183,36 @@ void p2psocket::prepare_wait()
 
     auto to_connect = state.get_to_connect();
 
-    beltpp::on_failure guard;
-
     if (to_connect.empty() &&
-        state.get_connected_peerids().empty())
+        state.get_connected_peerids().empty() &&
+        false == m_pimpl->connect_to_addresses.empty())
     {
+        //  be lazy, sleep a little bit
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         for (auto const& item : m_pimpl->connect_to_addresses)
             state.add_passive(item);
         to_connect = state.get_to_connect();
-
-        //  this get_to_connect is not convenient to write
-        //  exception safe code, so the guard is being rude
-        //  looping over the whole to_connect array, in case of exception
-        //  but the logic allows doing this, for now it's ok
-        guard = beltpp::on_failure([&state, &to_connect]
-        {
-            for (auto const& item : to_connect)
-                state.remove_later(item, 0, false);
-            //  since exception will force repeated attempt
-            //  better sleep for one second
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        });
-        //
-        //  other than handling connect_to_addresses
-        //  we don't really care to handle properly other addresses
-        //  in case of exception, those will remain in passive state
-        //  preventing repeated attempt to connect
     }
 
     for (auto const& item : to_connect)
     {
+        beltpp::finally guard_finally([&state, &item]
+        {
+            state.remove_from_todo_list(item);
+        });
+        beltpp::on_failure guard_failure([this, &item]
+        {
+            remove_if_configured_address(m_pimpl, item);
+        });
+
         size_t attempts = state.get_open_attempts(item);
 
         m_pimpl->write("connect to");
         m_pimpl->writeln(item.to_string());
         sk.open(item, attempts);
-    }   //  for to_connect
 
-    guard.dismiss();
+        guard_failure.dismiss();
+    }   //  for to_connect
 
     if (0 == m_pimpl->receive_attempt_count)
     {
@@ -238,19 +247,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
     }
     else
         ++m_pimpl->receive_attempt_count;
-
-    auto remove_passive = [&state](beltpp::ip_address address)
-    {
-        bool removed = false;
-        address.local = beltpp::ip_destination();
-        address.ip_type = beltpp::ip_address::e_type::any;
-        removed |= state.remove_later(address, 0, false);
-        address.ip_type = beltpp::ip_address::e_type::ipv4;
-        removed |= state.remove_later(address, 0, false);
-        address.ip_type = beltpp::ip_address::e_type::ipv6;
-        removed |= state.remove_later(address, 0, false);
-        return removed;
-    };
 
     for (auto& received_packet : received_packets)
     {
@@ -291,10 +287,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             {
                 sk.send(current_peer, beltpp::isocket_drop());
                 current_connection.local.port = state.get_fixed_local_port();
+                state.remove_later(current_connection, 0, false);
                 state.add_passive(current_connection);
             }
-
-            remove_passive(current_connection);
 
             break;
         }
@@ -323,8 +318,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             peer = "p2p: " + current_peer;
             return_packets.emplace_back(msg);
 
-            remove_passive(msg.address);
-            state.remove_later(msg.address, 0, false);
+            remove_if_configured_address(m_pimpl, msg.address);
             break;
         }
         case beltpp::isocket_open_error::rtt:
@@ -335,8 +329,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             peer = "p2p: " + current_peer;
             return_packets.emplace_back(msg);
 
-            remove_passive(msg.address);
-            state.remove_later(msg.address, 0, false);
+            remove_if_configured_address(m_pimpl, msg.address);
             break;
         }
         case beltpp::isocket_drop::rtt:

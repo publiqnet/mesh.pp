@@ -15,6 +15,7 @@
 #include <sstream>
 
 using beltpp::ip_address;
+using beltpp::ip_destination;
 using peer_id = beltpp::socket::peer_id;
 
 using boost::optional;
@@ -32,16 +33,13 @@ using std::unique_ptr;
 namespace std
 {
 template <>
-struct hash<ip_address>
+struct hash<ip_destination>
 {
-    size_t operator()(ip_address const& value) const noexcept
+    size_t operator()(ip_destination const& value) const noexcept
     {
         size_t hash_value = 0xdeadbeef;
-        boost::hash_combine(hash_value, value.local.address);
-        boost::hash_combine(hash_value, value.local.port);
-        boost::hash_combine(hash_value, value.remote.address);
-        boost::hash_combine(hash_value, value.remote.port);
-        boost::hash_combine(hash_value, value.ip_type);
+        boost::hash_combine(hash_value, value.address);
+        boost::hash_combine(hash_value, value.port);
         return hash_value;
     }
 };
@@ -178,15 +176,48 @@ public:
     enum class insert_code {old, fresh};
     enum class update_code {updated, added};
 
+    static ip_destination address_key(ip_address const& addr)
+    {
+        if (false == addr.remote.empty())
+            return addr.remote;
+        else
+            return addr.local;
+    }
+
     insert_code add_passive(ip_address const& addr,
                             T_value const& value = T_value())
     {
-        //  assume that value does not have key here
-        auto it_find = map_by_address.find(addr);
-        if (it_find == map_by_address.end())
-        {
-            state_item item(addr);
+        insert_code result;
 
+        state_item item(addr);
+
+        size_t index = 0;
+        auto it_find = map_by_address.find(address_key(addr));
+        auto it_find_to_remove = map_to_remove.begin();
+
+        if (it_find != map_by_address.end())
+        {
+            index = it_find->second;
+            it_find_to_remove = map_to_remove.find(index);
+        }
+
+        if (it_find != map_by_address.end() &&
+            it_find_to_remove != map_to_remove.end())
+        {
+            map_to_remove.erase(it_find_to_remove);
+            result = insert_code::fresh;
+        }
+        else if (it_find == map_by_address.end())
+        {
+            peers.emplace_back(item);
+            index = peers.size() - 1;
+            result = insert_code::fresh;
+        }
+        else
+            result = insert_code::old;
+
+        if (result == insert_code::fresh)
+        {
             if (value.key() != item.value.key())
             {
                 auto it_find_key = map_by_key.find(item.value.key());
@@ -195,31 +226,18 @@ public:
             }
 
             item.value = value;
+            peers[index] = item;
 
-            peers.emplace_back(item);
-            size_t index = peers.size() - 1;
-            auto by_addr_res =
-                    map_by_address.insert(std::make_pair(addr, index));
+            map_by_address.insert(std::make_pair(address_key(addr), index));
             insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
-
-            assert(by_addr_res.second);
-            B_UNUSED(by_addr_res);
 
             if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
             else
                 set_to_listen.insert(index);
-
-            return insert_code::fresh;
-        }
-        else
-        {
-            auto iter_remove = map_to_remove.find(it_find->second);
-            if (iter_remove != map_to_remove.end())
-                map_to_remove.erase(iter_remove);
         }
 
-        return insert_code::old;
+        return result;
     }
 
     update_code add_active(ip_address const& addr,
@@ -228,7 +246,7 @@ public:
     {
         insert_code add_passive_code = add_passive(addr);
 
-        auto it_find_addr = map_by_address.find(addr);
+        auto it_find_addr = map_by_address.find(address_key(addr));
         assert(it_find_addr != map_by_address.end());
 
         size_t index = it_find_addr->second;
@@ -293,7 +311,7 @@ public:
 
     void set_value(ip_address const& addr, T_value const& value)
     {
-        auto it_find_addr = map_by_address.find(addr);
+        auto it_find_addr = map_by_address.find(address_key(addr));
         if (it_find_addr != map_by_address.end())
         {
             size_t index = it_find_addr->second;
@@ -322,7 +340,7 @@ public:
 
     bool get_value(ip_address const& addr, T_value& value) const
     {
-        auto it_find_addr = map_by_address.find(addr);
+        auto it_find_addr = map_by_address.find(address_key(addr));
         if (it_find_addr != map_by_address.end())
         {
             size_t index = it_find_addr->second;
@@ -347,7 +365,7 @@ public:
 
     bool remove_later(ip_address const& addr, size_t step, bool send_drop)
     {
-        auto it_find_addr = map_by_address.find(addr);
+        auto it_find_addr = map_by_address.find(address_key(addr));
         if (it_find_addr != map_by_address.end())
         {
             insert_and_replace(map_to_remove,
@@ -464,7 +482,7 @@ public:
                 continue;
             }
 
-            it = set_to_listen.erase(it);
+            ++it;
             state_item const& item = peers[index];
             result.push_back(item.get_address());
         }
@@ -488,12 +506,28 @@ public:
                 continue;
             }
 
-            it = set_to_connect.erase(it);
+            ++it;
             state_item const& item = peers[index];
             result.push_back(item.get_address());
         }
 
         return result;
+    }
+
+    bool remove_from_todo_list(ip_address const& addr)
+    {
+        auto it_find_addr = map_by_address.find(address_key(addr));
+        if (it_find_addr != map_by_address.end())
+        {
+            size_t index = it_find_addr->second;
+
+            size_t erased_connect = set_to_connect.erase(index);
+            size_t erased_listen = set_to_listen.erase(index);
+
+            return (erased_connect || erased_listen);
+        }
+
+        return false;
     }
 
     vector<state_item> get_connected() const
@@ -540,7 +574,7 @@ public:
 
     bool get_peer_id(ip_address const& addr, peer_id& p)
     {
-        auto it_find_addr = map_by_address.find(addr);
+        auto it_find_addr = map_by_address.find(address_key(addr));
         if (it_find_addr != map_by_address.end())
         {
             size_t index = it_find_addr->second;
@@ -565,7 +599,7 @@ public:
     }
 
     vector<state_item> peers;
-    unordered_map<ip_address, size_t> map_by_address;
+    unordered_map<ip_destination, size_t> map_by_address;
     unordered_map<peer_id, size_t> map_by_peer_id;
     unordered_map<typename T_value::key_type, size_t> map_by_key;
     unordered_set<size_t> set_to_listen;
@@ -597,7 +631,7 @@ public:
     }
     string short_name() const override
     {
-        return SelfID.substr(0, 5) + "...";
+        return SelfID.substr(0, 8) + "...";
     }
 
     void set_fixed_local_port(unsigned short _fixed_local_port) override
@@ -620,10 +654,14 @@ public:
         Konnection k{nodeid, {}, peerid, {}};
         if (kbucket.find(k) != kbucket.end())
             return contact_status::existing_contact;
-        else if (kbucket.insert(k).second)
-            return contact_status::new_contact;
         else
-            return contact_status::no_contact;
+        {
+            auto res_pair = kbucket.insert(k);
+            if (res_pair.second)
+                return contact_status::new_contact;
+            else
+                return contact_status::no_contact;
+        }
     }
 
     void set_active_nodeid(peer_id const& peerid, string const& nodeid) override
@@ -695,6 +733,11 @@ public:
     vector<ip_address> get_to_connect() override
     {
         return program_state.get_to_connect();
+    }
+
+    bool remove_from_todo_list(ip_address const& addr) override
+    {
+        return program_state.remove_from_todo_list(addr);
     }
 
     size_t get_open_attempts(beltpp::ip_address const& addr) const override

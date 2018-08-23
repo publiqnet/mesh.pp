@@ -47,6 +47,7 @@ public:
                                    beltpp::socket::peer_id const& p) = 0;
     virtual std::vector<beltpp::ip_address> get_to_listen() = 0;
     virtual std::vector<beltpp::ip_address> get_to_connect() = 0;
+    virtual bool remove_from_todo_list(beltpp::ip_address const& addr) = 0;
 
     virtual size_t get_open_attempts(beltpp::ip_address const& addr) const = 0;
 
