@@ -1,7 +1,6 @@
 #include "p2pstate.hpp"
 #include <kbucket/konnection.hpp>
 #include <kbucket/kbucket.hpp>
-#include <kbucket/nodelookup.hpp>
 
 #include <libcryptoutility/cryptoutility.hpp>
 

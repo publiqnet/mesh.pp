@@ -1,16 +1,9 @@
 #pragma once
 
 #include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index_container.hpp>
 
-#include <array>
-#include <functional>
 #include <iostream>
-#include <set>
-#include <utility>
 #include <vector>
 
 namespace bmi = boost::multi_index;
@@ -30,6 +23,7 @@ struct contact_actions
 
 
     static distance_type distance(const Contact& a, const Contact& b) { return a.distance_from(b); }
+    static bool is_same(const Contact& a, const Contact& b) { return distance(a, b) == zero(); }
     static index_type index_from_distance(distance_type distance)
     {
         index_type cnt{};
@@ -157,17 +151,17 @@ private:
 template <class Contact, int K>
 KBucket<Contact, K> KBucket<Contact, K>::rebase(const Contact &new_origin, bool include_origin) const
 {
-    KBucket<Contact, K> result(new_origin);
-
-    if (new_origin == this->origin)
+    if (actions::is_same(new_origin, this->origin))
         return *this;
+
+    KBucket<Contact, K> result(new_origin);
 
     if(include_origin)
         result.insert(this->origin);
 
     for(auto const & it : contacts)
     {
-        if (it != new_origin)
+        if (!actions::is_same(it, new_origin))
             result.insert(it);
     }
 

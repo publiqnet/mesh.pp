@@ -26,7 +26,6 @@ struct Kontakt
     using age_type = T_age_type;
 
     distance_type distance_from (const Kontakt &r) const { return distance_type(_node_id) - distance_type(r._node_id); }
-    bool is_same(const Kontakt &r) const { return distance_from(r) == distance_type(); }
 
 public:
     //GET
@@ -35,8 +34,6 @@ public:
     //SET
     void set_access_time(age_type const & age) { _age = age; }
     void set_id(const node_id_type& nd_id) { _node_id = nd_id; }
-    //CONV
-    operator bool() const { return !(get_id() == node_id_type{}); }
 
 protected:
     Kontakt(node_id_type const& node_id = {}, age_type age = {}) :
@@ -67,6 +64,7 @@ struct string_distance
     bool operator<(string_distance const& r) const { return _val < r._val; }
     bool operator>(string_distance const& r) const { return _val > r._val; }
     bool operator==(string_distance const& r) const { return _val == r._val; }
+    bool operator!=(string_distance const& r) const { return _val != r._val; }
     void operator/=(string_distance const& r) { _val /= r._val; }
     string_distance& operator++() { ++_val; return *this; }
     string_distance operator-(string_distance const &r) const
