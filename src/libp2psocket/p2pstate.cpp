@@ -654,14 +654,10 @@ public:
         Konnection k{nodeid, {}, peerid, {}};
         if (kbucket.find(k) != kbucket.end())
             return contact_status::existing_contact;
+        else if (kbucket.insert(k).second)
+            return contact_status::new_contact;
         else
-        {
-            auto res_pair = kbucket.insert(k);
-            if (res_pair.second)
-                return contact_status::new_contact;
-            else
-                return contact_status::no_contact;
-        }
+            return contact_status::no_contact;
     }
 
     void set_active_nodeid(peer_id const& peerid, string const& nodeid) override

@@ -184,14 +184,17 @@ void p2psocket::prepare_wait()
     auto to_connect = state.get_to_connect();
 
     if (to_connect.empty() &&
-        state.get_connected_peerids().empty() &&
-        false == m_pimpl->connect_to_addresses.empty())
+        state.get_connected_peerids().empty())
     {
-        //  be lazy, sleep a little bit
-        std::this_thread::sleep_for(std::chrono::seconds(1));
         for (auto const& item : m_pimpl->connect_to_addresses)
             state.add_passive(item);
         to_connect = state.get_to_connect();
+        if (false == to_connect.empty())
+        {
+            //  be lazy, sleep a little bit - in case there was nothing to do
+            //  but only to reconnect
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
     }
 
     for (auto const& item : to_connect)
