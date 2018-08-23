@@ -322,7 +322,6 @@ string from_base58(string const& data)
 uint64_t distance(string const& hash58_first, string const& hash58_second)
 {
     vector<unsigned char> vec_first, vec_second;
-    string hash_hex_first, hash_hex_second;
     vec_first = detail::from_base58(hash58_first.c_str());
     vec_second = detail::from_base58(hash58_second.c_str());
     if (vec_first.empty())
@@ -349,25 +348,22 @@ uint64_t distance(string const& hash58_first, string const& hash58_second)
         return res;
     };
 
-    uint32_t compress_first = 0, compress_second = 0;
-    for (size_t index = 0; index < 32; ++index)
+    uint32_t compress_int = 0;
+    for (uint32_t index = 0; index < 32; ++index)
     {
-        if (0 < index)
-        {
-            compress_first *= 2;
-            compress_second *= 2;
-        }
+        unsigned char ch = vec_first[index] ^ vec_second[index];
+
+        if (index > 0)
+            compress_int *= 2;
 
         uint32_t temp = 0;
+        uint32_t k = 7 - index / 8;
 
-        temp = (4 < setbitcount(vec_first[index]));
-        compress_first |= temp;
-
-        temp = (4 < setbitcount(vec_second[index]));
-        compress_second |= temp;
+        temp = (k <= setbitcount(ch));
+        compress_int |= temp;
     }
 
-    return uint64_t(compress_first ^ compress_second);
+    return compress_int;
 }
 
 
