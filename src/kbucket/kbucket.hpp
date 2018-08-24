@@ -254,7 +254,7 @@ void KBucket<Contact, K>::print_list(std::ostream &os)
     {
         auto const & distance = actions::distance(origin, it);
         auto const & index = actions::index_from_distance(distance);
-        os<<"index: "<<index<<", id: "<<static_cast<std::string>(it).substr(0, 5) << std::endl;
+        os<<"index: "<<index<<", id: "<<static_cast<std::string>(it).substr(0, 8) << std::endl;
     };
 }
 

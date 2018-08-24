@@ -142,7 +142,10 @@ static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_inter
     }
 
     if (configured_address)
+    {
+        pimpl->writeln("remove_later item, 0, false: " + item.to_string());
         pimpl->m_ptr_state->remove_later(item, 0, false);
+    }
 }
 
 void p2psocket::prepare_wait()
@@ -187,7 +190,10 @@ void p2psocket::prepare_wait()
         state.get_connected_peerids().empty())
     {
         for (auto const& item : m_pimpl->connect_to_addresses)
+        {
+            m_pimpl->writeln("add_passove item: " + item.to_string());
             state.add_passive(item);
+        }
         to_connect = state.get_to_connect();
         if (false == to_connect.empty())
         {
@@ -270,6 +276,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             if (0 == state.get_fixed_local_port() ||
                 current_connection.local.port == state.get_fixed_local_port())
             {
+                m_pimpl->writeln("add_active current_connection, current_peer: " + current_connection.to_string() + ", " + current_peer);
                 state.add_active(current_connection, current_peer);
 
                 Ping ping_msg;
@@ -278,19 +285,23 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 ping_msg.signature = _sign.base58;
                 m_pimpl->writeln("sending ping");
                 sk.send(current_peer, ping_msg);
+                m_pimpl->writeln("remove_later current_peer, 10, true: " + current_peer + ", " + current_connection.to_string());
                 state.remove_later(current_peer, 10, true);
 
                 state.set_fixed_local_port(current_connection.local.port);
 
                 ip_address to_listen(current_connection.local,
                                      current_connection.ip_type);
+                m_pimpl->writeln("add_passove to_listen: " + to_listen.to_string());
                 state.add_passive(to_listen);
             }
             else
             {
                 sk.send(current_peer, beltpp::isocket_drop());
                 current_connection.local.port = state.get_fixed_local_port();
+                m_pimpl->writeln("remove_later current_connection, 0, false: " + current_connection.to_string() + ", " + current_peer);
                 state.remove_later(current_connection, 0, false);
+                m_pimpl->writeln("add_passove current_connection: " + current_connection.to_string());
                 state.add_passive(current_connection);
             }
 
@@ -306,6 +317,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln(msg.buffer);
             m_pimpl->write("dropping");
             m_pimpl->writeln(current_peer);
+            m_pimpl->writeln("remove_later current_peer, 0, true: " + current_peer + ", " + current_connection.to_string());
             state.remove_later(current_peer, 0, true);
 
             peer = state.get_nodeid(current_peer);
@@ -339,6 +351,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         {
             m_pimpl->write("dropped");
             m_pimpl->writeln(current_peer);
+            m_pimpl->writeln("remove_later current_peer, 0, true: " + current_peer + ", " + current_connection.to_string());
             state.remove_later(current_peer, 0, false);
 
             peer = state.get_nodeid(current_peer);
@@ -478,6 +491,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             assign(connect_to, msg.addr);
             connect_to.local = current_connection.local;
 
+            m_pimpl->writeln("add_passove connect_to, 100: " + connect_to.to_string());
             state.add_passive(connect_to, 100);
             break;
         }
@@ -588,7 +602,10 @@ void p2psocket::send(peer_id const& peer,
     if (state.get_peer_id(peer, p2p_peerid))
     {
         if (pack.type() == beltpp::isocket_drop::rtt)
+        {
+            m_pimpl->writeln("remove_later p2p_peerid, 0, true: " + p2p_peerid);
             state.remove_later(p2p_peerid, 0, true);
+        }
         else
         {
             Other wrapper;

@@ -193,12 +193,12 @@ public:
         }
 
         if (it_find != map_by_address.end() &&
-            it_find_to_remove != map_to_remove.end())
+            it_find_to_remove != map_to_remove.end() &&
+            it_find_to_remove->second.first == 0 &&
+            peers[index].state() != state_item::e_state::active)
         {
             map_to_remove.erase(it_find_to_remove);
             result = insert_code::fresh;
-
-            assert(peers[index].state() != state_item::e_state::active);
         }
         else if (it_find == map_by_address.end())
         {
