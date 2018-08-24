@@ -163,15 +163,6 @@ private:
         }
     }
 
-    template <typename T_map>
-    static void insert_and_replace(T_map& map, typename T_map::const_reference value)
-    {
-        auto res = map.insert(value);
-        if (res.second == false)
-        {
-            res.first->second = value.second;
-        }
-    }
 public:
     enum class insert_code {old, fresh};
     enum class update_code {updated, added};
@@ -206,6 +197,8 @@ public:
         {
             map_to_remove.erase(it_find_to_remove);
             result = insert_code::fresh;
+
+            assert(peers[index].state() != state_item::e_state::active);
         }
         else if (it_find == map_by_address.end())
         {
@@ -226,10 +219,16 @@ public:
             }
 
             item.value = value;
-            peers[index] = item;
 
-            map_by_address.insert(std::make_pair(address_key(addr), index));
-            insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
+            auto& stored_item = peers[index];
+
+            map_by_address.erase(address_key(stored_item.get_address()));
+            map_by_key.erase(stored_item.value.key());
+
+            stored_item = item;
+
+            map_by_address[address_key(addr)] = index;
+            map_by_key[item.value.key()] = index;
 
             if (item.type() == state_item::e_type::connect)
                 set_to_connect.insert(index);
@@ -250,27 +249,27 @@ public:
         assert(it_find_addr != map_by_address.end());
 
         size_t index = it_find_addr->second;
-        auto& item = peers[index];
+        auto& stored_item = peers[index];
 
-        if (item.state() == state_item::e_state::active &&
-            p != item.get_peer())
+        if (stored_item.state() == state_item::e_state::active &&
+            p != stored_item.get_peer())
         {
-            auto it_find_peer = map_by_peer_id.find(item.get_peer());
+            auto it_find_peer = map_by_peer_id.find(stored_item.get_peer());
             assert(it_find_peer != map_by_peer_id.end());
 
             map_by_peer_id.erase(it_find_peer);
         }
 
-        if (value.key() != item.value.key())
+        if (value.key() != stored_item.value.key())
         {
-            auto it_find_key = map_by_key.find(item.value.key());
+            auto it_find_key = map_by_key.find(stored_item.value.key());
             if (it_find_key != map_by_key.end())
                 map_by_key.erase(it_find_key);
         }
 
-        item.set_peer_id(addr, p);
-        item.value = value;
-        item.value.update();
+        stored_item.set_peer_id(addr, p);
+        stored_item.value = value;
+        stored_item.value.update();
 
         auto it_find_connect = set_to_connect.find(index);
         if (it_find_connect != set_to_connect.end())
@@ -279,8 +278,8 @@ public:
         if (it_find_listen != set_to_listen.end())
             set_to_listen.erase(it_find_listen);
 
-        insert_and_replace(map_by_peer_id, std::make_pair(p, index));
-        insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
+        map_by_peer_id[p] = index;
+        map_by_key[stored_item.value.key()] = index;
 
         if (add_passive_code == insert_code::old)
             return update_code::updated;
@@ -293,19 +292,19 @@ public:
         if (it_find_peer_id != map_by_peer_id.end())
         {
             size_t index = it_find_peer_id->second;
-            auto& item = peers[index];
+            auto& stored_item = peers[index];
 
-            if (value.key() != item.value.key())
+            if (value.key() != stored_item.value.key())
             {
-                auto it_find_key = map_by_key.find(item.value.key());
+                auto it_find_key = map_by_key.find(stored_item.value.key());
                 if (it_find_key != map_by_key.end())
                     map_by_key.erase(it_find_key);
             }
 
-            item.value = value;
-            item.value.update();
+            stored_item.value = value;
+            stored_item.value.update();
 
-            insert_and_replace(map_by_key, std::make_pair(item.value.key(), index));
+            map_by_key[stored_item.value.key()] = index;
         }
     }
 
@@ -315,10 +314,19 @@ public:
         if (it_find_addr != map_by_address.end())
         {
             size_t index = it_find_addr->second;
-            auto& item = peers[index];
+            auto& stored_item = peers[index];
 
-            item.value = value;
-            item.value.update();
+            if (value.key() != stored_item.value.key())
+            {
+                auto it_find_key = map_by_key.find(stored_item.value.key());
+                if (it_find_key != map_by_key.end())
+                    map_by_key.erase(it_find_key);
+            }
+
+            stored_item.value = value;
+            stored_item.value.update();
+
+            map_by_key[stored_item.value.key()] = index;
         }
     }
 
@@ -328,9 +336,9 @@ public:
         if (it_find_peer_id != map_by_peer_id.end())
         {
             size_t index = it_find_peer_id->second;
-            auto& item = peers[index];
+            auto const& stored_item = peers[index];
 
-            value = item.value;
+            value = stored_item.value;
 
             return true;
         }
@@ -344,9 +352,9 @@ public:
         if (it_find_addr != map_by_address.end())
         {
             size_t index = it_find_addr->second;
-            auto& item = peers[index];
+            auto const& stored_item = peers[index];
 
-            value = item.value;
+            value = stored_item.value;
 
             return true;
         }
@@ -368,10 +376,7 @@ public:
         auto it_find_addr = map_by_address.find(address_key(addr));
         if (it_find_addr != map_by_address.end())
         {
-            insert_and_replace(map_to_remove,
-                               std::make_pair(it_find_addr->second,
-                                              std::make_pair(step,
-                                                             send_drop)));
+            map_to_remove[it_find_addr->second] = std::make_pair(step, send_drop);
             return true;
         }
         return false;
@@ -382,10 +387,7 @@ public:
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
         {
-            insert_and_replace(map_to_remove,
-                               std::make_pair(it_find_peer_id->second,
-                                              std::make_pair(step,
-                                                             send_drop)));
+            map_to_remove[it_find_peer_id->second] = std::make_pair(step, send_drop);
             return true;
         }
         return false;
@@ -421,12 +423,12 @@ public:
 
             size_t index = pair_item.first;
             assert(peers.size() > index);
-            auto const& item = peers[index];
+            auto const& stored_item = peers[index];
 
-            if (item.value.key() != typename T_value::key_type())
-                result.first.push_back(item.value.key());
+            if (stored_item.value.key() != typename T_value::key_type())
+                result.first.push_back(stored_item.value.key());
             if (iter_remove->second.second)
-                result.second.push_back(item.get_peer());
+                result.second.push_back(stored_item.get_peer());
 
             indices.push_back(index);
             iter_remove = map_to_remove.erase(iter_remove);
@@ -483,8 +485,8 @@ public:
             }
 
             ++it;
-            state_item const& item = peers[index];
-            result.push_back(item.get_address());
+            state_item const& stored_item = peers[index];
+            result.push_back(stored_item.get_address());
         }
 
         return result;
@@ -507,8 +509,8 @@ public:
             }
 
             ++it;
-            state_item const& item = peers[index];
-            result.push_back(item.get_address());
+            state_item const& stored_item = peers[index];
+            result.push_back(stored_item.get_address());
         }
 
         return result;
@@ -536,16 +538,16 @@ public:
 
         for (size_t index = 0; index < peers.size(); ++index)
         {
-            auto const& item = peers[index];
+            auto const& stored_item = peers[index];
 
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
                 iter_remove->second.first == 0)
                 continue;
 
-            if (item.state() == state_item::e_state::active &&
-                item.type() == state_item::e_type::connect)
-                result.push_back(item);
+            if (stored_item.state() == state_item::e_state::active &&
+                stored_item.type() == state_item::e_type::connect)
+                result.push_back(stored_item);
         }
 
         return result;
@@ -557,16 +559,16 @@ public:
 
         for (size_t index = 0; index < peers.size(); ++index)
         {
-            auto const& item = peers[index];
+            auto const& stored_item = peers[index];
 
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
                 iter_remove->second.first == 0)
                 continue;
 
-            if (item.state() == state_item::e_state::active &&
-                item.type() == state_item::e_type::listen)
-                result.push_back(item);
+            if (stored_item.state() == state_item::e_state::active &&
+                stored_item.type() == state_item::e_type::listen)
+                result.push_back(stored_item);
         }
 
         return result;
