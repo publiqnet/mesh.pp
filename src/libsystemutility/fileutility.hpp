@@ -524,6 +524,7 @@ public:
             {
                 size_t count = all_keys.erase(item.first);
                 assert(1 == count);
+                B_UNUSED(count);
             }
             else
                 all_keys.insert(item.first);
