@@ -515,6 +515,7 @@ public:
         {
             auto insert_res = all_keys.insert(item.first);
             assert(insert_res.second);
+            B_UNUSED(insert_res);
         }
 
         for (auto const& item : data.overlay)
