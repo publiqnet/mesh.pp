@@ -191,7 +191,7 @@ void p2psocket::prepare_wait()
     {
         for (auto const& item : m_pimpl->connect_to_addresses)
         {
-            m_pimpl->writeln("add_passove item: " + item.to_string());
+            m_pimpl->writeln("add_passive item: " + item.to_string());
             state.add_passive(item);
         }
         to_connect = state.get_to_connect();
@@ -292,7 +292,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 ip_address to_listen(current_connection.local,
                                      current_connection.ip_type);
-                m_pimpl->writeln("add_passove to_listen: " + to_listen.to_string());
+                m_pimpl->writeln("add_passive to_listen: " + to_listen.to_string());
                 state.add_passive(to_listen);
             }
             else
@@ -301,7 +301,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 current_connection.local.port = state.get_fixed_local_port();
                 m_pimpl->writeln("remove_later current_connection, 0, false: " + current_connection.to_string() + ", " + current_peer);
                 state.remove_later(current_connection, 0, false);
-                m_pimpl->writeln("add_passove current_connection: " + current_connection.to_string());
+                m_pimpl->writeln("add_passive current_connection: " + current_connection.to_string());
                 state.add_passive(current_connection);
             }
 
@@ -491,7 +491,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             assign(connect_to, msg.addr);
             connect_to.local = current_connection.local;
 
-            m_pimpl->writeln("add_passove connect_to, 100: " + connect_to.to_string());
+            m_pimpl->writeln("add_passive connect_to, 100: " + connect_to.to_string());
             state.add_passive(connect_to, 100);
             break;
         }
