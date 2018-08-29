@@ -19,5 +19,17 @@ module Data2
     {
         Hash UInt64 Extension block
     }
+
+    class BlockRow
+    {
+        String key
+        Extension item
+    }
+
+    class BlockRow2
+    {
+        UInt64 index
+        Extension item
+    }
 }
 ////

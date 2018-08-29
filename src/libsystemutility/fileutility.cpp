@@ -101,6 +101,49 @@ void small_random_sleep()
     std::this_thread::sleep_for(std::chrono::milliseconds(random_sleep));
 }
 
+uint64_t key_to_uint64_t(uint64_t key)
+{
+    return key;
+}
+
+uint64_t key_to_uint64_t(std::string const& key)
+{
+    std::hash<std::string> hasher;
+
+    if (key.empty())
+        return hasher(key);
+
+    std::string key_temp(key);
+    ++key_temp.at(0);
+    return hasher(key_temp);
+}
+
+bool from_block_string(beltpp::packet& package, std::string const& buffer, std::string const& key, void* putl)
+{
+    Data2::BlockRow ob;
+    ob.from_string(buffer, putl);
+    if (ob.key == key)
+    {
+        package = std::move(ob.item);
+        return true;
+    }
+
+    return false;
+}
+
+bool from_block_string(beltpp::packet& package, std::string const& buffer, uint64_t index, void* putl)
+{
+    Data2::BlockRow2 ob;
+    ob.from_string(buffer, putl);
+    if (ob.index == index)
+    {
+        package = std::move(ob.item);
+        return true;
+    }
+
+    return false;
+}
+
 void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
 {
     FileAttributes::LockedByPID attr_lock;
@@ -141,14 +184,20 @@ void map_loader_internals::load(std::string const& key) const
 
     beltpp::finally guard1;
 
+    //  ptransaction is a complex transaction consisting of
+    //  smaller transactions of single file blocks
     if (ptransaction)
     {
         class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
 
         auto pair_res = ref_class_transaction.overlay.insert(
                     std::make_pair(filename(key, name),
-                                detail::null_ptr_transaction()));
+                                   detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
+        //
+        //  different keys having same filename will reuse same file block transaction
+        //  temporarily take that transaction out, make sure that guard1 eventually will
+        //  put it back
         item_ptransaction = std::move(ref_ptransaction);
         guard1 = beltpp::finally([&ref_ptransaction, &item_ptransaction]
         {
@@ -156,6 +205,8 @@ void map_loader_internals::load(std::string const& key) const
         });
     }
 
+    //  let file block owner maintain the transaction
+    //  that belongs to it
     file_loader<Data2::FileData,
                 &Data2::FileData::from_string,
                 &Data2::FileData::to_string>
@@ -163,6 +214,9 @@ void map_loader_internals::load(std::string const& key) const
                  ptr_utl.get(),
                  std::move(item_ptransaction));
 
+    //  make sure guard2 will take the transaction back eventually
+    //  for guard1 to be able to do it's job
+    //  thus "temp" will be destructed without owning a transaction
     beltpp::finally guard2([&item_ptransaction, &temp]
     {
         item_ptransaction = std::move(temp.transaction());
@@ -170,6 +224,7 @@ void map_loader_internals::load(std::string const& key) const
 
     std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
 
+    //  load item corresponding to key to overlay
     auto it_block = block.find(key);
     if (it_block != block.end())
         overlay.insert(std::make_pair(key,
@@ -199,6 +254,8 @@ void map_loader_internals::save()
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
 
+        //  let file block owner maintain the transaction
+        //  that belongs to it
         file_loader<Data2::FileData,
                     &Data2::FileData::from_string,
                     &Data2::FileData::to_string>
@@ -206,11 +263,15 @@ void map_loader_internals::save()
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
 
+        //  make sure guard_item will take the transaction back eventually
+        //  in the end of this for step
+        //  thus "temp" will be destructed without owning a transaction
         beltpp::finally guard_item([&ref_ptransaction, &temp]
         {
             ref_ptransaction = std::move(temp.transaction());
         });
 
+        //  update the block
         std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
 
         if (item.second.second == map_loader_internals::deleted)

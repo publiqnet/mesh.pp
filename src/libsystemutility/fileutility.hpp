@@ -31,6 +31,12 @@ SYSTEMUTILITYSHARED_EXPORT void delete_lock_file(intptr_t native_handle, boost::
 SYSTEMUTILITYSHARED_EXPORT void dostuff(intptr_t native_handle, boost::filesystem::path const& path);
 SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
 
+SYSTEMUTILITYSHARED_EXPORT uint64_t key_to_uint64_t(uint64_t key);
+SYSTEMUTILITYSHARED_EXPORT uint64_t key_to_uint64_t(std::string const& key);
+
+SYSTEMUTILITYSHARED_EXPORT bool from_block_string(beltpp::packet& package, std::string const& buffer, std::string const& key, void* putl);
+SYSTEMUTILITYSHARED_EXPORT bool from_block_string(beltpp::packet& package, std::string const& buffer, uint64_t index, void* putl);
+
 using ptr_transaction = beltpp::t_unique_ptr<beltpp::itransaction>;
 inline ptr_transaction null_ptr_transaction()
 {
@@ -177,7 +183,7 @@ public:
                 std::ios_base::trunc);
         if (!fl)
             throw std::runtime_error("file_loader::save(): unable to write to the file: "
-                                     + file_path.string());
+                                     + file_path_tr().string());
 
         fl << ptr->to_string();
 
@@ -286,6 +292,270 @@ private:
     intptr_t native_handle;
     boost::filesystem::path lock_path;
     std::unique_ptr<T> ptr;
+};
+
+template <typename T,
+          void(T::*from_string)(std::string const&, void*),
+          std::string(T::*to_string)()const
+          >
+class block_file_loader
+{
+    class marker
+    {
+    public:
+        uint64_t start;
+        uint64_t end;
+        uint64_t key;
+    };
+
+    class class_transaction : public beltpp::itransaction
+    {
+    public:
+        class_transaction(boost::filesystem::path const& path,
+                          boost::filesystem::path const& path_tr)
+            : commited(false)
+            , file_path(path)
+            , file_path_tr(path_tr) {}
+        ~class_transaction() override
+        {
+            commit();
+        }
+
+        void commit() noexcept override
+        {
+            if (false == commited)
+            {
+                commited = true;
+                bool res = true;
+                boost::system::error_code ec;
+                res = boost::filesystem::remove(file_path, ec);
+                assert(res);
+                if (res)
+                    boost::filesystem::rename(file_path_tr, file_path, ec);
+            }
+        }
+
+        void rollback() noexcept override
+        {
+            if (false == commited)
+            {
+                commited = true;
+                boost::system::error_code ec;
+                bool res = boost::filesystem::remove(file_path_tr, ec);
+                assert(res);
+                B_UNUSED(res);
+            }
+        }
+    private:
+        bool commited;
+        boost::filesystem::path file_path;
+        boost::filesystem::path file_path_tr;
+    };
+public:
+    using value_type = T;
+
+    template <typename T_key>
+    block_file_loader(boost::filesystem::path const& path,
+                      T_key key,
+                      void* putl = nullptr,
+                      detail::ptr_transaction&& ptransaction_
+                      = detail::null_ptr_transaction())
+        : modified(false)
+        , loaded_marker_index(size_t(-1))
+        , ptransaction(std::move(ptransaction_))
+        , main_path(path)
+        , ptr(new T)
+        , putl(putl)
+    {
+        beltpp::on_failure guard([this, &ptransaction_]()
+        {
+            ptransaction_ = std::move(ptransaction);
+        });
+
+        if (nullptr != ptransaction &&
+            nullptr == dynamic_cast<class_transaction*>(ptransaction.get()))
+            throw std::runtime_error("not a file_loader::class_transaction");
+
+        std::istreambuf_iterator<char> end, begin;
+        boost::filesystem::ifstream fl;
+        boost::filesystem::path marker_path, contents_path;
+        if (nullptr == ptransaction)
+        {
+            marker_path = file_path_marker();
+            contents_path = file_path();
+        }
+        else
+        {
+            marker_path = file_path_marker_tr();
+            contents_path = file_path_tr();
+        }
+
+        load_file(marker_path, fl, begin, end);
+
+        if (fl && begin != end)
+        {
+            std::vector<char> buf_markers(begin, end);
+            if (0 != buf_markers.size() % 24)
+                throw std::runtime_error("invalid marker file size: " + marker_path.string());
+
+            markers.resize(buf_markers.size() / 24);
+            for (size_t index = 0; index < markers.size(); ++index)
+            {
+                marker& item = markers[index];
+                item.start = *reinterpret_cast<uint64_t*>(&markers[index * 24 + 0]);
+                item.end = *reinterpret_cast<uint64_t*>(&markers[index * 24 + 8]);
+                item.key = *reinterpret_cast<uint64_t*>(&markers[index * 24 + 16]);
+
+                if (item.end <= item.start)
+                    throw std::runtime_error("invalid entry in marker file: " + marker_path.string());
+
+                if (0 < index)
+                {
+                    auto const& previous = markers[index - 1];
+                    if (previous.end >= item.start)
+                        throw std::runtime_error("invalid consequtive entry in marker file: " + marker_path.string());
+                }
+
+                if (item.key == key_to_uint64(key) &&
+                    size_t(-1) == loaded_marker_index)
+                {
+                    boost::filesystem::ifstream fl_contents;
+                    fl_contents.open(contents_path, std::ios_base::binary);
+                    if (!fl_contents)
+                    {
+                        boost::filesystem::ofstream ofl;
+                        //  ofstream will also create a new file if needed
+                        ofl.open(contents_path, std::ios_base::trunc);
+                        if (!ofl)
+                            throw std::runtime_error("block_file_loader(): cannot open: " + contents_path.string());
+                    }
+
+                    if (fl_contents)
+                    {
+                        std::string row;
+                        row.resize(item.end - item.start);
+                        fl.seekg(item.start);
+                        fl.read(&row[0], item.end - item.start);
+
+                        ::beltpp::packet package;
+                        if (from_block_string(package, row, key, putl))
+                        {
+                            loaded_marker_index = index;
+                            std::move(package).get(*ptr);
+                        }
+                    }
+                }
+            }
+        }
+
+        guard.dismiss();
+    }
+
+    block_file_loader(block_file_loader const&) = delete;
+    block_file_loader(block_file_loader&& other)
+        : modified(other.modified)
+        , loaded_marker_index(other.loaded_marker_index)
+        , ptransaction(std::move(other.ptransaction))
+        , main_path(other.main_path)
+        , ptr(std::move(other.ptr))
+        , putl(std::move(other.putl))
+        , markers(std::move(markers))
+    {
+        if (nullptr != ptransaction &&
+            nullptr == dynamic_cast<class_transaction*>(ptransaction.get()))
+            throw std::runtime_error("not a block_file_loader::class_transaction");
+    }
+
+    ~block_file_loader()
+    {
+        commit();
+    }
+
+    void save()
+    {
+        if (false == modified)
+            return;
+
+        boost::filesystem::ofstream fl;
+
+        fl.open(file_path_tr(),
+                std::ios_base::binary |
+                std::ios_base::trunc);
+        if (!fl)
+            throw std::runtime_error("file_loader::save(): unable to write to the file: "
+                                     + file_path_tr().string());
+
+        fl << ptr->to_string();
+
+        if (nullptr == ptransaction)
+            ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction,
+                                                     block_file_loader::class_transaction>(file_path(),
+                                                                                           file_path_tr());
+        modified = false;
+    }
+
+    void commit() noexcept
+    {
+        if (ptransaction)
+        {
+            ptransaction->commit();
+            ptransaction = detail::null_ptr_transaction();
+        }
+    }
+
+    void discard()
+    {
+        if (ptransaction)
+        {
+            ptransaction->rollback();
+            ptransaction = detail::null_ptr_transaction();
+        }
+
+        modified = false;
+    }
+
+    detail::ptr_transaction&& transaction()
+    {
+        return std::move(ptransaction);
+    }
+
+    block_file_loader const& as_const() const { return *this; }
+
+    T const& operator * () const { return *ptr.get(); }
+    T& operator * () { modified = true; return *ptr.get(); }
+
+    T const* operator -> () const { return ptr.get(); }
+    T* operator -> () { modified = true; return ptr.get(); }
+private:
+    boost::filesystem::path file_path_marker() const
+    {
+        auto file_path_temp = main_path;
+        file_path_temp += ".m";
+        return file_path_temp;
+    }
+    boost::filesystem::path file_path_marker_tr() const
+    {
+        auto file_path_temp = main_path;
+        file_path_temp += ".m.tr";
+        return file_path_temp;
+    }
+    boost::filesystem::path file_path() const
+    {
+        return main_path;
+    }
+    boost::filesystem::path file_path_tr() const
+    {
+        auto file_path_temp = main_path;
+        file_path_temp += ".tr";
+        return file_path_temp;
+    }
+    bool modified;
+    size_t loaded_marker_index;
+    detail::ptr_transaction ptransaction;
+    boost::filesystem::path main_path;
+    std::unique_ptr<T> ptr;
+    void* putl;
+    std::vector<marker> markers;
 };
 
 namespace detail
