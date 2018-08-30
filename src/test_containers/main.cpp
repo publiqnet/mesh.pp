@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
 
     try
     {
-        meshpp::map_loader<Value> map("map", "/Users/tigran/publiq.pp1/map", get_putl());
+        meshpp::map_loader<Value> map("map", "/Users/tigran/publiq.pp1/map", 100, get_putl());
         Value v;
         v.num = 0;
         map.at("0").num = 30;

@@ -791,6 +791,7 @@ class SYSTEMUTILITYSHARED_EXPORT map_loader_internals
 public:
     map_loader_internals(std::string const& name,
                          boost::filesystem::path const& path,
+                         size_t limit,
                          beltpp::void_unique_ptr&& ptr_utl);
     ~map_loader_internals();
 
@@ -799,10 +800,13 @@ public:
     void discard();
     void commit();
 
-    static std::string filename(std::string const& key, std::string const& name);
+    static std::string filename(std::string const& key,
+                                std::string const& name,
+                                size_t limit);
 
     enum ecode {none, deleted, modified};
 
+    size_t limit;
     std::string name;
     boost::filesystem::path dir_path;
     std::unordered_map<std::string, std::string> index;
@@ -820,8 +824,9 @@ public:
     using value_type = T;
     map_loader(std::string const& name,
                boost::filesystem::path const& path,
+               size_t limit,
                beltpp::void_unique_ptr&& ptr_utl)
-        : data(name, path, std::move(ptr_utl))
+        : data(name, path, limit, std::move(ptr_utl))
     {}
     ~map_loader()
     {
@@ -1063,6 +1068,7 @@ class SYSTEMUTILITYSHARED_EXPORT vector_loader_internals
 public:
     vector_loader_internals(std::string const& name,
                             boost::filesystem::path const& path,
+                            size_t limit,
                             beltpp::void_unique_ptr&& ptr_utl);
     ~vector_loader_internals();
 
@@ -1071,10 +1077,13 @@ public:
     void discard();
     void commit();
 
-    static std::string filename(size_t index, std::string const& name);
+    static std::string filename(size_t index,
+                                std::string const& name,
+                                size_t limit);
 
     enum ecode {none, deleted, modified};
 
+    size_t limit;
     std::string name;
     boost::filesystem::path dir_path;
     size_t size;
@@ -1092,8 +1101,9 @@ public:
     using value_type = T;
     vector_loader(std::string const& name,
                   boost::filesystem::path const& path,
+                  size_t limit,
                   beltpp::void_unique_ptr&& ptr_utl)
-        : data(name, path, std::move(ptr_utl))
+        : data(name, path, limit, std::move(ptr_utl))
     {}
     ~vector_loader()
     {

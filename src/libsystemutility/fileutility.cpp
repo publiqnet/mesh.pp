@@ -108,8 +108,6 @@ uint64_t key_to_uint64_t(uint64_t key)
 
 uint64_t key_to_uint64_t(std::string const& key)
 {
-    if ("0" == key || "1" == key || "2" == key)
-        return 1024;
     std::hash<std::string> hasher;
 
     if (key.empty())
@@ -177,8 +175,10 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
 
 map_loader_internals::map_loader_internals(std::string const& name,
                                            boost::filesystem::path const& path,
+                                           size_t limit,
                                            beltpp::void_unique_ptr&& ptr_utl)
-    : name(name)
+    : limit(limit)
+    , name(name)
     , dir_path(path)
     , index()
     , overlay()
@@ -207,7 +207,7 @@ void map_loader_internals::load(std::string const& key) const
         class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
 
         auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(filename(key, name),
+                    std::make_pair(filename(key, name, limit),
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
         //
@@ -227,7 +227,7 @@ void map_loader_internals::load(std::string const& key) const
                       Data2::BlockRow,
                       &Data2::BlockRow::from_string,
                       &Data2::BlockRow::to_string>
-            temp(dir_path / filename(key, name),
+            temp(dir_path / filename(key, name, limit),
                  key,
                  ptr_utl.get(),
                  std::move(item_ptransaction));
@@ -275,7 +275,7 @@ void map_loader_internals::save()
     for (auto& item : overlay)
     {
         auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(filename(item.first, name),
+                    std::make_pair(filename(item.first, name, limit),
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
 
@@ -285,7 +285,7 @@ void map_loader_internals::save()
                           Data2::BlockRow,
                           &Data2::BlockRow::from_string,
                           &Data2::BlockRow::to_string>
-                temp(dir_path / filename(item.first, name),
+                temp(dir_path / filename(item.first, name, limit),
                      item.first,
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
@@ -327,7 +327,7 @@ void map_loader_internals::save()
             block[item.first] = std::move(item.second.first);
             temp.save();*/
 
-            index.insert(std::make_pair(item.first, filename(item.first, name)));
+            index.insert(std::make_pair(item.first, filename(item.first, name, limit)));
         }
     }
 
@@ -377,14 +377,15 @@ void map_loader_internals::commit()
     }
 }
 
-std::string map_loader_internals::filename(std::string const& key, std::string const& name)
+std::string map_loader_internals::filename(std::string const& key,
+                                           std::string const& name,
+                                           size_t limit)
 {
+    assert(limit > 0);
     std::hash<std::string> hasher;
-    size_t h = hasher(key) % 10000;
+    size_t h = hasher(key) % limit;
 
     std::string strh = std::to_string(h);
-    if ("0" == key || "1" == key || "2" == key)
-        strh = "4913";
     while (strh.length() < 4)
         strh = "0" + strh;
 
@@ -393,8 +394,10 @@ std::string map_loader_internals::filename(std::string const& key, std::string c
 
 vector_loader_internals::vector_loader_internals(std::string const& name,
                                                  boost::filesystem::path const& path,
+                                                 size_t limit,
                                                  beltpp::void_unique_ptr&& ptr_utl)
-    : name(name)
+    : limit(limit)
+    , name(name)
     , dir_path(path)
     , size()
     , overlay()
@@ -420,7 +423,7 @@ void vector_loader_internals::load(size_t index) const
         class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
 
         auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(filename(index, name),
+                    std::make_pair(filename(index, name, limit),
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
         item_ptransaction = std::move(ref_ptransaction);
@@ -434,7 +437,7 @@ void vector_loader_internals::load(size_t index) const
                       Data2::BlockRow2,
                       &Data2::BlockRow2::from_string,
                       &Data2::BlockRow2::to_string>
-            temp(dir_path / filename(index, name),
+            temp(dir_path / filename(index, name, limit),
                  index,
                  ptr_utl.get(),
                  std::move(item_ptransaction));
@@ -479,7 +482,7 @@ void vector_loader_internals::save()
     for (auto& item : overlay)
     {
         auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(filename(item.first, name),
+                    std::make_pair(filename(item.first, name, limit),
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
 
@@ -487,7 +490,7 @@ void vector_loader_internals::save()
                           Data2::BlockRow2,
                           &Data2::BlockRow2::from_string,
                           &Data2::BlockRow2::to_string>
-                temp(dir_path / filename(item.first, name),
+                temp(dir_path / filename(item.first, name, limit),
                      item.first,
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
@@ -576,9 +579,12 @@ void vector_loader_internals::commit()
     }
 }
 
-std::string vector_loader_internals::filename(size_t index, std::string const& name)
+std::string vector_loader_internals::filename(size_t index,
+                                              std::string const& name,
+                                              size_t limit)
 {
-    std::string strh = std::to_string(index % 10000);
+    assert(limit > 0);
+    std::string strh = std::to_string(index % limit);
     while (strh.length() < 4)
         strh = "0" + strh;
 
