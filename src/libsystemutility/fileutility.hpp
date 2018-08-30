@@ -339,13 +339,13 @@ class block_file_loader
                 if (boost::filesystem::exists(file_path))
                     res = boost::filesystem::remove(file_path, ec);
                 assert(res);
-                if (res)
+                if (res && boost::filesystem::exists(file_path_tr))
                     boost::filesystem::rename(file_path_tr, file_path, ec);
 
                 if (boost::filesystem::exists(file_path_m))
                     res = boost::filesystem::remove(file_path_m, ec);
                 assert(res);
-                if (res)
+                if (res && boost::filesystem::exists(file_path_m_tr))
                     boost::filesystem::rename(file_path_m_tr, file_path_m, ec);
             }
         }
@@ -356,9 +356,12 @@ class block_file_loader
             {
                 commited = true;
                 boost::system::error_code ec;
-                bool res = boost::filesystem::remove(file_path_tr, ec);
+                bool res = true;
+                if (boost::filesystem::exists(file_path_tr))
+                    res = boost::filesystem::remove(file_path_tr, ec);
                 assert(res);
-                res = boost::filesystem::remove(file_path_m_tr, ec);
+                if (boost::filesystem::exists(file_path_m_tr))
+                    res = boost::filesystem::remove(file_path_m_tr, ec);
                 assert(res);
                 B_UNUSED(res);
             }
@@ -521,21 +524,25 @@ public:
         if (nullptr == ptransaction)
         {
             boost::system::error_code ec;
-            boost::filesystem::copy_file(file_path(),
-                                         file_path_tr(),
-                                         boost::filesystem::copy_option::overwrite_if_exists,
-                                         ec);
+            if (boost::filesystem::exists(file_path()))
+                boost::filesystem::copy_file(file_path(),
+                                             file_path_tr(),
+                                             boost::filesystem::copy_option::overwrite_if_exists,
+                                             ec);
+            else
+                boost::filesystem::ofstream(file_path_tr(), std::ios_base::trunc);
         }
 
         {
-            boost::filesystem::ofstream fl;
+            boost::filesystem::fstream fl;
 
             fl.exceptions(std::ios_base::failbit |
                           std::ios_base::badbit |
                           std::ios_base::eofbit);
 
             fl.open(file_path_tr(), std::ios_base::binary |
-                                    std::ios_base::app);
+                                    std::ios_base::out |
+                                    std::ios_base::in);
 
             fl.seekp(markers[loaded_marker_index].start, std::ios_base::beg);
             fl.write(&buffer[0], int64_t(buffer.size()));
@@ -670,9 +677,22 @@ private:
 
     void save_markers()
     {
+        if (markers.empty())
+        {
+            if (boost::filesystem::exists(file_path_marker_tr()))
+            {
+                boost::system::error_code ec;
+                bool res = boost::filesystem::remove(file_path_marker_tr(), ec);
+                assert(res);
+                B_UNUSED(res);
+            }
+            return;
+        }
+
         boost::filesystem::ofstream ofl;
 
-        ofl.open(file_path_marker_tr(), std::ios_base::binary | std::ios_base::trunc);
+        ofl.open(file_path_marker_tr(), std::ios_base::binary |
+                                        std::ios_base::trunc);
         if (!ofl)
             throw std::runtime_error("save_markers(): cannot open: " + file_path_marker_tr().string());
 
