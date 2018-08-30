@@ -108,6 +108,8 @@ uint64_t key_to_uint64_t(uint64_t key)
 
 uint64_t key_to_uint64_t(std::string const& key)
 {
+    if ("0" == key || "1" == key || "2" == key)
+        return 1024;
     std::hash<std::string> hasher;
 
     if (key.empty())
@@ -118,17 +120,31 @@ uint64_t key_to_uint64_t(std::string const& key)
     return hasher(key_temp);
 }
 
+void default_block(beltpp::packet& package, std::string const& key)
+{
+    Data2::BlockRow ob;
+    ob.key = key;
+    package = std::move(ob);
+}
+
 bool from_block_string(beltpp::packet& package, std::string const& buffer, std::string const& key, void* putl)
 {
     Data2::BlockRow ob;
     ob.from_string(buffer, putl);
     if (ob.key == key)
     {
-        package = std::move(ob.item);
+        package = std::move(ob);
         return true;
     }
 
     return false;
+}
+
+void default_block(beltpp::packet& package, uint64_t index)
+{
+    Data2::BlockRow2 ob;
+    ob.index = index;
+    package = std::move(ob);
 }
 
 bool from_block_string(beltpp::packet& package, std::string const& buffer, uint64_t index, void* putl)
@@ -137,7 +153,7 @@ bool from_block_string(beltpp::packet& package, std::string const& buffer, uint6
     ob.from_string(buffer, putl);
     if (ob.index == index)
     {
-        package = std::move(ob.item);
+        package = std::move(ob);
         return true;
     }
 
@@ -207,12 +223,20 @@ void map_loader_internals::load(std::string const& key) const
 
     //  let file block owner maintain the transaction
     //  that belongs to it
-    file_loader<Data2::FileData,
+    block_file_loader<std::string,
+                      Data2::BlockRow,
+                      &Data2::BlockRow::from_string,
+                      &Data2::BlockRow::to_string>
+            temp(dir_path / filename(key, name),
+                 key,
+                 ptr_utl.get(),
+                 std::move(item_ptransaction));
+    /*file_loader<Data2::FileData,
                 &Data2::FileData::from_string,
                 &Data2::FileData::to_string>
             temp(dir_path / filename(key, name),
                  ptr_utl.get(),
-                 std::move(item_ptransaction));
+                 std::move(item_ptransaction));*/
 
     //  make sure guard2 will take the transaction back eventually
     //  for guard1 to be able to do it's job
@@ -222,14 +246,15 @@ void map_loader_internals::load(std::string const& key) const
         item_ptransaction = std::move(temp.transaction());
     });
 
-    std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
-
     //  load item corresponding to key to overlay
+    overlay[key] = std::make_pair(std::move(temp->item),
+                                  map_loader_internals::none);
+    /*std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
     auto it_block = block.find(key);
     if (it_block != block.end())
         overlay.insert(std::make_pair(key,
                                       std::make_pair(std::move(it_block->second),
-                                                     map_loader_internals::none)));
+                                                     map_loader_internals::none)));*/
 }
 
 void map_loader_internals::save()
@@ -256,12 +281,20 @@ void map_loader_internals::save()
 
         //  let file block owner maintain the transaction
         //  that belongs to it
-        file_loader<Data2::FileData,
+        block_file_loader<std::string,
+                          Data2::BlockRow,
+                          &Data2::BlockRow::from_string,
+                          &Data2::BlockRow::to_string>
+                temp(dir_path / filename(item.first, name),
+                     item.first,
+                     ptr_utl.get(),
+                     std::move(ref_ptransaction));
+        /*file_loader<Data2::FileData,
                     &Data2::FileData::from_string,
                     &Data2::FileData::to_string>
                 temp(dir_path / filename(item.first, name),
                      ptr_utl.get(),
-                     std::move(ref_ptransaction));
+                     std::move(ref_ptransaction));*/
 
         //  make sure guard_item will take the transaction back eventually
         //  in the end of this for step
@@ -272,23 +305,27 @@ void map_loader_internals::save()
         });
 
         //  update the block
-        std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
 
         if (item.second.second == map_loader_internals::deleted)
         {
+            temp.erase();
+            /*std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
             auto it_block = block.find(item.first);
             if (it_block != block.end())
             {
                 block.erase(it_block);
                 temp.save();
-            }
+            }*/
 
             index.erase(item.first);
         }
         else if (item.second.second == map_loader_internals::modified)
         {
-            block[item.first] = std::move(item.second.first);
+            temp->item = std::move(item.second.first);
             temp.save();
+            /*std::unordered_map<std::string, ::beltpp::packet>& block = temp->block;
+            block[item.first] = std::move(item.second.first);
+            temp.save();*/
 
             index.insert(std::make_pair(item.first, filename(item.first, name)));
         }
@@ -346,6 +383,8 @@ std::string map_loader_internals::filename(std::string const& key, std::string c
     size_t h = hasher(key) % 10000;
 
     std::string strh = std::to_string(h);
+    if ("0" == key || "1" == key || "2" == key)
+        strh = "4913";
     while (strh.length() < 4)
         strh = "0" + strh;
 
@@ -391,25 +430,35 @@ void vector_loader_internals::load(size_t index) const
         });
     }
 
-    file_loader<Data2::FileData2,
+    block_file_loader<uint64_t,
+                      Data2::BlockRow2,
+                      &Data2::BlockRow2::from_string,
+                      &Data2::BlockRow2::to_string>
+            temp(dir_path / filename(index, name),
+                 index,
+                 ptr_utl.get(),
+                 std::move(item_ptransaction));
+    /*file_loader<Data2::FileData2,
                 &Data2::FileData2::from_string,
                 &Data2::FileData2::to_string>
             temp(dir_path / filename(index, name),
                  ptr_utl.get(),
-                 std::move(item_ptransaction));
+                 std::move(item_ptransaction));*/
 
     beltpp::finally guard2([&item_ptransaction, &temp]
     {
         item_ptransaction = std::move(temp.transaction());
     });
 
-    std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
+    overlay[index] = std::make_pair(std::move(temp->item),
+                                    vector_loader_internals::none);
+    /*std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
 
     auto it_block = block.find(index);
     if (it_block != block.end())
         overlay.insert(std::make_pair(index,
                                       std::make_pair(std::move(it_block->second),
-                                                     vector_loader_internals::none)));
+                                                     vector_loader_internals::none)));*/
 }
 
 void vector_loader_internals::save()
@@ -434,36 +483,47 @@ void vector_loader_internals::save()
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
 
-        file_loader<Data2::FileData2,
+        block_file_loader<uint64_t,
+                          Data2::BlockRow2,
+                          &Data2::BlockRow2::from_string,
+                          &Data2::BlockRow2::to_string>
+                temp(dir_path / filename(item.first, name),
+                     item.first,
+                     ptr_utl.get(),
+                     std::move(ref_ptransaction));
+        /*file_loader<Data2::FileData2,
                     &Data2::FileData2::from_string,
                     &Data2::FileData2::to_string>
                 temp(dir_path / filename(item.first, name),
                      ptr_utl.get(),
-                     std::move(ref_ptransaction));
+                     std::move(ref_ptransaction));*/
 
         beltpp::finally guard_item([&ref_ptransaction, &temp]
         {
             ref_ptransaction = std::move(temp.transaction());
         });
 
-        std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
-
         if (item.second.second == vector_loader_internals::deleted)
         {
+            temp.erase();
+            /*std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
             auto it_block = block.find(item.first);
             if (it_block != block.end())
             {
                 block.erase(it_block);
                 temp.save();
-            }
+            }*/
 
             if (size > item.first)
                 size = item.first;
         }
         else if (item.second.second == vector_loader_internals::modified)
         {
-            block[item.first] = std::move(item.second.first);
+            temp->item = std::move(item.second.first);
             temp.save();
+            /*std::unordered_map<uint64_t, ::beltpp::packet>& block = temp->block;
+            block[item.first] = std::move(item.second.first);
+            temp.save();*/
 
             if (item.first >= size)
                 size = item.first + 1;

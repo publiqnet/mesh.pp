@@ -34,6 +34,8 @@ SYSTEMUTILITYSHARED_EXPORT void small_random_sleep();
 SYSTEMUTILITYSHARED_EXPORT uint64_t key_to_uint64_t(uint64_t key);
 SYSTEMUTILITYSHARED_EXPORT uint64_t key_to_uint64_t(std::string const& key);
 
+SYSTEMUTILITYSHARED_EXPORT void default_block(beltpp::packet& package, std::string const& key);
+SYSTEMUTILITYSHARED_EXPORT void default_block(beltpp::packet& package, uint64_t index);
 SYSTEMUTILITYSHARED_EXPORT bool from_block_string(beltpp::packet& package, std::string const& buffer, std::string const& key, void* putl);
 SYSTEMUTILITYSHARED_EXPORT bool from_block_string(beltpp::packet& package, std::string const& buffer, uint64_t index, void* putl);
 
@@ -52,18 +54,18 @@ inline void load_file(boost::filesystem::path const& path,
     fl.open(path, std::ios_base::binary);
     if (!fl)
     {
-        boost::filesystem::ofstream ofl;
-        //  ofstream will also create a new file if needed
-        ofl.open(path, std::ios_base::trunc);
-        if (!ofl)
-            throw std::runtime_error("load_file(): cannot open: " + path.string());
+        {
+            boost::filesystem::ofstream ofl;
+            //  ofstream will also create a new file if needed
+            ofl.open(path, std::ios_base::trunc);
+            if (!ofl)
+                throw std::runtime_error("load_file(): cannot open: " + path.string());
+        }
+        fl.open(path, std::ios_base::binary);
     }
 
-    if (fl)
-    {
-        end = std::istreambuf_iterator<char>();
-        begin = std::istreambuf_iterator<char>(fl);
-    }
+    end = std::istreambuf_iterator<char>();
+    begin = std::istreambuf_iterator<char>(fl);
 }
 
 template <typename T,
@@ -143,7 +145,7 @@ public:
         else
             load_file(file_path_tr(), fl, begin, end);
 
-        if (fl && begin != end)
+        if (begin != end)
         {
             T ob;
             ob.from_string(std::string(begin, end), putl);
@@ -294,7 +296,8 @@ private:
     std::unique_ptr<T> ptr;
 };
 
-template <typename T,
+template <typename T_key,
+          typename T,
           void(T::*from_string)(std::string const&, void*),
           std::string(T::*to_string)()const
           >
@@ -312,10 +315,15 @@ class block_file_loader
     {
     public:
         class_transaction(boost::filesystem::path const& path,
-                          boost::filesystem::path const& path_tr)
+                          boost::filesystem::path const& path_tr,
+                          boost::filesystem::path const& path_m,
+                          boost::filesystem::path const& path_m_tr)
             : commited(false)
             , file_path(path)
-            , file_path_tr(path_tr) {}
+            , file_path_tr(path_tr)
+            , file_path_m(path_m)
+            , file_path_m_tr(path_m_tr)
+        {}
         ~class_transaction() override
         {
             commit();
@@ -328,10 +336,17 @@ class block_file_loader
                 commited = true;
                 bool res = true;
                 boost::system::error_code ec;
-                res = boost::filesystem::remove(file_path, ec);
+                if (boost::filesystem::exists(file_path))
+                    res = boost::filesystem::remove(file_path, ec);
                 assert(res);
                 if (res)
                     boost::filesystem::rename(file_path_tr, file_path, ec);
+
+                if (boost::filesystem::exists(file_path_m))
+                    res = boost::filesystem::remove(file_path_m, ec);
+                assert(res);
+                if (res)
+                    boost::filesystem::rename(file_path_m_tr, file_path_m, ec);
             }
         }
 
@@ -343,6 +358,8 @@ class block_file_loader
                 boost::system::error_code ec;
                 bool res = boost::filesystem::remove(file_path_tr, ec);
                 assert(res);
+                res = boost::filesystem::remove(file_path_m_tr, ec);
+                assert(res);
                 B_UNUSED(res);
             }
         }
@@ -350,17 +367,19 @@ class block_file_loader
         bool commited;
         boost::filesystem::path file_path;
         boost::filesystem::path file_path_tr;
+        boost::filesystem::path file_path_m;
+        boost::filesystem::path file_path_m_tr;
     };
 public:
     using value_type = T;
 
-    template <typename T_key>
     block_file_loader(boost::filesystem::path const& path,
-                      T_key key,
+                      T_key key_,
                       void* putl = nullptr,
                       detail::ptr_transaction&& ptransaction_
                       = detail::null_ptr_transaction())
         : modified(false)
+        , key(key_)
         , loaded_marker_index(size_t(-1))
         , ptransaction(std::move(ptransaction_))
         , main_path(path)
@@ -392,19 +411,23 @@ public:
 
         load_file(marker_path, fl, begin, end);
 
-        if (fl && begin != end)
+        ::beltpp::packet package;
+        detail::default_block(package, key);
+        std::move(package).get(*ptr);
+
+        if (begin != end)
         {
             std::vector<char> buf_markers(begin, end);
-            if (0 != buf_markers.size() % 24)
+            if (0 != buf_markers.size() % (3 * sizeof(uint64_t)))
                 throw std::runtime_error("invalid marker file size: " + marker_path.string());
 
-            markers.resize(buf_markers.size() / 24);
+            markers.resize(buf_markers.size() / (3 * sizeof(uint64_t)));
             for (size_t index = 0; index < markers.size(); ++index)
             {
                 marker& item = markers[index];
-                item.start = *reinterpret_cast<uint64_t*>(&markers[index * 24 + 0]);
-                item.end = *reinterpret_cast<uint64_t*>(&markers[index * 24 + 8]);
-                item.key = *reinterpret_cast<uint64_t*>(&markers[index * 24 + 16]);
+                item.start = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 0]);
+                item.end = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + sizeof(uint64_t)]);
+                item.key = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 2 * sizeof(uint64_t)]);
 
                 if (item.end <= item.start)
                     throw std::runtime_error("invalid entry in marker file: " + marker_path.string());
@@ -412,33 +435,28 @@ public:
                 if (0 < index)
                 {
                     auto const& previous = markers[index - 1];
-                    if (previous.end >= item.start)
+                    if (previous.end > item.start)
                         throw std::runtime_error("invalid consequtive entry in marker file: " + marker_path.string());
                 }
 
-                if (item.key == key_to_uint64(key) &&
+                if (item.key == detail::key_to_uint64_t(key) &&
                     size_t(-1) == loaded_marker_index)
                 {
+                    std::istreambuf_iterator<char> end_contents, begin_contents;
                     boost::filesystem::ifstream fl_contents;
-                    fl_contents.open(contents_path, std::ios_base::binary);
-                    if (!fl_contents)
-                    {
-                        boost::filesystem::ofstream ofl;
-                        //  ofstream will also create a new file if needed
-                        ofl.open(contents_path, std::ios_base::trunc);
-                        if (!ofl)
-                            throw std::runtime_error("block_file_loader(): cannot open: " + contents_path.string());
-                    }
+                    load_file(contents_path, fl_contents, begin_contents, end_contents);
 
-                    if (fl_contents)
+                    if (end_contents != begin_contents)
                     {
+                        fl_contents.exceptions(std::ios_base::failbit |
+                                               std::ios_base::badbit |
+                                               std::ios_base::eofbit);
                         std::string row;
                         row.resize(item.end - item.start);
-                        fl.seekg(item.start);
-                        fl.read(&row[0], item.end - item.start);
+                        fl_contents.seekg(item.start, std::ios_base::beg);
+                        fl_contents.read(&row[0], item.end - item.start);
 
-                        ::beltpp::packet package;
-                        if (from_block_string(package, row, key, putl))
+                        if (detail::from_block_string(package, row, key, putl))
                         {
                             loaded_marker_index = index;
                             std::move(package).get(*ptr);
@@ -476,22 +494,88 @@ public:
         if (false == modified)
             return;
 
-        boost::filesystem::ofstream fl;
+        std::string buffer = ptr->to_string();
 
-        fl.open(file_path_tr(),
-                std::ios_base::binary |
-                std::ios_base::trunc);
-        if (!fl)
-            throw std::runtime_error("file_loader::save(): unable to write to the file: "
-                                     + file_path_tr().string());
+        if (size_t(-1) == loaded_marker_index ||
+            buffer.size() > (markers[loaded_marker_index].end - markers[loaded_marker_index].start))
+        {
+            //  will append this item in the end of file
+            size_t seek_pos = 0;
+            if (false == markers.empty())
+                seek_pos = markers.back().end;
 
-        fl << ptr->to_string();
+            markers.push_back(marker());
+            markers.back().start = seek_pos;
+            markers.back().end = seek_pos + buffer.size();
+            markers.back().key = detail::key_to_uint64_t(key);
+
+            if (loaded_marker_index != size_t(-1))
+                markers.erase(markers.begin() + loaded_marker_index);
+
+            loaded_marker_index = markers.size() - 1;
+        }
+        else
+        //  will reuse same slot
+            markers[loaded_marker_index].end = markers[loaded_marker_index].start + buffer.length();
+
+        if (nullptr == ptransaction)
+        {
+            boost::system::error_code ec;
+            boost::filesystem::copy_file(file_path(),
+                                         file_path_tr(),
+                                         boost::filesystem::copy_option::overwrite_if_exists,
+                                         ec);
+        }
+
+        {
+            boost::filesystem::ofstream fl;
+
+            fl.exceptions(std::ios_base::failbit |
+                          std::ios_base::badbit |
+                          std::ios_base::eofbit);
+
+            fl.open(file_path_tr(), std::ios_base::binary |
+                                    std::ios_base::app);
+
+            fl.seekp(markers[loaded_marker_index].start, std::ios_base::beg);
+            fl.write(&buffer[0], int64_t(buffer.size()));
+        }
+
+        compact();
+        save_markers();
 
         if (nullptr == ptransaction)
             ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction,
                                                      block_file_loader::class_transaction>(file_path(),
-                                                                                           file_path_tr());
+                                                                                           file_path_tr(),
+                                                                                           file_path_marker(),
+                                                                                           file_path_marker_tr());
         modified = false;
+    }
+
+    void erase()
+    {
+        if (size_t(-1) != loaded_marker_index)
+            markers.erase(markers.begin() + loaded_marker_index);
+
+        if (nullptr == ptransaction)
+        {
+            boost::system::error_code ec;
+            boost::filesystem::copy_file(file_path(),
+                                         file_path_tr(),
+                                         boost::filesystem::copy_option::overwrite_if_exists,
+                                         ec);
+        }
+
+        compact();
+        save_markers();
+
+        if (nullptr == ptransaction)
+            ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction,
+                                                     block_file_loader::class_transaction>(file_path(),
+                                                                                           file_path_tr(),
+                                                                                           file_path_marker(),
+                                                                                           file_path_marker_tr());
     }
 
     void commit() noexcept
@@ -527,6 +611,79 @@ public:
     T const* operator -> () const { return ptr.get(); }
     T* operator -> () { modified = true; return ptr.get(); }
 private:
+    void compact()
+    {
+        uint64_t start = 0;
+        uint64_t shift = 0;
+
+        {
+            boost::filesystem::fstream fl;
+
+            fl.exceptions(std::ios_base::failbit |
+                          std::ios_base::badbit |
+                          std::ios_base::eofbit);
+
+            fl.open(file_path_tr(), std::ios_base::binary |
+                                    std::ios_base::out |
+                                    std::ios_base::in);
+
+            for (size_t index = 0; index < markers.size(); ++index)
+            {
+                auto& item = markers[index];
+
+                shift = item.start - start;
+
+                item.start -= shift;
+                item.end -= shift;
+
+                if (shift)
+                {
+                    std::vector<char> buffer;
+                    buffer.resize(item.end - item.start);
+
+                    fl.seekg(item.start + shift, std::ios_base::beg);
+                    fl.read(&buffer[0], int64_t(buffer.size()));
+
+                    fl.seekp(item.start, std::ios_base::beg);
+                    fl.write(&buffer[0], int64_t(buffer.size()));
+                }
+
+                start = item.end;
+            }
+        }
+
+        if (shift)
+        {
+            boost::system::error_code ec;
+            boost::filesystem::resize_file(file_path_tr(), start, ec);
+        }
+        else if (markers.empty())
+        {
+            bool res = true;
+            boost::system::error_code ec;
+            if (boost::filesystem::exists(file_path_tr()))
+                res = boost::filesystem::remove(file_path_tr(), ec);
+            assert(res);
+            B_UNUSED(res);
+        }
+    }
+
+    void save_markers()
+    {
+        boost::filesystem::ofstream ofl;
+
+        ofl.open(file_path_marker_tr(), std::ios_base::binary | std::ios_base::trunc);
+        if (!ofl)
+            throw std::runtime_error("save_markers(): cannot open: " + file_path_marker_tr().string());
+
+        for (auto const& marker : markers)
+        {
+            ofl.write(reinterpret_cast<char const*>(&marker.start), sizeof(uint64_t));
+            ofl.write(reinterpret_cast<char const*>(&marker.end), sizeof(uint64_t));
+            ofl.write(reinterpret_cast<char const*>(&marker.key), sizeof(uint64_t));
+        }
+    }
+
     boost::filesystem::path file_path_marker() const
     {
         auto file_path_temp = main_path;
@@ -550,6 +707,7 @@ private:
         return file_path_temp;
     }
     bool modified;
+    T_key key;
     size_t loaded_marker_index;
     detail::ptr_transaction ptransaction;
     boost::filesystem::path main_path;
@@ -582,7 +740,7 @@ class SYSTEMUTILITYSHARED_EXPORT map_loader_internals
                 item.second = detail::null_ptr_transaction();
             }
             overlay.clear();
-            
+
             if (index)
             {
                 index->commit();
