@@ -451,13 +451,12 @@ public:
 
                     if (end_contents != begin_contents)
                     {
-                        fl_contents.exceptions(std::ios_base::failbit |
-                                               std::ios_base::badbit |
-                                               std::ios_base::eofbit);
                         std::string row;
                         row.resize(item.end - item.start);
                         fl_contents.seekg(item.start, std::ios_base::beg);
+                        check(fl_contents, contents_path, "block_file_loader", "seekg", std::to_string(item.start) + "-beg", std::string());
                         fl_contents.read(&row[0], item.end - item.start);
+                        check(fl_contents, contents_path, "block_file_loader", "read", std::to_string(item.start) + "-" + std::to_string(item.end), std::string());
 
                         if (detail::from_block_string(package, row, key, putl))
                         {
@@ -529,23 +528,30 @@ public:
                                              file_path_tr(),
                                              boost::filesystem::copy_option::overwrite_if_exists,
                                              ec);
-            else
-                boost::filesystem::ofstream(file_path_tr(), std::ios_base::trunc);
         }
+        if (false == boost::filesystem::exists(file_path_tr()))
+            boost::filesystem::ofstream(file_path_tr(), std::ios_base::trunc);
 
         {
             boost::filesystem::fstream fl;
-
-            fl.exceptions(std::ios_base::failbit |
-                          std::ios_base::badbit |
-                          std::ios_base::eofbit);
 
             fl.open(file_path_tr(), std::ios_base::binary |
                                     std::ios_base::out |
                                     std::ios_base::in);
 
+            if (!fl)
+                throw std::runtime_error("save(): unable to open fstream: " + file_path_tr().string());
+
+            fl.seekg(0, std::ios_base::end);
+            check(fl, file_path_tr(), "save", "seekg", "end", std::string());
+
+            size_t size_when_opened = size_t(fl.tellg());
+
             fl.seekp(markers[loaded_marker_index].start, std::ios_base::beg);
+            check(fl, file_path_tr(), "save", "seekp", std::to_string(markers[loaded_marker_index].start) + "-beg", "opened size: " + std::to_string(size_when_opened));
+
             fl.write(&buffer[0], int64_t(buffer.size()));
+            check(fl, file_path_tr(), "save", "write", std::to_string(markers[loaded_marker_index].start) + "-" + std::to_string(markers[loaded_marker_index].start), "opened size: " + std::to_string(size_when_opened));
         }
 
         compact();
@@ -618,6 +624,22 @@ public:
     T const* operator -> () const { return ptr.get(); }
     T* operator -> () { modified = true; return ptr.get(); }
 private:
+    void check(std::basic_ios<char>& fl,
+               boost::filesystem::path const& path,
+               std::string const& function,
+               std::string const& what,
+               std::string const& where,
+               std::string const& info) const
+    {
+        auto state_flags = fl.rdstate();
+        if (state_flags & std::ios_base::badbit)
+            throw std::runtime_error(function + "(): badbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+        if (state_flags & std::ios_base::eofbit)
+            throw std::runtime_error(function + "(): eofbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+        if (state_flags & std::ios_base::failbit)
+            throw std::runtime_error(function + "(): failbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+    }
+
     void compact()
     {
         uint64_t start = 0;
@@ -626,13 +648,17 @@ private:
         {
             boost::filesystem::fstream fl;
 
-            fl.exceptions(std::ios_base::failbit |
-                          std::ios_base::badbit |
-                          std::ios_base::eofbit);
-
             fl.open(file_path_tr(), std::ios_base::binary |
                                     std::ios_base::out |
                                     std::ios_base::in);
+
+            if (!fl)
+                throw std::runtime_error("compact(): unable to open fstream: " + file_path_tr().string());
+
+            fl.seekg(0, std::ios_base::end);
+            check(fl, file_path_tr(), "compact", "seekg", "end", std::string());
+
+            size_t size_when_opened = size_t(fl.tellg());
 
             for (size_t index = 0; index < markers.size(); ++index)
             {
@@ -649,10 +675,16 @@ private:
                     buffer.resize(item.end - item.start);
 
                     fl.seekg(item.start + shift, std::ios_base::beg);
+                    check(fl, file_path_tr(), "compact", "seekg", std::to_string(item.start + shift) + "-beg", "opened size: " + std::to_string(size_when_opened));
+
                     fl.read(&buffer[0], int64_t(buffer.size()));
+                    check(fl, file_path_tr(), "compact", "read", std::to_string(item.start + shift) + "-" + std::to_string(item.end + shift), "opened size: " + std::to_string(size_when_opened));
 
                     fl.seekp(item.start, std::ios_base::beg);
+                    check(fl, file_path_tr(), "compact", "seekp", std::to_string(item.start) + "-beg", "opened size: " + std::to_string(size_when_opened));
+
                     fl.write(&buffer[0], int64_t(buffer.size()));
+                    check(fl, file_path_tr(), "compact", "write", std::to_string(item.start) + "-" + std::to_string(item.end), "opened size: " + std::to_string(size_when_opened));
                 }
 
                 start = item.end;
