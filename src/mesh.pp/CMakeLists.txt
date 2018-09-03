@@ -22,7 +22,7 @@ if( APPLE )
               "${HOMEBREW_PREFIX}/opt/pbc"
               "${HOMEBREW_PREFIX}/opt/gmp"
               "${HOMEBREW_PREFIX}/opt/cryptopp"
-              "${HOMEBREW_PREFIX}/opt/berkeley-db"
+              "${HOMEBREW_PREFIX}/opt/rocksdb"
               "${HOMEBREW_PREFIX}/opt/qt5"
             )
     endif()
@@ -55,7 +55,7 @@ MESSAGE(STATUS "${Boost_LIBRARIES}")
 list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules" )
 
 find_package(CryptoPP REQUIRED)
-
+find_package(rocksdb REQUIRED)
 
 # interface library for headers only module
 add_library(mesh.pp INTERFACE)
@@ -87,7 +87,8 @@ set(SRC_FILES
     global.hpp
     fileutility.hpp
     processutility.hpp
-    p2psocket.hpp)
+    p2psocket.hpp
+    rdbutility.hpp)
 
 install(FILES
     ${SRC_FILES}

@@ -24,16 +24,21 @@ add_library(systemutility
     fileutility.cpp
     fileutility.hpp
     processutility.cpp
-    processutility.hpp)
+    processutility.hpp
+    rdbutility.hpp)
 
+
+target_include_directories(systemutility PRIVATE rocksdb)
 # libraries this module links to
 target_link_libraries(systemutility
     PUBLIC
         mesh.pp
         belt.pp
         packet
+        rocksdb
     PRIVATE
-        utility)
+        utility
+    )
 
 # what to do on make install
 install(TARGETS systemutility
@@ -46,4 +51,5 @@ install(FILES
     global.hpp
     fileutility.hpp
     processutility.hpp
+    rdbutility.hpp
     DESTINATION ${MESHPP_INSTALL_DESTINATION_INCLUDE}/libsystemutility)
