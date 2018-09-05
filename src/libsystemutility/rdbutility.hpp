@@ -12,19 +12,16 @@
 #include <set>
 #include <string>
 
-using namespace rocksdb;
-using namespace std;
-
 namespace meshpp {
 
 namespace detail { template <typename T, class SERDES> struct db_loader_impl; }
 
 template <typename T, class SERDES>
-struct SYSTEMUTILITYSHARED_EXPORT db_loader
+struct db_loader
 {
     using value_type = T;
 
-    db_loader(boost::filesystem::path const& path, string const& db_name, SERDES const& serdes = {}) :
+    db_loader(boost::filesystem::path const& path, std::string const& db_name, SERDES const& serdes = {}) :
         _impl(new detail::db_loader_impl<value_type, SERDES>(path, db_name, serdes))
     {}
 
@@ -40,7 +37,7 @@ struct SYSTEMUTILITYSHARED_EXPORT db_loader
 
 
 private:
-    unique_ptr<detail::db_loader_impl<value_type, SERDES>> _impl;
+    std::unique_ptr<detail::db_loader_impl<value_type, SERDES>> _impl;
 };
 
 namespace detail {
@@ -50,23 +47,23 @@ struct db_loader_impl
 {
     using value_type = T;
 
-    db_loader_impl(boost::filesystem::path path, string const& db_name, SERDES const& serdes) :
+    db_loader_impl(boost::filesystem::path path, std::string const& db_name, SERDES const& serdes) :
         _serdes(serdes)
     {
-        Options options;
+        rocksdb::Options options;
         options.IncreaseParallelism();
         options.OptimizeLevelStyleCompaction();
         options.create_if_missing = true;
         options.target_file_size_multiplier = 2;
 
-        DB* _db;
+        rocksdb::DB* _db;
         path /= db_name;
-        Status s = DB::Open(options, path.string(), &_db);
+        rocksdb::Status s = rocksdb::DB::Open(options, path.string(), &_db);
         db.reset(_db);
         assert(s.ok());
 
-        string size_str;
-        s = db->Get(ReadOptions(), SIZE_KEY, &size_str);
+        std::string size_str;
+        s = db->Get(rocksdb::ReadOptions(), SIZE_KEY, &size_str);
         if(s.ok())
             memcpy(&db_index, size_str.data(), size_str.length());
         else
@@ -84,7 +81,7 @@ struct db_loader_impl
             non_const_access_mark.insert(index);
             return stage.at(index);
         }
-        catch (out_of_range const&)
+        catch (std::out_of_range const&)
         {
             try
             {
@@ -103,7 +100,7 @@ struct db_loader_impl
         {
             return stage.at(index);
         }
-        catch (out_of_range &e)
+        catch (std::out_of_range &e)
         {
             try {
                 fetch_from_db(index);
@@ -139,28 +136,28 @@ struct db_loader_impl
 
         for(auto const &di : to_delete)
         {
-            Slice di_s((const char*)&di, sizeof(di));
+            rocksdb::Slice di_s((const char*)&di, sizeof(di));
             batch.Delete(di_s);
         }
 
-        PinnableSlice _ps;
+        rocksdb::PinnableSlice _ps;
         for (auto it = stage.begin(); it != stage.end(); ++it)
         {
-            Slice key_s((const char*)&it->first, sizeof(it->first));
+            rocksdb::Slice key_s((const char*)&it->first, sizeof(it->first));
 
             if(it->first < db_index)
             {
                 if(non_const_access_mark.find(it->first) == non_const_access_mark.end())
                     continue;
 
-                auto s = db->Get(ReadOptions(), db->DefaultColumnFamily(), key_s, &_ps);
+                auto s = db->Get(rocksdb::ReadOptions(), db->DefaultColumnFamily(), key_s, &_ps);
                 if(s.ok() && _serdes.deserialize(_ps.ToString()) == it->second)
                     continue;
                 _ps.Reset();
             }
 
-            string _str_new = _serdes.serialize(it->second);
-            Slice value_s(_str_new.data(), _str_new.size());
+            std::string _str_new = _serdes.serialize(it->second);
+            rocksdb::Slice value_s(_str_new.data(), _str_new.size());
             batch.Put(key_s, value_s);
         }
     }
@@ -178,9 +175,9 @@ struct db_loader_impl
     {
         if(batch.Count())
         {
-            Slice _size((const char*)&stage_index, sizeof(stage_index));
+            rocksdb::Slice _size((const char*)&stage_index, sizeof(stage_index));
             batch.Put(SIZE_KEY, _size);
-            auto s = db->Write(WriteOptions(), &batch);
+            auto s = db->Write(rocksdb::WriteOptions(), &batch);
             if (s.ok())
             {
                 db_index = stage_index;
@@ -194,18 +191,18 @@ struct db_loader_impl
 private:
     static const char * const SIZE_KEY;
     SERDES _serdes;
-    unique_ptr<DB> db;
-    mutable map<size_t, value_type> stage;
-    set<size_t> to_delete, non_const_access_mark;
+    std::unique_ptr<rocksdb::DB> db;
+    mutable std::map<size_t, value_type> stage;
+    std::set<size_t> to_delete, non_const_access_mark;
 
-    WriteBatch batch;
+    rocksdb::WriteBatch batch;
     size_t db_index, stage_index;
 
     value_type& fetch_from_db(size_t index) const
     {
-        PinnableSlice value_ps;
-        Slice _index((const char*)&index, sizeof(index));
-        auto s = db->Get(ReadOptions(), db->DefaultColumnFamily(), _index, &value_ps);
+        rocksdb::PinnableSlice value_ps;
+        rocksdb::Slice _index((const char*)&index, sizeof(index));
+        auto s = db->Get(rocksdb::ReadOptions(), db->DefaultColumnFamily(), _index, &value_ps);
         if(s.ok())
         {
             stage.emplace(index, _serdes.deserialize(value_ps.ToString()));
