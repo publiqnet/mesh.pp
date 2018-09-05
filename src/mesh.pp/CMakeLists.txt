@@ -56,9 +56,6 @@ list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules" )
 
 find_package(CryptoPP REQUIRED)
 find_package(rocksdb)
-if(ROCKSDB_FOUND)
-    set(GLOB_ROCKSDB_FOUND 1 CACHE STRING "${ROCKSDB_INCLUDE_DIR}")
-endif()
 
 # interface library for headers only module
 add_library(mesh.pp INTERFACE)
@@ -75,10 +72,15 @@ target_include_directories(mesh.pp INTERFACE
 target_link_libraries(mesh.pp INTERFACE
     #boost
     cryptopp
-    rocksdb
     ${Boost_LIBRARIES}
     belt.pp
     )
+
+if(ROCKSDB_FOUND)
+    set(GLOB_ROCKSDB_FOUND 1 CACHE STRING "${ROCKSDB_INCLUDE_DIR}")
+    target_link_libraries(mesh.pp INTERFACE
+        rocksdb)
+endif()
 
 # what to do on make install
 install(TARGETS mesh.pp
