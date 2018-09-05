@@ -24,9 +24,11 @@ add_library(systemutility
     fileutility.cpp
     fileutility.hpp
     processutility.cpp
-    processutility.hpp
-    rdbutility.hpp)
+    processutility.hpp)
 
+if(GLOB_ROCKSDB_FOUND)
+    target_sources(systemutility PRIVATE rdbutility.hpp)
+endif()
 
 target_include_directories(systemutility PRIVATE rocksdb)
 # libraries this module links to
@@ -35,7 +37,6 @@ target_link_libraries(systemutility
         mesh.pp
         belt.pp
         packet
-        rocksdb
     PRIVATE
         utility
     )
