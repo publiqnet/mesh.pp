@@ -55,7 +55,7 @@ MESSAGE(STATUS "${Boost_LIBRARIES}")
 list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules" )
 
 find_package(CryptoPP REQUIRED)
-find_package(rocksdb)
+find_package(RocksDB)
 
 # interface library for headers only module
 add_library(mesh.pp INTERFACE)
