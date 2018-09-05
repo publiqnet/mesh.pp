@@ -339,7 +339,8 @@ void map_loader_internals::save()
                 &Data2::Index::to_string>
             temp(dir_path / (name + ".index"),
                  ptr_utl.get(),
-                 std::move(ref_ptransaction_index));
+                 std::move(ref_ptransaction_index),
+                 false);
 
     beltpp::finally guard_index([&ref_ptransaction_index, &temp]
     {
@@ -541,7 +542,8 @@ void vector_loader_internals::save()
                 &Data2::Number::to_string>
             temp(dir_path / (name + ".size"),
                  ptr_utl.get(),
-                 std::move(ref_ptransaction_size));
+                 std::move(ref_ptransaction_size),
+                 false);
 
     beltpp::finally guard_size([&ref_ptransaction_size, &temp]
     {

@@ -122,7 +122,8 @@ public:
     file_loader(boost::filesystem::path const& path,
                 void* putl = nullptr,
                 detail::ptr_transaction&& ptransaction_
-                    = detail::null_ptr_transaction())
+                    = detail::null_ptr_transaction(),
+                bool read = true)
         : modified(false)
         , ptransaction(std::move(ptransaction_))
         , file_path(path)
@@ -148,7 +149,8 @@ public:
         if (begin != end)
         {
             T ob;
-            ob.from_string(std::string(begin, end), putl);
+            if (read)
+                ob.from_string(std::string(begin, end), putl);
             beltpp::assign(*ptr, std::move(ob));
         }
 
