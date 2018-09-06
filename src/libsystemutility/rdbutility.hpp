@@ -8,14 +8,17 @@
 
 #include <boost/filesystem.hpp>
 
+#include <iostream>
 #include <map>
 #include <set>
 #include <string>
+#include <unordered_set>
 
 namespace meshpp {
 
 namespace detail {
 template <typename T, class SERDES> struct db_vector_impl;
+template <typename T, class SERDES> struct db_map_impl;
 }
 
 template <typename T, class SERDES>
@@ -40,6 +43,31 @@ struct SYSTEMUTILITYSHARED_EXPORT db_vector
 
 private:
     std::unique_ptr<detail::db_vector_impl<value_type, SERDES>> _impl;
+};
+
+template <typename T, class SERDES>
+struct SYSTEMUTILITYSHARED_EXPORT db_map
+{
+    using value_type = T;
+
+    db_map(boost::filesystem::path const& path, string const& db_name, SERDES const& serdes = {}) :
+        _impl(new detail::db_map_impl<value_type, SERDES>(path, db_name, serdes))
+    {}
+
+    value_type& at(string index) { return _impl->at(index); }
+    value_type const& at(string index) const { return _impl->as_const().at(index); }
+    void insert(string key, value_type const& value) { _impl->insert(key, value); }
+    void erase(string key) { _impl->erase(key); }
+    std::unordered_set<std::string> keys() const { return _impl->as_const().keys(); }
+    bool contains(string const& key) const { return _impl->as_const().contains(key); }
+    void save() { _impl->save(); }
+    void discard() { _impl->discard(); }
+    void commit() { _impl->commit(); }
+    db_map const& as_const() const { return *this; }
+
+
+private:
+    unique_ptr<detail::db_map_impl<value_type, SERDES>> _impl;
 };
 
 namespace detail {
@@ -219,4 +247,188 @@ private:
 template <typename T, class serdes> const char * const db_vector_impl<T, serdes>::SIZE_KEY = "__size";
 
 } // namespace detail
+
+namespace detail {
+
+template <typename T, typename SERDES>
+struct db_map_impl
+{
+    using value_type = T;
+    using key_type = string;
+
+    db_map_impl(boost::filesystem::path path, string const& db_name, SERDES const& serdes) :
+        _serdes(serdes)
+    {
+        Options options;
+        options.IncreaseParallelism();
+        options.OptimizeLevelStyleCompaction();
+        options.create_if_missing = true;
+        options.target_file_size_multiplier = 2;
+        DB* _db;
+        path /= db_name;
+        Status s = DB::Open(options, path.string(), &_db);
+        db.reset(_db);
+        assert(s.ok());
+
+        discard();
+    }
+
+    ~db_map_impl() { commit(); }
+
+    value_type& at(key_type const& key)
+    {
+        try
+        {
+            non_const_access_mark.insert(key);
+            return stage.at(key);
+        }
+        catch (out_of_range const&)
+        {
+            try
+            {
+                non_const_access_mark.insert(key);
+                fetch_from_db(key);
+                return stage.at(key);
+            } catch (...) {
+                throw;
+            }
+        }
+    }
+
+    value_type const& at(key_type const& key) const
+    {
+        try
+        {
+            return stage.at(key);
+        }
+        catch (out_of_range &e)
+        {
+            try {
+                fetch_from_db(key);
+                return stage.at(key);
+            } catch (...) {
+                throw;
+            }
+        }
+    }
+
+    void insert(key_type const& key, value_type const& value)
+    {
+        non_const_access_mark.insert(key);
+        stage.emplace(key, value);
+    }
+
+    void erase(key_type const& key)
+    {
+        to_delete.insert(key);
+        stage.erase(key);
+    }
+
+    bool contains(key_type const& key) const
+    {
+        if (stage.find(key) != stage.end())
+        {
+            if (to_delete.find(key) == to_delete.end())
+                return true;
+        }
+        else
+        {
+            try {
+                fetch_from_db(key);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    unordered_set<key_type> keys() const
+    {
+        unordered_set<key_type> result;
+        for (auto const &ki : stage.keys())
+            result.insert(ki);
+
+        unique_ptr<rocksdb::Iterator> it;
+        it.reset(db->NewIterator(ReadOptions()));
+
+        for (it->SeekToFirst(); it->Valid(); it->Next())
+        {
+            auto key = it->key().ToString();
+            result.insert(key);
+        }
+
+        for(auto const &di : to_delete)
+        {
+            result.erase(di);
+        }
+
+        return result;
+    }
+
+    void save()
+    {
+        batch.Clear();
+
+        for(auto const &di : to_delete)
+        {
+            Slice di_s(di);
+            batch.Delete(di_s);
+            non_const_access_mark.erase(di);
+        }
+
+        for(auto const &key : non_const_access_mark)
+        {
+            auto value = _serdes.serialize(stage.at(key));
+            Slice key_s(key), value_s(value);
+
+            batch.Put(key_s, value_s);
+        }
+    }
+
+    void discard()
+    {
+        stage.clear();
+        to_delete.clear();
+        non_const_access_mark.clear();
+        batch.Clear();
+    }
+
+    void commit()
+    {
+        if(batch.Count())
+        {
+            auto s = db->Write(WriteOptions(), &batch);
+            if (s.ok())
+                discard();
+        }
+    }
+
+    db_map_impl const& as_const() const { return *this; }
+
+private:
+    SERDES _serdes;
+    unique_ptr<DB> db;
+    mutable map<key_type, value_type> stage;
+    set<key_type> to_delete, non_const_access_mark;
+
+    WriteBatch batch;
+
+    value_type& fetch_from_db(key_type const& key) const
+    {
+        PinnableSlice value_ps;
+        Slice key_s(key);
+        auto s = db->Get(ReadOptions(), db->DefaultColumnFamily(), key_s, &value_ps);
+        if(s.ok())
+        {
+            stage.emplace(key, _serdes.deserialize(value_ps.ToString()));
+            value_ps.Reset();
+            return stage.at(key);
+        }
+        else
+            throw;
+    }
+};
+
+} // namespace detial
 } // namespace meshpp
