@@ -170,7 +170,8 @@ struct db_vector_impl
             batch.Delete(di_s);
         }
 
-        rocksdb::PinnableSlice _ps;
+        std::string value_str;
+        auto ro = rocksdb::ReadOptions();
         for (auto it = stage.begin(); it != stage.end(); ++it)
         {
             rocksdb::Slice key_s((const char*)&it->first, sizeof(it->first));
@@ -180,10 +181,9 @@ struct db_vector_impl
                 if(non_const_access_mark.find(it->first) == non_const_access_mark.end())
                     continue;
 
-                auto s = db->Get(rocksdb::ReadOptions(), db->DefaultColumnFamily(), key_s, &_ps);
-                if(s.ok() && _serdes.deserialize(_ps.ToString()) == it->second)
+                auto s = db->Get(ro, key_s, &value_str);
+                if(s.ok() && _serdes.deserialize(value_str) == it->second)
                     continue;
-                _ps.Reset();
             }
 
             std::string _str_new = _serdes.serialize(it->second);
@@ -230,13 +230,12 @@ private:
 
     value_type& fetch_from_db(size_t index) const
     {
-        rocksdb::PinnableSlice value_ps;
+        std::string value_str;
         rocksdb::Slice _index((const char*)&index, sizeof(index));
-        auto s = db->Get(rocksdb::ReadOptions(), db->DefaultColumnFamily(), _index, &value_ps);
+        auto s = db->Get(rocksdb::ReadOptions(), _index, &value_str);
         if(s.ok())
         {
-            stage.emplace(index, _serdes.deserialize(value_ps.ToString()));
-            value_ps.Reset();
+            stage.emplace(index, _serdes.deserialize(value_str));
             return stage.at(index);
         }
         else
@@ -419,14 +418,13 @@ private:
     value_type& fetch_from_db(key_type const& key_) const
     {
         auto key = _key_serdes.serialize(key_);
-        rocksdb::PinnableSlice value_ps;
+        std::string value_str;
         rocksdb::Slice key_s(key);
-        auto s = db->Get(rocksdb::ReadOptions(), db->DefaultColumnFamily(), key_s, &value_ps);
+        auto s = db->Get(rocksdb::ReadOptions(), key_s, &value_str);
         if(s.ok())
         {
-            value_type value_ = _val_serdes.deserialize(value_ps.ToString());
+            value_type value_ = _val_serdes.deserialize(value_str);
             stage.emplace(key_, value_);
-            value_ps.Reset();
             return stage.at(key_);
         }
         else
