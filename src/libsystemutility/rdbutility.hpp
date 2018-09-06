@@ -21,7 +21,7 @@ template <typename KEY, typename VAL, template<typename> class SERDES> struct db
 }
 
 template <typename VAL, template<typename> class SERDES>
-struct SYSTEMUTILITYSHARED_EXPORT db_vector
+struct db_vector
 {
     using value_type = VAL;
 
@@ -45,12 +45,12 @@ private:
 };
 
 template <typename KEY, typename VAL, template <typename> class SERDES>
-struct SYSTEMUTILITYSHARED_EXPORT db_map
+struct db_map
 {
     using key_type = KEY;
     using value_type = VAL;
 
-    db_map(boost::filesystem::path const& path, string const& db_name, SERDES<key_type> const& key_serdes = {}, SERDES<value_type> const& value_serdes = {}) :
+    db_map(boost::filesystem::path const& path, std::string const& db_name, SERDES<key_type> const& key_serdes = {}, SERDES<value_type> const& value_serdes = {}) :
         _impl(new detail::db_map_impl<key_type, value_type, SERDES>(path, db_name, key_serdes, value_serdes))
     {}
 
@@ -67,7 +67,7 @@ struct SYSTEMUTILITYSHARED_EXPORT db_map
 
 
 private:
-    unique_ptr<detail::db_map_impl<key_type, value_type, SERDES>> _impl;
+    std::unique_ptr<detail::db_map_impl<key_type, value_type, SERDES>> _impl;
 };
 
 namespace detail {
@@ -222,7 +222,7 @@ private:
     static const char * const SIZE_KEY;
     SERDES<value_type> _serdes;
     std::unique_ptr<rocksdb::DB> db;
-    mutable map<size_t, value_type> stage;
+    mutable std::map<size_t, value_type> stage;
     std::set<size_t> to_delete, non_const_access_mark;
 
     rocksdb::WriteBatch batch;
@@ -256,17 +256,17 @@ struct db_map_impl
     using key_type = KEY;
     using value_type = VAL;
 
-    db_map_impl(boost::filesystem::path path, string const& db_name, SERDES<key_type> const& key_serdes, SERDES<value_type> const& val_serdes) :
+    db_map_impl(boost::filesystem::path path, std::string const& db_name, SERDES<key_type> const& key_serdes, SERDES<value_type> const& val_serdes) :
         _key_serdes(key_serdes), _val_serdes(val_serdes)
     {
-        Options options;
+        rocksdb::Options options;
         options.IncreaseParallelism();
         options.OptimizeLevelStyleCompaction();
         options.create_if_missing = true;
         options.target_file_size_multiplier = 2;
-        DB* _db;
+        rocksdb::DB* _db;
         path /= db_name;
-        Status s = DB::Open(options, path.string(), &_db);
+        rocksdb::Status s = rocksdb::DB::Open(options, path.string(), &_db);
         db.reset(_db);
         assert(s.ok());
 
@@ -282,7 +282,7 @@ struct db_map_impl
             non_const_access_mark.insert(key);
             return stage.at(key);
         }
-        catch (out_of_range const&)
+        catch (std::out_of_range const&)
         {
             try
             {
@@ -301,7 +301,7 @@ struct db_map_impl
         {
             return stage.at(key);
         }
-        catch (out_of_range &e)
+        catch (std::out_of_range &e)
         {
             try {
                 fetch_from_db(key);
@@ -343,14 +343,14 @@ struct db_map_impl
         return false;
     }
 
-    unordered_set<key_type> keys() const
+    std::unordered_set<key_type> keys() const
     {
-        unordered_set<key_type> result;
+        std::unordered_set<key_type> result;
         for (auto const &ki : stage.keys())
             result.insert(ki);
 
-        unique_ptr<rocksdb::Iterator> it;
-        it.reset(db->NewIterator(ReadOptions()));
+        std::unique_ptr<rocksdb::Iterator> it;
+        it.reset(db->NewIterator(rocksdb::ReadOptions()));
 
         for (it->SeekToFirst(); it->Valid(); it->Next())
         {
@@ -372,7 +372,7 @@ struct db_map_impl
 
         for(auto const &di : to_delete)
         {
-            Slice di_s(_key_serdes.serialize(di));
+            rocksdb::Slice di_s(_key_serdes.serialize(di));
             batch.Delete(di_s);
             non_const_access_mark.erase(di);
         }
@@ -381,7 +381,7 @@ struct db_map_impl
         {
             auto value = _val_serdes.serialize(stage.at(key_));
             auto key = _key_serdes.serialize(key_);
-            Slice key_s(key), value_s(value);
+            rocksdb::Slice key_s(key), value_s(value);
 
             batch.Put(key_s, value_s);
         }
@@ -399,7 +399,7 @@ struct db_map_impl
     {
         if(batch.Count())
         {
-            auto s = db->Write(WriteOptions(), &batch);
+            auto s = db->Write(rocksdb::WriteOptions(), &batch);
             if (s.ok())
                 discard();
         }
@@ -410,18 +410,18 @@ struct db_map_impl
 private:
     SERDES<key_type> _key_serdes;
     SERDES<value_type> _val_serdes;
-    unique_ptr<DB> db;
-    mutable map<key_type, value_type> stage;
-    set<key_type> to_delete, non_const_access_mark;
+    std::unique_ptr<rocksdb::DB> db;
+    mutable std::map<key_type, value_type> stage;
+    std::set<key_type> to_delete, non_const_access_mark;
 
-    WriteBatch batch;
+    rocksdb::WriteBatch batch;
 
     value_type& fetch_from_db(key_type const& key_) const
     {
         auto key = _key_serdes.serialize(key_);
-        PinnableSlice value_ps;
-        Slice key_s(key);
-        auto s = db->Get(ReadOptions(), db->DefaultColumnFamily(), key_s, &value_ps);
+        rocksdb::PinnableSlice value_ps;
+        rocksdb::Slice key_s(key);
+        auto s = db->Get(rocksdb::ReadOptions(), db->DefaultColumnFamily(), key_s, &value_ps);
         if(s.ok())
         {
             value_type value_ = _val_serdes.deserialize(value_ps.ToString());
