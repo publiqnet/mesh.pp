@@ -16,16 +16,16 @@
 namespace meshpp {
 
 namespace detail {
-template <typename T, class SERDES> struct db_vector_impl;
+template <typename VAL, template<typename> class SERDES> struct db_vector_impl;
 template <typename KEY, typename VAL, template<typename> class SERDES> struct db_map_impl;
 }
 
-template <typename T, class SERDES>
+template <typename VAL, template<typename> class SERDES>
 struct SYSTEMUTILITYSHARED_EXPORT db_vector
 {
-    using value_type = T;
+    using value_type = VAL;
 
-    db_vector(boost::filesystem::path const& path, std::string const& db_name, SERDES const& serdes = {}) :
+    db_vector(boost::filesystem::path const& path, std::string const& db_name, SERDES<value_type> const& serdes = {}) :
         _impl(new detail::db_vector_impl<value_type, SERDES>(path, db_name, serdes))
     {}
 
@@ -41,7 +41,7 @@ struct SYSTEMUTILITYSHARED_EXPORT db_vector
 
 
 private:
-    std::unique_ptr<detail::db_vector_impl<value_type, SERDES>> _impl;
+    std::unique_ptr<detail::db_vector_impl<VAL, SERDES>> _impl;
 };
 
 template <typename KEY, typename VAL, template <typename> class SERDES>
@@ -72,12 +72,12 @@ private:
 
 namespace detail {
 
-template <typename T, class SERDES>
+template <typename VAL, template<typename> class SERDES>
 struct db_vector_impl
 {
-    using value_type = T;
+    using value_type = VAL;
 
-    db_vector_impl(boost::filesystem::path path, std::string const& db_name, SERDES const& serdes) :
+    db_vector_impl(boost::filesystem::path path, std::string const& db_name, SERDES<value_type> const& serdes) :
         _serdes(serdes)
     {
         rocksdb::Options options;
@@ -220,9 +220,9 @@ struct db_vector_impl
 
 private:
     static const char * const SIZE_KEY;
-    SERDES _serdes;
+    SERDES<value_type> _serdes;
     std::unique_ptr<rocksdb::DB> db;
-    mutable std::map<size_t, value_type> stage;
+    mutable map<size_t, value_type> stage;
     std::set<size_t> to_delete, non_const_access_mark;
 
     rocksdb::WriteBatch batch;
@@ -244,7 +244,7 @@ private:
     }
 };
 
-template <typename T, class serdes> const char * const db_vector_impl<T, serdes>::SIZE_KEY = "__size";
+template <typename VAL, template<typename> class SERDES> const char * const db_vector_impl<VAL, SERDES>::SIZE_KEY = "__size";
 
 } // namespace detail
 
