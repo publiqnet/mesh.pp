@@ -8,7 +8,6 @@
 
 #include <boost/filesystem.hpp>
 
-#include <iostream>
 #include <map>
 #include <set>
 #include <string>
@@ -18,7 +17,7 @@ namespace meshpp {
 
 namespace detail {
 template <typename T, class SERDES> struct db_vector_impl;
-template <typename T, class SERDES> struct db_map_impl;
+template <typename KEY, typename VAL, template<typename> class SERDES> struct db_map_impl;
 }
 
 template <typename T, class SERDES>
@@ -45,21 +44,22 @@ private:
     std::unique_ptr<detail::db_vector_impl<value_type, SERDES>> _impl;
 };
 
-template <typename T, class SERDES>
+template <typename KEY, typename VAL, template <typename> class SERDES>
 struct SYSTEMUTILITYSHARED_EXPORT db_map
 {
-    using value_type = T;
+    using key_type = KEY;
+    using value_type = VAL;
 
-    db_map(boost::filesystem::path const& path, string const& db_name, SERDES const& serdes = {}) :
-        _impl(new detail::db_map_impl<value_type, SERDES>(path, db_name, serdes))
+    db_map(boost::filesystem::path const& path, string const& db_name, SERDES<key_type> const& key_serdes = {}, SERDES<value_type> const& value_serdes = {}) :
+        _impl(new detail::db_map_impl<key_type, value_type, SERDES>(path, db_name, key_serdes, value_serdes))
     {}
 
-    value_type& at(string index) { return _impl->at(index); }
-    value_type const& at(string index) const { return _impl->as_const().at(index); }
-    void insert(string key, value_type const& value) { _impl->insert(key, value); }
-    void erase(string key) { _impl->erase(key); }
-    std::unordered_set<std::string> keys() const { return _impl->as_const().keys(); }
-    bool contains(string const& key) const { return _impl->as_const().contains(key); }
+    value_type& at(key_type index) { return _impl->at(index); }
+    value_type const& at(key_type index) const { return _impl->as_const().at(index); }
+    void insert(key_type key, value_type const& value) { _impl->insert(key, value); }
+    void erase(key_type key) { _impl->erase(key); }
+    std::unordered_set<key_type> keys() const { return _impl->as_const().keys(); }
+    bool contains(key_type const& key) const { return _impl->as_const().contains(key); }
     void save() { _impl->save(); }
     void discard() { _impl->discard(); }
     void commit() { _impl->commit(); }
@@ -67,7 +67,7 @@ struct SYSTEMUTILITYSHARED_EXPORT db_map
 
 
 private:
-    unique_ptr<detail::db_map_impl<value_type, SERDES>> _impl;
+    unique_ptr<detail::db_map_impl<key_type, value_type, SERDES>> _impl;
 };
 
 namespace detail {
@@ -250,14 +250,14 @@ template <typename T, class serdes> const char * const db_vector_impl<T, serdes>
 
 namespace detail {
 
-template <typename T, typename SERDES>
+template <typename KEY, typename VAL, template <typename> class SERDES>
 struct db_map_impl
 {
-    using value_type = T;
-    using key_type = string;
+    using key_type = KEY;
+    using value_type = VAL;
 
-    db_map_impl(boost::filesystem::path path, string const& db_name, SERDES const& serdes) :
-        _serdes(serdes)
+    db_map_impl(boost::filesystem::path path, string const& db_name, SERDES<key_type> const& key_serdes, SERDES<value_type> const& val_serdes) :
+        _key_serdes(key_serdes), _val_serdes(val_serdes)
     {
         Options options;
         options.IncreaseParallelism();
@@ -354,7 +354,7 @@ struct db_map_impl
 
         for (it->SeekToFirst(); it->Valid(); it->Next())
         {
-            auto key = it->key().ToString();
+            auto key = _key_serdes.deserialize(it->key().ToString());
             result.insert(key);
         }
 
@@ -372,14 +372,15 @@ struct db_map_impl
 
         for(auto const &di : to_delete)
         {
-            Slice di_s(di);
+            Slice di_s(_key_serdes.serialize(di));
             batch.Delete(di_s);
             non_const_access_mark.erase(di);
         }
 
-        for(auto const &key : non_const_access_mark)
+        for(auto const &key_ : non_const_access_mark)
         {
-            auto value = _serdes.serialize(stage.at(key));
+            auto value = _val_serdes.serialize(stage.at(key_));
+            auto key = _key_serdes.serialize(key_);
             Slice key_s(key), value_s(value);
 
             batch.Put(key_s, value_s);
@@ -407,23 +408,26 @@ struct db_map_impl
     db_map_impl const& as_const() const { return *this; }
 
 private:
-    SERDES _serdes;
+    SERDES<key_type> _key_serdes;
+    SERDES<value_type> _val_serdes;
     unique_ptr<DB> db;
     mutable map<key_type, value_type> stage;
     set<key_type> to_delete, non_const_access_mark;
 
     WriteBatch batch;
 
-    value_type& fetch_from_db(key_type const& key) const
+    value_type& fetch_from_db(key_type const& key_) const
     {
+        auto key = _key_serdes.serialize(key_);
         PinnableSlice value_ps;
         Slice key_s(key);
         auto s = db->Get(ReadOptions(), db->DefaultColumnFamily(), key_s, &value_ps);
         if(s.ok())
         {
-            stage.emplace(key, _serdes.deserialize(value_ps.ToString()));
+            value_type value_ = _val_serdes.deserialize(value_ps.ToString());
+            stage.emplace(key_, value_);
             value_ps.Reset();
-            return stage.at(key);
+            return stage.at(key_);
         }
         else
             throw;
