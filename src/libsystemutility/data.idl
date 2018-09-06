@@ -1,34 +1,24 @@
-module Data2
+module Data
 {
-    class Number
+    class StringValue
     {
-        UInt64 value
+        String value
     }
 
-    class Index
+    class UInt64Value
     {
-        Hash String String dictionary
+        uint64_t value
     }
 
-    class FileData
-    {
-        Hash String Extension block
-    }
-
-    class FileData2
-    {
-        Hash UInt64 Extension block
-    }
-
-    class BlockRow
+    class StringBlockItem
     {
         String key
         Extension item
     }
 
-    class BlockRow2
+    class UInt64BlockItem
     {
-        UInt64 index
+        UInt64 key
         Extension item
     }
 }
