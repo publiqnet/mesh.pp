@@ -14,15 +14,17 @@
 
 namespace meshpp {
 
-namespace detail { template <typename T, class SERDES> struct db_loader_impl; }
+namespace detail {
+template <typename T, class SERDES> struct db_vector_impl;
+}
 
 template <typename T, class SERDES>
-struct db_loader
+struct SYSTEMUTILITYSHARED_EXPORT db_vector
 {
     using value_type = T;
 
-    db_loader(boost::filesystem::path const& path, std::string const& db_name, SERDES const& serdes = {}) :
-        _impl(new detail::db_loader_impl<value_type, SERDES>(path, db_name, serdes))
+    db_vector(boost::filesystem::path const& path, std::string const& db_name, SERDES const& serdes = {}) :
+        _impl(new detail::db_vector_impl<value_type, SERDES>(path, db_name, serdes))
     {}
 
     value_type& at(size_t index) { return _impl->at(index); }
@@ -33,21 +35,21 @@ struct db_loader
     void save() { _impl->save(); }
     void discard() { _impl->discard(); }
     void commit() { _impl->commit(); }
-    db_loader const& as_const() const { return *this; }
+    db_vector const& as_const() const { return *this; }
 
 
 private:
-    std::unique_ptr<detail::db_loader_impl<value_type, SERDES>> _impl;
+    std::unique_ptr<detail::db_vector_impl<value_type, SERDES>> _impl;
 };
 
 namespace detail {
 
 template <typename T, class SERDES>
-struct db_loader_impl
+struct db_vector_impl
 {
     using value_type = T;
 
-    db_loader_impl(boost::filesystem::path path, std::string const& db_name, SERDES const& serdes) :
+    db_vector_impl(boost::filesystem::path path, std::string const& db_name, SERDES const& serdes) :
         _serdes(serdes)
     {
         rocksdb::Options options;
@@ -72,7 +74,7 @@ struct db_loader_impl
         discard();
     }
 
-    ~db_loader_impl() { commit(); }
+    ~db_vector_impl() { commit(); }
 
     value_type& at(size_t index)
     {
@@ -186,7 +188,7 @@ struct db_loader_impl
         }
     }
 
-    db_loader_impl const& as_const() const { return *this; }
+    db_vector_impl const& as_const() const { return *this; }
 
 private:
     static const char * const SIZE_KEY;
@@ -214,7 +216,7 @@ private:
     }
 };
 
-template <typename T, class serdes> const char * const db_loader_impl<T, serdes>::SIZE_KEY = "__size";
+template <typename T, class serdes> const char * const db_vector_impl<T, serdes>::SIZE_KEY = "__size";
 
 } // namespace detail
 } // namespace meshpp
