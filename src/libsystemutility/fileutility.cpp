@@ -559,12 +559,22 @@ private:
 
     void compact()
     {
-        uint64_t start = 0;
-        uint64_t shift = 0;
+        uint64_t shift_sum = 0;
+        uint64_t size_sum = 0;
+        uint64_t written_size = 0;
+        size_t size_when_opened = 0;
 
         {
-            boost::filesystem::fstream fl;
+            uint64_t start = 0;
+            for (auto const& item : markers)
+            {
+                size_sum += (item.end - item.start);
+                shift_sum = item.start - start;
+                start = item.end - shift_sum;
+            }
+            written_size = start + shift_sum;
 
+            boost::filesystem::fstream fl;
             fl.open(file_path_tr(), std::ios_base::binary |
                                     std::ios_base::out |
                                     std::ios_base::in);
@@ -575,12 +585,25 @@ private:
             fl.seekg(0, std::ios_base::end);
             check(fl, file_path_tr(), "compact", "seekg", "end", std::string());
 
-            size_t size_when_opened = size_t(fl.tellg());
+            size_when_opened = size_t(fl.tellg());
+        }
 
-            for (size_t index = 0; index < markers.size(); ++index)
+        if (shift_sum >= size_sum)
+        {
+            uint64_t start = 0;
+            uint64_t shift = 0;
+
+            boost::filesystem::fstream fl;
+
+            fl.open(file_path_tr(), std::ios_base::binary |
+                                    std::ios_base::out |
+                                    std::ios_base::in);
+
+            if (!fl)
+                throw std::runtime_error("compact(): unable to open fstream: " + file_path_tr().string());
+
+            for (auto& item : markers)
             {
-                auto& item = markers[index];
-
                 shift = item.start - start;
 
                 item.start -= shift;
@@ -606,14 +629,17 @@ private:
 
                 start = item.end;
             }
+
+            written_size = start;
         }
 
-        if (shift)
+        if (written_size < size_when_opened)
         {
             boost::system::error_code ec;
-            boost::filesystem::resize_file(file_path_tr(), start, ec);
+            boost::filesystem::resize_file(file_path_tr(), written_size, ec);
         }
-        else if (markers.empty())
+
+        if (markers.empty())
         {
             bool res = true;
             boost::system::error_code ec;
@@ -963,6 +989,7 @@ vector_loader_internals::vector_loader_internals(std::string const& name,
     , name(name)
     , dir_path(path)
     , size(load_size(name, path))
+    , size_with_overlay(size)
     , overlay()
     , ptr_utl(std::move(ptr_utl))
     , ptransaction(detail::null_ptr_transaction())
@@ -1102,6 +1129,7 @@ void vector_loader_internals::discard()
 
     overlay.clear();
     size = load_size(name, dir_path);
+    size_with_overlay = size;
 }
 
 void vector_loader_internals::commit()

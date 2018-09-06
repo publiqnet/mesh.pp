@@ -644,6 +644,7 @@ public:
     std::string name;
     boost::filesystem::path dir_path;
     size_t size;
+    size_t size_with_overlay;
     mutable std::unordered_map<size_t, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
     ptr_transaction ptransaction;
@@ -744,6 +745,7 @@ public:
         auto& ref = data.overlay[length];
         ref.first.set(value);
         ref.second = internal::modified;
+        ++data.size_with_overlay;
     }
 
     void pop_back()
@@ -764,11 +766,13 @@ public:
             else
                 it_overlay->second.second = internal::deleted;
         }
+        --data.size_with_overlay;
     }
 
     size_t size() const
     {
-        size_t size = data.size;
+        return data.size_with_overlay;
+        /*size_t size = data.size;
 
         for (auto const& item : data.overlay)
         {
@@ -789,7 +793,7 @@ public:
                 throw std::runtime_error(data.name + ": vector loader overlay integrity check error");
         }
 
-        return size;
+        return size;*/
     }
 
     void save()
