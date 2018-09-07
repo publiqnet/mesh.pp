@@ -80,12 +80,6 @@ public:
             state.add_passive(item);
     }
 
-    void write(string const& value)
-    {
-        if (plogger)
-            plogger->message_no_eol(value);
-    }
-
     void writeln(string const& value)
     {
         if (plogger)
@@ -169,16 +163,14 @@ void p2psocket::prepare_wait()
 
         item.local.port = state.get_fixed_local_port();
 
-        m_pimpl->write("start to listen on");
-        m_pimpl->writeln(item.to_string());
+        m_pimpl->writeln("start to listen on " + item.to_string());
 
         peer_ids peers = sk.listen(item);
 
         for (auto const& peer_item : peers)
         {
             auto conn_item = sk.info(peer_item);
-            m_pimpl->write("listening on");
-            m_pimpl->writeln(conn_item.to_string());
+            m_pimpl->writeln("listening on " + conn_item.to_string());
 
             state.add_active(conn_item, peer_item);
         }
@@ -216,23 +208,19 @@ void p2psocket::prepare_wait()
 
         size_t attempts = state.get_open_attempts(item);
 
-        m_pimpl->write("connect to");
-        m_pimpl->writeln(item.to_string());
+        m_pimpl->writeln("connect to " + item.to_string());
         sk.open(item, attempts);
 
         guard_failure.dismiss();
     }   //  for to_connect
 
     if (0 == m_pimpl->receive_attempt_count)
-    {
-        m_pimpl->write(state.short_name());
-        m_pimpl->write("reading...");
-    }
+        m_pimpl->writeln(state.short_name() + " reading...");
     else
-    {
-        m_pimpl->write(std::to_string(m_pimpl->receive_attempt_count));
-        m_pimpl->write("...");
-    }
+        m_pimpl->writeln("    " +
+                         state.short_name() +
+                         " still reading... " +
+                         std::to_string(m_pimpl->receive_attempt_count));
 
     sk.prepare_wait();
 }
@@ -312,12 +300,12 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             beltpp::isocket_protocol_error msg;
             received_packet.get(msg);
 
-            m_pimpl->write("got error from bad guy");
-            m_pimpl->writeln(current_connection.to_string());
+            m_pimpl->writeln("got error from bad guy " + current_connection.to_string());
             m_pimpl->writeln(msg.buffer);
-            m_pimpl->write("dropping");
-            m_pimpl->writeln(current_peer);
-            m_pimpl->writeln("remove_later current_peer, 0, true: " + current_peer + ", " + current_connection.to_string());
+            m_pimpl->writeln("dropping " + current_peer);
+            m_pimpl->writeln("remove_later current_peer, 0, true: " +
+                             current_peer + ", " +
+                             current_connection.to_string());
             state.remove_later(current_peer, 0, true);
 
             peer = state.get_nodeid(current_peer);
@@ -349,9 +337,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         }
         case beltpp::isocket_drop::rtt:
         {
-            m_pimpl->write("dropped");
-            m_pimpl->writeln(current_peer);
-            m_pimpl->writeln("remove_later current_peer, 0, true: " + current_peer + ", " + current_connection.to_string());
+            m_pimpl->writeln("dropped " + current_peer);
+            m_pimpl->writeln("remove_later current_peer, 0, true: " +
+                             current_peer + ", " +
+                             current_connection.to_string());
             state.remove_later(current_peer, 0, false);
 
             peer = state.get_nodeid(current_peer);
@@ -468,8 +457,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 ip_address introduce_addr = sk.info(introduce_peer_id);
                 OpenConnectionWith msg_open;
 
-                m_pimpl->write("sending connect info");
-                m_pimpl->writeln(introduce_addr.to_string());
+                m_pimpl->writeln("sending connect info " + introduce_addr.to_string());
 
                 assign(msg_open.addr, introduce_addr);
 
@@ -572,17 +560,11 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         if (false == connected.empty())
             m_pimpl->writeln("status summary - connected");
         for (auto const& item : connected)
-        {
-            m_pimpl->write("   ");
-            m_pimpl->writeln(item.to_string());
-        }
+            m_pimpl->writeln("    " + item.to_string());
         if (false == listening.empty())
             m_pimpl->writeln("status summary - listening");
         for (auto const& item : listening)
-        {
-            m_pimpl->write("   ");
-            m_pimpl->writeln(item.to_string());
-        }
+            m_pimpl->writeln("    " + item.to_string());
 
         m_pimpl->writeln("KBucket list");
         m_pimpl->writeln("--------");
