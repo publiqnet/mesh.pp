@@ -92,6 +92,7 @@ set(SRC_FILES
     cryptoutility.hpp
     global.hpp
     fileutility.hpp
+    log.hpp
     processutility.hpp
     p2psocket.hpp
     rdbutility.hpp)
