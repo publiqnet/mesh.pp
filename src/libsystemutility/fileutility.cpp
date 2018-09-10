@@ -471,7 +471,7 @@ public:
             check(fl, file_path_tr(), "save", "write", std::to_string(markers[loaded_marker_index].start) + "-" + std::to_string(markers[loaded_marker_index].start), "opened size: " + std::to_string(size_when_opened));
         }
 
-        compact();
+        //compact();
         save_markers();
 
         if (nullptr == ptransaction)
@@ -671,12 +671,17 @@ private:
         if (!ofl)
             throw std::runtime_error("save_markers(): cannot open: " + file_path_marker_tr().string());
 
-        for (auto const& marker : markers)
+        static_assert(sizeof(marker) == 3 * sizeof(uint64_t), "size mismatch");
+
+        if (false == markers.empty())
+            ofl.write(reinterpret_cast<char const*>(&markers.front().start), sizeof(marker) * markers.size());
+        
+        /*for (auto const& marker : markers)
         {
             ofl.write(reinterpret_cast<char const*>(&marker.start), sizeof(uint64_t));
             ofl.write(reinterpret_cast<char const*>(&marker.end), sizeof(uint64_t));
             ofl.write(reinterpret_cast<char const*>(&marker.key), sizeof(uint64_t));
-        }
+        }*/
     }
 
     boost::filesystem::path file_path_marker() const
