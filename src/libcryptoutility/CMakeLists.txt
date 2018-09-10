@@ -9,8 +9,10 @@ add_library(cryptoutility
     words.hpp)
 
 # libraries this module links to
-target_link_libraries(cryptoutility PUBLIC
-    mesh.pp)
+target_link_libraries(cryptoutility
+    PUBLIC
+        mesh.pp
+        cryptopp)
 
 # what to do on make install
 install(TARGETS cryptoutility

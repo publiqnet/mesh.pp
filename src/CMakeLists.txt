@@ -26,7 +26,9 @@ if( NOT WIN32 )
     #SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 endif()
 
-if(NOT BELT_PP_LOADED)
+include(cmake_utility/utility.cmake)
+
+if(NOT TARGET belt.pp)
 add_subdirectory(belt.pp)
 endif()
 add_subdirectory(libcryptoutility)
@@ -44,4 +46,4 @@ add_subdirectory(test_socket)
 
 # following is used for find_package functionality
 install(FILES mesh.pp-config.cmake DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
-install(EXPORT mesh.pp.package DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})
+install(EXPORT mesh.pp.package NAMESPACE mesh:: DESTINATION ${MESHPP_INSTALL_DESTINATION_LIBRARY})

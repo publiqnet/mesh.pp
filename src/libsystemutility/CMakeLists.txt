@@ -26,7 +26,7 @@ add_library(systemutility
     processutility.cpp
     processutility.hpp)
 
-if(GLOB_ROCKSDB_FOUND)
+if(TARGET rocksdb)
     target_sources(systemutility PRIVATE rdbutility.hpp)
 endif()
 
@@ -37,6 +37,8 @@ target_link_libraries(systemutility
         mesh.pp
         belt.pp
         packet
+        Boost::system
+        Boost::filesystem
     PRIVATE
         utility
     )

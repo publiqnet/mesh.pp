@@ -7,7 +7,13 @@ add_library(mlog
     log.hpp)
 
 # libraries this module links to
-target_link_libraries(mlog PUBLIC mesh.pp belt.pp PRIVATE utility)
+target_link_libraries(mlog
+    PUBLIC
+        mesh.pp
+        belt.pp
+        Boost::filesystem
+    PRIVATE
+        utility)
 
 # what to do on make install
 install(TARGETS mlog

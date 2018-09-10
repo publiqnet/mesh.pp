@@ -20,7 +20,5 @@ endif (WIN32)
 
 project(mesh.pp)
 
-set(MESH_PP_LOADED TRUE PARENT_SCOPE)
-
 add_subdirectory(src)
 

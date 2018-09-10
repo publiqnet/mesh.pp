@@ -9,8 +9,12 @@ target_include_directories(kbucket INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>)
 
 # libraries this module links to
-target_link_libraries(kbucket INTERFACE
-    mesh.pp
+target_link_libraries(kbucket
+    INTERFACE
+        mesh.pp
+        belt.pp
+        cryptopp
+        Boost::boost
     )
 
 # what to do on make install

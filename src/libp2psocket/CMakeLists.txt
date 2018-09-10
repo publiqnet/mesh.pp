@@ -18,15 +18,16 @@ add_library(p2psocket
     message.gen.hpp)
 
 # libraries this module links to
-target_link_libraries(p2psocket PUBLIC
-    mesh.pp
-    belt.pp
-    packet
+target_link_libraries(p2psocket
+    PUBLIC
+        mesh.pp
+        belt.pp
+        packet
     PRIVATE
-    cryptoutility
-    utility
-    socket
-    kbucket)
+        cryptoutility
+        utility
+        socket
+        kbucket)
 
 # what to do on make install
 install(TARGETS p2psocket
