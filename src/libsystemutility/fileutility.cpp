@@ -984,8 +984,10 @@ size_t load_size(std::string const& name,
 vector_loader_internals::vector_loader_internals(std::string const& name,
                                                  boost::filesystem::path const& path,
                                                  size_t limit,
+                                                 size_t group,
                                                  beltpp::void_unique_ptr&& ptr_utl)
     : limit(limit)
+    , group(group)
     , name(name)
     , dir_path(path)
     , size(load_size(name, path))
@@ -1007,7 +1009,7 @@ void vector_loader_internals::load(size_t index) const
         class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
 
         auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(filename(index, name, limit),
+                    std::make_pair(filename(index, name, limit, group),
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
         item_ptransaction = std::move(ref_ptransaction);
@@ -1021,7 +1023,7 @@ void vector_loader_internals::load(size_t index) const
                       Data::UInt64BlockItem,
                       &Data::UInt64BlockItem::from_string,
                       &Data::UInt64BlockItem::to_string>
-            temp(dir_path / filename(index, name, limit),
+            temp(dir_path / filename(index, name, limit, group),
                  index,
                  ptr_utl.get(),
                  std::move(item_ptransaction));
@@ -1054,7 +1056,7 @@ void vector_loader_internals::save()
     for (auto& item : overlay)
     {
         auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(filename(item.first, name, limit),
+                    std::make_pair(filename(item.first, name, limit, group),
                                    detail::null_ptr_transaction()));
         auto& ref_ptransaction = pair_res.first->second;
 
@@ -1062,7 +1064,7 @@ void vector_loader_internals::save()
                           Data::UInt64BlockItem,
                           &Data::UInt64BlockItem::from_string,
                           &Data::UInt64BlockItem::to_string>
-                temp(dir_path / filename(item.first, name, limit),
+                temp(dir_path / filename(item.first, name, limit, group),
                      item.first,
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
@@ -1143,10 +1145,12 @@ void vector_loader_internals::commit()
 
 std::string vector_loader_internals::filename(size_t index,
                                               std::string const& name,
-                                              size_t limit)
+                                              size_t limit,
+                                              size_t group)
 {
+    assert(group > 0);
     assert(limit > 0);
-    std::string strh = std::to_string(index % limit);
+    std::string strh = std::to_string((index / group) % limit);
     while (strh.length() < 4)
         strh = "0" + strh;
 

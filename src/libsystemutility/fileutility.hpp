@@ -626,6 +626,7 @@ public:
     vector_loader_internals(std::string const& name,
                             boost::filesystem::path const& path,
                             size_t limit,
+                            size_t group,
                             beltpp::void_unique_ptr&& ptr_utl);
     ~vector_loader_internals();
 
@@ -636,11 +637,13 @@ public:
 
     static std::string filename(size_t index,
                                 std::string const& name,
-                                size_t limit);
+                                size_t limit,
+                                size_t group);
 
     enum ecode {none, deleted, modified};
 
     size_t limit;
+    size_t group;
     std::string name;
     boost::filesystem::path dir_path;
     size_t size;
@@ -660,8 +663,9 @@ public:
     vector_loader(std::string const& name,
                   boost::filesystem::path const& path,
                   size_t limit,
+                  size_t group,
                   beltpp::void_unique_ptr&& ptr_utl)
-        : data(name, path, limit, std::move(ptr_utl))
+        : data(name, path, limit, group, std::move(ptr_utl))
     {}
     ~vector_loader()
     {
