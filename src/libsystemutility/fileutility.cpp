@@ -339,6 +339,9 @@ public:
             keys.push_back(T_key());
         }
 
+        if (keys.empty())
+            throw std::runtime_error("block_file_loader(): nothing to do, keys are empty");
+
         for (auto const& key : keys)
         {
             size_t& loaded_marker_index = values[key].loaded_marker_index;
@@ -1010,6 +1013,7 @@ void map_loader_internals::load(std::string const& key) const
 #endif
 }
 
+#ifdef USE_ROCKS_DB
 void map_loader_internals::save()
 {
     auto ptr_utl_local = meshpp::detail::get_putl();
@@ -1022,98 +1026,22 @@ void map_loader_internals::save()
         discard();
     });
 
-#ifdef USE_ROCKS_DB
     auto& batch = pimpl->batch;
     batch.Clear();
-#else
-    if (nullptr == pimpl->ptransaction)
-        pimpl->ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
-
-    class_transaction& ref_class_transaction =
-            dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
-#endif
 
     for (auto& item : overlay)
     {
         if (item.second.second == map_loader_internals::none)
             continue;
-#ifndef USE_ROCKS_DB
-
-        //  let index block owner maintain the index transaction
-        auto& ref_ptransaction_index = ref_class_transaction.index;
-        block_file_loader<std::string,
-                          Data::StringBlockItem,
-                          &Data::StringBlockItem::from_string,
-                          &Data::StringBlockItem::to_string>
-                index_bl(dir_path / (name + ".index"),
-                         std::vector<std::string>{item.first},
-                         ptr_utl_local.get(),
-                         std::move(ref_ptransaction_index));
-        //  make sure guard_index will take the transaction back eventually
-        //  in the end of this for step
-        //  thus "index_bl" will be destructed without owning a transaction
-        beltpp::finally guard_index([&ref_ptransaction_index, &index_bl]
-        {
-            ref_ptransaction_index = std::move(index_bl.transaction());
-        });
-
-        std::string str_filename;
-        if (index_bl.loaded())
-        {
-            Data::StringValue index_item;
-            index_bl.as_const()[item.first].item.get(index_item);
-            str_filename = index_item.value;
-        }
-        else
-        {
-            str_filename = filename(item.first, name, limit);
-
-            Data::StringValue index_item;
-            index_item.value = str_filename;
-            index_bl[item.first].item.set(std::move(index_item));
-        }
-
-        auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(str_filename,
-                                   detail::null_ptr_transaction()));
-        auto& ref_ptransaction = pair_res.first->second;
-
-        //  let file block owner maintain the transaction
-        //  that belongs to it
-        block_file_loader<std::string,
-                          Data::StringBlockItem,
-                          &Data::StringBlockItem::from_string,
-                          &Data::StringBlockItem::to_string>
-                temp(dir_path / str_filename,
-                     std::vector<std::string>{item.first},
-                     ptr_utl.get(),
-                     std::move(ref_ptransaction));
-
-        //  make sure guard_item will take the transaction back eventually
-        //  in the end of this for step
-        //  thus "temp" will be destructed without owning a transaction
-        beltpp::finally guard_item([&ref_ptransaction, &temp]
-        {
-            ref_ptransaction = std::move(temp.transaction());
-        });
-#endif
         //  update the block
 
         if (item.second.second == map_loader_internals::deleted)
         {
-#ifdef USE_ROCKS_DB
             rocksdb::Slice di_s(item.first);
             batch.Delete(di_s);
-#else
-            temp.erase();
-
-            index_bl.erase();
-            index.erase(item.first);
-#endif
         }
         else if (item.second.second == map_loader_internals::modified)
         {
-#ifdef USE_ROCKS_DB
             rocksdb::Slice key_s(item.first);
 
             Data::StringBlockItem store;
@@ -1125,22 +1053,149 @@ void map_loader_internals::save()
             item.second.first = std::move(store.item);
 
             batch.Put(key_s, value_s);
-#else
-            temp[item.first].item = std::move(item.second.first);
-            temp.save();
-
-            index_bl.save();
-            index.insert(std::make_pair(item.first, filename(item.first, name, limit)));
-#endif
         }
     }
 
-#ifndef USE_ROCKS_DB
+    guard.dismiss();
+}
+#else
+void map_loader_internals::save()
+{
+    auto ptr_utl_local = meshpp::detail::get_putl();
+
+    if (overlay.empty())
+        return;
+
+    beltpp::on_failure guard([this]
+    {
+        discard();
+    });
+
+    if (nullptr == pimpl->ptransaction)
+        pimpl->ptransaction =
+                beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
+
+    class_transaction& ref_class_transaction =
+            dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
+
+    std::vector<std::string> modified_keys;
+    std::vector<std::string> erased_keys;
+    for (auto& item : overlay)
+    {
+        if (item.second.second == map_loader_internals::modified)
+            modified_keys.push_back(item.first);
+        else if (item.second.second == map_loader_internals::deleted)
+            erased_keys.push_back(item.first);
+    }
+
+    enum e_op {e_op_erase = 0, e_op_modify = 1};
+    std::vector<std::vector<std::string>> all_keys = {std::move(erased_keys),
+                                                      std::move(modified_keys)};
+
+    for (size_t i = 0; i < all_keys.size(); ++i)
+    {
+        auto const& group_keys = all_keys[i];
+        if (group_keys.empty())
+            continue;
+        //  let index block owner maintain the index transaction
+        auto& ref_ptransaction_index = ref_class_transaction.index;
+        block_file_loader<std::string,
+                          Data::StringBlockItem,
+                          &Data::StringBlockItem::from_string,
+                          &Data::StringBlockItem::to_string>
+                index_bl(dir_path / (name + ".index"),
+                         group_keys,
+                         ptr_utl_local.get(),
+                         std::move(ref_ptransaction_index));
+        //  make sure guard_index will take the transaction back eventually
+        //  in the end of this for step
+        //  thus "index_bl" will be destructed without owning a transaction
+        beltpp::finally guard_index([&ref_ptransaction_index, &index_bl]
+        {
+            ref_ptransaction_index = std::move(index_bl.transaction());
+        });
+
+        std::unordered_map<std::string, std::vector<std::string>> file_name_to_keys;
+        std::unordered_set<std::string> loaded_keys;
+        index_bl.loaded(loaded_keys);
+
+        for (auto const& key : group_keys)
+        {
+            if (loaded_keys.end() == loaded_keys.find(key))
+            {
+                std::string str_filename = filename(key, name, limit);
+                Data::StringValue index_item;
+                index_item.value = str_filename;
+                index_bl[key].item.set(std::move(index_item));
+                file_name_to_keys[str_filename].push_back(key);
+            }
+            else
+            {
+                Data::StringValue index_item;
+                index_bl.as_const()[key].item.get(index_item);
+                file_name_to_keys[index_item.value].push_back(key);
+            }
+        }
+
+        if (i == e_op_erase)
+            index_bl.erase();
+        else
+            index_bl.save();
+
+        for (auto const& per_file : file_name_to_keys)
+        {
+            std::string const& str_filename = per_file.first;
+            auto const& file_keys = per_file.second;
+
+            auto pair_res = ref_class_transaction.overlay.insert(
+                        std::make_pair(str_filename,
+                                       detail::null_ptr_transaction()));
+            auto& ref_ptransaction = pair_res.first->second;
+
+            //  let file block owner maintain the transaction
+            //  that belongs to it
+            block_file_loader<std::string,
+                              Data::StringBlockItem,
+                              &Data::StringBlockItem::from_string,
+                              &Data::StringBlockItem::to_string>
+                    temp(dir_path / str_filename,
+                         file_keys,
+                         ptr_utl.get(),
+                         std::move(ref_ptransaction));
+
+            //  make sure guard_item will take the transaction back eventually
+            //  in the end of this for step
+            //  thus "temp" will be destructed without owning a transaction
+            beltpp::finally guard_item([&ref_ptransaction, &temp]
+            {
+                ref_ptransaction = std::move(temp.transaction());
+            });
+
+            if (i == e_op_erase)
+            {
+                for (std::string const& key : file_keys)
+                    index.erase(key);
+
+                temp.erase();
+            }
+            else
+            {
+                for (auto const& key : file_keys)
+                {
+                    index.insert(std::make_pair(key, str_filename));
+                    temp[key].item = std::move(overlay[key].first);
+                }
+
+                temp.save();
+            }
+        }
+    }
+
     overlay.clear();
-#endif
 
     guard.dismiss();
 }
+#endif
 
 void map_loader_internals::discard()
 {
@@ -1336,41 +1391,85 @@ void vector_loader_internals::save()
     class_transaction& ref_class_transaction =
             dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
 
+    std::vector<uint64_t> modified_keys;
+    std::vector<uint64_t> erased_keys;
     for (auto& item : overlay)
     {
-        auto pair_res = ref_class_transaction.overlay.insert(
-                    std::make_pair(filename(item.first, name, limit, group),
-                                   detail::null_ptr_transaction()));
-        auto& ref_ptransaction = pair_res.first->second;
+        if (item.second.second == vector_loader_internals::modified)
+            modified_keys.push_back(item.first);
+        else if (item.second.second == vector_loader_internals::deleted)
+            erased_keys.push_back(item.first);
+    }
 
-        block_file_loader<uint64_t,
-                          Data::UInt64BlockItem,
-                          &Data::UInt64BlockItem::from_string,
-                          &Data::UInt64BlockItem::to_string>
-                temp(dir_path / filename(item.first, name, limit, group),
-                     std::vector<uint64_t>{item.first},
-                     ptr_utl.get(),
-                     std::move(ref_ptransaction));
+    enum e_op {e_op_erase = 0, e_op_modify = 1};
+    std::vector<std::vector<uint64_t>> all_keys = {std::move(erased_keys),
+                                                   std::move(modified_keys)};
 
-        beltpp::finally guard_item([&ref_ptransaction, &temp]
+    for (size_t i = 0; i < all_keys.size(); ++i)
+    {
+        auto const& group_keys = all_keys[i];
+        if (group_keys.empty())
+            continue;
+
+        std::unordered_map<std::string, std::vector<uint64_t>> file_name_to_keys;
+
+        for (auto const& key : group_keys)
         {
-            ref_ptransaction = std::move(temp.transaction());
-        });
-
-        if (item.second.second == vector_loader_internals::deleted)
-        {
-            temp.erase();
-
-            if (size > item.first)
-                size = item.first;
+            std::string str_filename = filename(key, name, limit, group);
+            file_name_to_keys[str_filename].push_back(key);
         }
-        else if (item.second.second == vector_loader_internals::modified)
-        {
-            temp[item.first].item = std::move(item.second.first);
-            temp.save();
 
-            if (item.first >= size)
-                size = item.first + 1;
+        for (auto const& per_file : file_name_to_keys)
+        {
+            std::string const& str_filename = per_file.first;
+            auto const& file_keys = per_file.second;
+
+            auto pair_res = ref_class_transaction.overlay.insert(
+                        std::make_pair(str_filename,
+                                       detail::null_ptr_transaction()));
+            auto& ref_ptransaction = pair_res.first->second;
+
+            //  let file block owner maintain the transaction
+            //  that belongs to it
+            block_file_loader<uint64_t,
+                              Data::UInt64BlockItem,
+                              &Data::UInt64BlockItem::from_string,
+                              &Data::UInt64BlockItem::to_string>
+                    temp(dir_path / str_filename,
+                         file_keys,
+                         ptr_utl.get(),
+                         std::move(ref_ptransaction));
+
+            //  make sure guard_item will take the transaction back eventually
+            //  in the end of this for step
+            //  thus "temp" will be destructed without owning a transaction
+            beltpp::finally guard_item([&ref_ptransaction, &temp]
+            {
+                ref_ptransaction = std::move(temp.transaction());
+            });
+
+            if (i == e_op_erase)
+            {
+                for (uint64_t key : file_keys)
+                {
+                    if (size > key)
+                        size = key;
+                }
+
+                temp.erase();
+            }
+            else
+            {
+                for (auto const& key : file_keys)
+                {
+                    if (key >= size)
+                        size = key + 1;
+
+                    temp[key].item = std::move(overlay[key].first);
+                }
+
+                temp.save();
+            }
         }
     }
 
@@ -1378,9 +1477,9 @@ void vector_loader_internals::save()
 
     auto& ref_ptransaction_size = ref_class_transaction.size;
     using size_loader = block_file_loader<uint64_t,
-                                            Data::UInt64BlockItem,
-                                            &Data::UInt64BlockItem::from_string,
-                                            &Data::UInt64BlockItem::to_string>;
+                                          Data::UInt64BlockItem,
+                                          &Data::UInt64BlockItem::from_string,
+                                          &Data::UInt64BlockItem::to_string>;
 
     size_loader
             temp(dir_path / (name + ".size"),
