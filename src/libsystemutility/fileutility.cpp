@@ -201,6 +201,13 @@ class block_file_loader
         uint64_t key;
     };
 
+    class value
+    {
+    public:
+        T item;
+        size_t loaded_marker_index = size_t(-1);
+    };
+
     class class_transaction : public beltpp::itransaction
     {
     public:
@@ -268,17 +275,15 @@ public:
     using value_type = T;
 
     block_file_loader(boost::filesystem::path const& path,
-                      T_key key_,
+                      std::vector<T_key> keys,
                       void* putl = nullptr,
                       detail::ptr_transaction&& ptransaction_
                       = detail::null_ptr_transaction(),
                       e_load_option load_option = e_find)
         : modified(false)
-        , key(key_)
-        , loaded_marker_index(size_t(-1))
         , ptransaction(std::move(ptransaction_))
         , main_path(path)
-        , ptr(new T)
+        , values()
         , putl(putl)
     {
         beltpp::on_failure guard([this, &ptransaction_]()
@@ -305,15 +310,8 @@ public:
         }
 
         load_file(marker_path, fl, begin, end);
-
-        detail::default_block(*ptr, key);
-
         if (begin != end)
         {
-            bool acceptcurrent = false;
-            if (load_option == e_load_first)
-                acceptcurrent = true;
-
             std::vector<char> buf_markers(begin, end);
             if (0 != buf_markers.size() % (3 * sizeof(uint64_t)))
                 throw std::runtime_error("invalid marker file size: " + marker_path.string());
@@ -321,12 +319,8 @@ public:
             markers.resize(buf_markers.size() / (3 * sizeof(uint64_t)));
             for (size_t index = 0; index < markers.size(); ++index)
             {
-                marker& item = markers[index];
+                auto& item = markers[index];
                 item = *reinterpret_cast<marker*>(&buf_markers[index * 3 * sizeof(uint64_t)]);
-                //item.start = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 0]);
-                //item.end = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + sizeof(uint64_t)]);
-                //item.key = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 2 * sizeof(uint64_t)]);
-
                 if (item.end <= item.start)
                     throw std::runtime_error("invalid entry in marker file: " + marker_path.string());
 
@@ -336,9 +330,29 @@ public:
                     if (previous.end > item.start)
                         throw std::runtime_error("invalid consequtive entry in marker file: " + marker_path.string());
                 }
+            }
+        }
+
+        if (load_option == e_load_first)
+        {
+            keys.clear();
+            keys.push_back(T_key());
+        }
+
+        for (auto const& key : keys)
+        {
+            size_t& loaded_marker_index = values[key].loaded_marker_index;
+            auto& value = values[key].item;
+            detail::default_block(value, key);
+
+            auto load_option2 = load_option;
+
+            for (size_t index = 0; index < markers.size(); ++index)
+            {
+                auto const& item = markers[index];
 
                 if ((item.key == detail::key_to_uint64_t(key) ||
-                     acceptcurrent) &&
+                     load_option2 == e_load_first) &&
                     size_t(-1) == loaded_marker_index)
                 {
                     std::istreambuf_iterator<char> end_contents, begin_contents;
@@ -350,20 +364,27 @@ public:
                         std::string row;
                         row.resize(item.end - item.start);
                         fl_contents.seekg(int64_t(item.start), std::ios_base::beg);
-                        check(fl_contents, contents_path, "block_file_loader", "seekg", std::to_string(item.start) + "-beg", std::string());
+                        check(fl_contents, contents_path, "block_file_loader",
+                              "seekg",
+                              std::to_string(item.start) + "-beg",
+                              std::string());
                         fl_contents.read(&row[0], int64_t(item.end - item.start));
-                        check(fl_contents, contents_path, "block_file_loader", "read", std::to_string(item.start) + "-" + std::to_string(item.end), std::string());
+                        check(fl_contents, contents_path, "block_file_loader",
+                              "read",
+                              std::to_string(item.start) + "-" + std::to_string(item.end),
+                              std::string());
 
-                        if (detail::from_block_string(*ptr, row, key, acceptcurrent, putl))
+                        if (detail::from_block_string(value, row, key, (load_option2 == e_load_first), putl))
                         {
-                            if (load_option == e_find || acceptcurrent)
+                            if (load_option2 == e_find ||
+                                load_option2 == e_load_first)
                             {
                                 loaded_marker_index = index;
                             }
                             else
                             {
-                                detail::default_block(*ptr, key);
-                                acceptcurrent = true;
+                                detail::default_block(value, key);
+                                load_option2 = e_load_first;
                             }
                         }
                     }
@@ -377,11 +398,9 @@ public:
     block_file_loader(block_file_loader const&) = delete;
     block_file_loader(block_file_loader&& other)
         : modified(other.modified)
-        , key(std::move(other.key))
-        , loaded_marker_index(other.loaded_marker_index)
         , ptransaction(std::move(other.ptransaction))
         , main_path(other.main_path)
-        , ptr(std::move(other.ptr))
+        , values(std::move(other.values))
         , putl(std::move(other.putl))
         , markers(std::move(markers))
     {
@@ -399,20 +418,38 @@ public:
     block_file_loader& operator = (block_file_loader&& other)
     {
         modified = other.modified;
-        key = std::move(other.key);
-        loaded_marker_index = other.loaded_marker_index;
         ptransaction = std::move(other.ptransaction);
         main_path = std::move(other.main_path);
-        ptr = std::move(other.ptr);
+        values = std::move(other.values);
         putl = std::move(other.putl);
         markers = std::move(other.markers);
 
         return *this;
     }
 
+    bool loaded(std::unordered_set<T_key>& keys) const
+    {
+        keys.clear();
+        for (auto const& value : values)
+        {
+            if (value.second.loaded_marker_index != size_t(-1))
+                keys.insert(value.first);
+        }
+
+        return false == keys.empty();
+    }
+
     bool loaded() const
     {
-        return loaded_marker_index != size_t(-1);
+        std::unordered_set<T_key> keys;
+
+        for (auto const& value : values)
+        {
+            if (value.second.loaded_marker_index != size_t(-1))
+                keys.insert(value.first);
+        }
+
+        return false == keys.empty();
     }
 
     void save()
@@ -420,39 +457,44 @@ public:
         if (false == modified)
             return;
 
-        std::string buffer = ptr->to_string();
+        auto start_pos = size_t(-1);
+        std::string bulk_buffer;
 
-        if (size_t(-1) == loaded_marker_index ||
-            buffer.size() > (markers[loaded_marker_index].end - markers[loaded_marker_index].start))
+        for (auto& value : values)
         {
+            std::string buffer = value.second.item.to_string();
+
             //  will append this item in the end of file
-            size_t seek_pos = 0;
+            auto seek_pos = size_t(0);
             if (false == markers.empty())
                 seek_pos = markers.back().end;
+
+            if (size_t(-1) == start_pos)
+                start_pos = seek_pos;
 
             markers.push_back(marker());
             markers.back().start = seek_pos;
             markers.back().end = seek_pos + buffer.size();
-            markers.back().key = detail::key_to_uint64_t(key);
+            markers.back().key = detail::key_to_uint64_t(value.first);
 
-            if (loaded_marker_index != size_t(-1))
-                markers.erase(markers.begin() + int64_t(loaded_marker_index));
+            if (value.second.loaded_marker_index != size_t(-1))
+                markers.erase(markers.begin() + int64_t(value.second.loaded_marker_index));
 
-            loaded_marker_index = markers.size() - 1;
+            value.second.loaded_marker_index = markers.size() - 1;
+
+            if (nullptr == ptransaction)
+            {
+                boost::system::error_code ec;
+                if (boost::filesystem::exists(file_path()))
+                    boost::filesystem::copy_file(file_path(),
+                                                 file_path_tr(),
+                                                 boost::filesystem::copy_option::overwrite_if_exists,
+                                                 ec);
+            }
+
+            bulk_buffer += buffer;
         }
-        else
-        //  will reuse same slot
-            markers[loaded_marker_index].end = markers[loaded_marker_index].start + buffer.length();
 
-        if (nullptr == ptransaction)
-        {
-            boost::system::error_code ec;
-            if (boost::filesystem::exists(file_path()))
-                boost::filesystem::copy_file(file_path(),
-                                             file_path_tr(),
-                                             boost::filesystem::copy_option::overwrite_if_exists,
-                                             ec);
-        }
         if (false == boost::filesystem::exists(file_path_tr()))
             boost::filesystem::ofstream(file_path_tr(), std::ios_base::trunc);
 
@@ -471,14 +513,18 @@ public:
 
             size_t size_when_opened = size_t(fl.tellg());
 
-            fl.seekp(int64_t(markers[loaded_marker_index].start), std::ios_base::beg);
-            check(fl, file_path_tr(), "save", "seekp", std::to_string(markers[loaded_marker_index].start) + "-beg", "opened size: " + std::to_string(size_when_opened));
+            fl.seekp(int64_t(start_pos), std::ios_base::beg);
+            check(fl, file_path_tr(), "save", "seekp",
+                  std::to_string(start_pos) + "-beg",
+                  "opened size: " + std::to_string(size_when_opened));
 
-            fl.write(&buffer[0], int64_t(buffer.size()));
-            check(fl, file_path_tr(), "save", "write", std::to_string(markers[loaded_marker_index].start) + "-" + std::to_string(markers[loaded_marker_index].start), "opened size: " + std::to_string(size_when_opened));
+            fl.write(&bulk_buffer[0], int64_t(bulk_buffer.size()));
+            check(fl, file_path_tr(), "save", "write",
+                  std::to_string(start_pos) + "-" + std::to_string(start_pos + bulk_buffer.size()),
+                  "opened size: " + std::to_string(size_when_opened));
         }
 
-        //compact();
+        compact();
         save_markers();
 
         if (nullptr == ptransaction)
@@ -492,8 +538,23 @@ public:
 
     void erase()
     {
-        if (size_t(-1) != loaded_marker_index)
-            markers.erase(markers.begin() + int64_t(loaded_marker_index));
+        std::unordered_set<size_t> erase_indices;
+        for (auto const& value : values)
+        {
+            if (size_t(-1) != value.second.loaded_marker_index)
+                erase_indices.insert(value.second.loaded_marker_index);
+        }
+
+        size_t write_index = 0;
+        for (size_t index = 0; index < markers.size(); ++index)
+        {
+            if (erase_indices.end() == erase_indices.find(index))
+            {
+                markers[write_index] = markers[index];
+                ++write_index;
+            }
+        }
+        markers.resize(write_index);
 
         if (nullptr == ptransaction)
         {
@@ -542,11 +603,15 @@ public:
 
     block_file_loader const& as_const() const { return *this; }
 
-    T const& operator * () const { return *ptr.get(); }
-    T& operator * () { modified = true; return *ptr.get(); }
-
-    T const* operator -> () const { return ptr.get(); }
-    T* operator -> () { modified = true; return ptr.get(); }
+    T const& operator[] (T_key const& key) const
+    {
+        return values.at(key).item;
+    }
+    T& operator[] (T_key const& key)
+    {
+        modified = true;
+        return values.at(key).item;
+    }
 private:
     void check(std::basic_ios<char>& fl,
                boost::filesystem::path const& path,
@@ -597,9 +662,6 @@ private:
 
         if (shift_sum >= size_sum)
         {
-            uint64_t start = 0;
-            uint64_t shift = 0;
-
             boost::filesystem::fstream fl;
 
             fl.open(file_path_tr(), std::ios_base::binary |
@@ -609,7 +671,42 @@ private:
             if (!fl)
                 throw std::runtime_error("compact(): unable to open fstream: " + file_path_tr().string());
 
-            for (auto& item : markers)
+            auto markers_copy = markers;
+            size_t write_index = 0;
+            for (size_t index = 0; index < markers_copy.size(); ++index)
+            {
+                auto& read_item = markers_copy[index];
+                auto& write_item = markers_copy[write_index];
+
+                if (write_index > 0 &&
+                    markers_copy[write_index - 1].end == read_item.start &&
+                    read_item.end - markers_copy[write_index - 1].start < 10 * 1024 * 1024) //  limit chunks to 10 Mb
+                    markers_copy[write_index - 1].end = read_item.end;
+                else
+                {
+                    write_item = read_item;
+                    ++write_index;
+                }
+            }
+            markers_copy.resize(write_index);
+
+            {
+                uint64_t start = 0;
+                uint64_t shift = 0;
+
+                for (auto& item : markers)
+                {
+                    shift = item.start - start;
+
+                    item.start -= shift;
+                    item.end -= shift;
+                }
+            }
+
+            uint64_t start = 0;
+            uint64_t shift = 0;
+
+            for (auto& item : markers_copy)
             {
                 shift = item.start - start;
 
@@ -622,16 +719,24 @@ private:
                     buffer.resize(item.end - item.start);
 
                     fl.seekg(int64_t(item.start + shift), std::ios_base::beg);
-                    check(fl, file_path_tr(), "compact", "seekg", std::to_string(item.start + shift) + "-beg", "opened size: " + std::to_string(size_when_opened));
+                    check(fl, file_path_tr(), "compact", "seekg",
+                          std::to_string(item.start + shift) +"-beg",
+                          "opened size: " + std::to_string(size_when_opened));
 
                     fl.read(&buffer[0], int64_t(buffer.size()));
-                    check(fl, file_path_tr(), "compact", "read", std::to_string(item.start + shift) + "-" + std::to_string(item.end + shift), "opened size: " + std::to_string(size_when_opened));
+                    check(fl, file_path_tr(), "compact","read",
+                          std::to_string(item.start + shift) + "-" + std::to_string(item.end + shift),
+                          "opened size: " + std::to_string(size_when_opened));
 
                     fl.seekp(int64_t(item.start), std::ios_base::beg);
-                    check(fl, file_path_tr(), "compact", "seekp", std::to_string(item.start) + "-beg", "opened size: " + std::to_string(size_when_opened));
+                    check(fl, file_path_tr(), "compact", "seekp",
+                          std::to_string(item.start) + "-beg",
+                          "opened size: " + std::to_string(size_when_opened));
 
                     fl.write(&buffer[0], int64_t(buffer.size()));
-                    check(fl, file_path_tr(), "compact", "write", std::to_string(item.start) + "-" + std::to_string(item.end), "opened size: " + std::to_string(size_when_opened));
+                    check(fl, file_path_tr(), "compact", "write",
+                          std::to_string(item.start) + "-" + std::to_string(item.end),
+                          "opened size: " + std::to_string(size_when_opened));
                 }
 
                 start = item.end;
@@ -681,14 +786,7 @@ private:
         static_assert(sizeof(marker) == 3 * sizeof(uint64_t), "size mismatch");
 
         if (false == markers.empty())
-            ofl.write(reinterpret_cast<char const*>(&markers.front().start), sizeof(marker) * markers.size());
-        
-        /*for (auto const& marker : markers)
-        {
-            ofl.write(reinterpret_cast<char const*>(&marker.start), sizeof(uint64_t));
-            ofl.write(reinterpret_cast<char const*>(&marker.end), sizeof(uint64_t));
-            ofl.write(reinterpret_cast<char const*>(&marker.key), sizeof(uint64_t));
-        }*/
+            ofl.write(reinterpret_cast<char const*>(&markers.front().start), int64_t(sizeof(marker) * markers.size()));
     }
 
     boost::filesystem::path file_path_marker() const
@@ -714,11 +812,9 @@ private:
         return file_path_temp;
     }
     bool modified;
-    T_key key;
-    size_t loaded_marker_index;
     detail::ptr_transaction ptransaction;
     boost::filesystem::path main_path;
-    std::unique_ptr<T> ptr;
+    std::unordered_map<T_key, value> values;
     void* putl;
     std::vector<marker> markers;
 };
@@ -754,19 +850,30 @@ std::unordered_map<std::string, std::string> load_index(std::string const& name,
 
     index_loader
             temp(path / (name + ".index"),
-                 std::string(),
+                 std::vector<std::string>(),
                  ptr_utl.get(),
                  detail::null_ptr_transaction(),
                  index_loader::e_load_first);
-    while (temp.loaded())
+    std::unordered_set<std::string> keys;
+    while (temp.loaded(keys))
     {
-        Data::StringValue item;
-        std::move(temp->item).get(item);
+        std::vector<std::string> continue_keys;
 
-        index[temp->key] = item.value;
+        for (auto const& key : keys)
+        {
+            auto& temp_key = temp[key];
+
+            Data::StringValue item;
+            std::move(temp_key.item).get(item);
+            std::string real_key = temp_key.key;
+
+            index[real_key] = item.value;
+
+            continue_keys.push_back(real_key);
+        }
 
         temp = index_loader(path / (name + ".index"),
-                            temp->key,
+                            continue_keys,
                             ptr_utl.get(),
                             detail::null_ptr_transaction(),
                             index_loader::e_load_next);
@@ -885,7 +992,7 @@ void map_loader_internals::load(std::string const& key) const
                       &Data::StringBlockItem::from_string,
                       &Data::StringBlockItem::to_string>
             temp(dir_path / filename(key, name, limit),
-                 key,
+                 std::vector<std::string>{key},
                  ptr_utl.get(),
                  std::move(item_ptransaction));
 
@@ -898,7 +1005,7 @@ void map_loader_internals::load(std::string const& key) const
     });
 
     //  load item corresponding to key to overlay
-    overlay[key] = std::make_pair(std::move(temp->item),
+    overlay[key] = std::make_pair(std::move(temp[key].item),
                                   map_loader_internals::none);
 #endif
 }
@@ -939,7 +1046,7 @@ void map_loader_internals::save()
                           &Data::StringBlockItem::from_string,
                           &Data::StringBlockItem::to_string>
                 index_bl(dir_path / (name + ".index"),
-                         item.first,
+                         std::vector<std::string>{item.first},
                          ptr_utl_local.get(),
                          std::move(ref_ptransaction_index));
         //  make sure guard_index will take the transaction back eventually
@@ -954,7 +1061,7 @@ void map_loader_internals::save()
         if (index_bl.loaded())
         {
             Data::StringValue index_item;
-            index_bl.as_const()->item.get(index_item);
+            index_bl.as_const()[item.first].item.get(index_item);
             str_filename = index_item.value;
         }
         else
@@ -963,7 +1070,7 @@ void map_loader_internals::save()
 
             Data::StringValue index_item;
             index_item.value = str_filename;
-            index_bl->item.set(std::move(index_item));
+            index_bl[item.first].item.set(std::move(index_item));
         }
 
         auto pair_res = ref_class_transaction.overlay.insert(
@@ -978,7 +1085,7 @@ void map_loader_internals::save()
                           &Data::StringBlockItem::from_string,
                           &Data::StringBlockItem::to_string>
                 temp(dir_path / str_filename,
-                     item.first,
+                     std::vector<std::string>{item.first},
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
 
@@ -1019,7 +1126,7 @@ void map_loader_internals::save()
 
             batch.Put(key_s, value_s);
 #else
-            temp->item = std::move(item.second.first);
+            temp[item.first].item = std::move(item.second.first);
             temp.save();
 
             index_bl.save();
@@ -1114,16 +1221,21 @@ size_t load_size(std::string const& name,
 
     size_loader
             temp(path / (name + ".size"),
-                 0,
+                 std::vector<uint64_t>(),
                  ptr_utl_local.get(),
                  detail::null_ptr_transaction(),
                  size_loader::e_load_first);
-    if (temp.loaded())
-    {
-        Data::UInt64Value item;
-        std::move(temp->item).get(item);
 
-        size = item.value;
+    std::unordered_set<uint64_t> keys;
+    if (temp.loaded(keys))
+    {
+        for (auto const& key : keys)
+        {
+            Data::UInt64Value item;
+            std::move(temp[key].item).get(item);
+
+            size = item.value;
+        }
     }
 
     return size;
@@ -1193,7 +1305,7 @@ void vector_loader_internals::load(size_t index) const
                       &Data::UInt64BlockItem::from_string,
                       &Data::UInt64BlockItem::to_string>
             temp(dir_path / filename(index, name, limit, group),
-                 index,
+                 std::vector<uint64_t>{index},
                  ptr_utl.get(),
                  std::move(item_ptransaction));
 
@@ -1202,7 +1314,7 @@ void vector_loader_internals::load(size_t index) const
         item_ptransaction = std::move(temp.transaction());
     });
 
-    overlay[index] = std::make_pair(std::move(temp->item),
+    overlay[index] = std::make_pair(std::move(temp[index].item),
                                     vector_loader_internals::none);
 }
 
@@ -1236,7 +1348,7 @@ void vector_loader_internals::save()
                           &Data::UInt64BlockItem::from_string,
                           &Data::UInt64BlockItem::to_string>
                 temp(dir_path / filename(item.first, name, limit, group),
-                     item.first,
+                     std::vector<uint64_t>{item.first},
                      ptr_utl.get(),
                      std::move(ref_ptransaction));
 
@@ -1254,7 +1366,7 @@ void vector_loader_internals::save()
         }
         else if (item.second.second == vector_loader_internals::modified)
         {
-            temp->item = std::move(item.second.first);
+            temp[item.first].item = std::move(item.second.first);
             temp.save();
 
             if (item.first >= size)
@@ -1272,7 +1384,7 @@ void vector_loader_internals::save()
 
     size_loader
             temp(dir_path / (name + ".size"),
-                 0,
+                 std::vector<uint64_t>(),
                  ptr_utl_local.get(),
                  std::move(ref_ptransaction_size),
                  size_loader::e_load_first);
@@ -1285,7 +1397,7 @@ void vector_loader_internals::save()
     {
         Data::UInt64Value item;
         item.value = size;
-        temp->item.set(std::move(item));
+        temp[0].item.set(std::move(item));
     }
     temp.save();
 
