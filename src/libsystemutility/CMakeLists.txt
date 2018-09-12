@@ -14,6 +14,10 @@ add_custom_command (
 
 add_definitions(-DSYSTEMUTILITY_LIBRARY)
 
+#if(TARGET rocksdb)
+#    add_definitions(-DUSE_ROCKS_DB)
+#endif()
+
 # define the library
 add_library(systemutility
     data.hpp
@@ -30,7 +34,6 @@ if(TARGET rocksdb)
     target_sources(systemutility PRIVATE rdbutility.hpp)
 endif()
 
-target_include_directories(systemutility PRIVATE rocksdb)
 # libraries this module links to
 target_link_libraries(systemutility
     PUBLIC
@@ -42,6 +45,13 @@ target_link_libraries(systemutility
     PRIVATE
         utility
     )
+
+if(TARGET rocksdb)
+    target_link_libraries(systemutility
+        PRIVATE
+            rocksdb
+        )
+endif()
 
 # what to do on make install
 install(TARGETS systemutility

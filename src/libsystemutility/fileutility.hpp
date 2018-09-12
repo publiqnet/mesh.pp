@@ -295,6 +295,8 @@ private:
 
 namespace detail
 {
+class map_loader_internals_impl;
+using ptr_map_loader_internals_impl = std::unique_ptr<map_loader_internals_impl>;
 class SYSTEMUTILITYSHARED_EXPORT map_loader_internals
 {
     class class_transaction : public beltpp::itransaction
@@ -369,7 +371,7 @@ public:
     std::unordered_map<std::string, std::string> index;
     mutable std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
-    ptr_transaction ptransaction;
+    ptr_map_loader_internals_impl pimpl;
 };
 }
 
@@ -572,6 +574,8 @@ private:
 
 namespace detail
 {
+class vector_loader_internals_impl;
+using ptr_vector_loader_internals_impl = std::unique_ptr<vector_loader_internals_impl>;
 class SYSTEMUTILITYSHARED_EXPORT vector_loader_internals
 {
     class class_transaction : public beltpp::itransaction
@@ -650,7 +654,7 @@ public:
     size_t size_with_overlay;
     mutable std::unordered_map<size_t, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
-    ptr_transaction ptransaction;
+    ptr_vector_loader_internals_impl pimpl;
 };
 }
 

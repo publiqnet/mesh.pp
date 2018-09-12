@@ -17,6 +17,12 @@ static_assert(sizeof(intptr_t) == sizeof(HANDLE), "check the sizes");
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#ifdef USE_ROCKS_DB
+#include <rocksdb/db.h>
+#include <rocksdb/options.h>
+#include <rocksdb/slice.h>
+#endif
+
 static_assert(intptr_t(-1) == int(-1), "be sure it works");
 static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
 
@@ -316,9 +322,10 @@ public:
             for (size_t index = 0; index < markers.size(); ++index)
             {
                 marker& item = markers[index];
-                item.start = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 0]);
-                item.end = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + sizeof(uint64_t)]);
-                item.key = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 2 * sizeof(uint64_t)]);
+                item = *reinterpret_cast<marker*>(&buf_markers[index * 3 * sizeof(uint64_t)]);
+                //item.start = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 0]);
+                //item.end = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + sizeof(uint64_t)]);
+                //item.key = *reinterpret_cast<uint64_t*>(&buf_markers[index * 3 * sizeof(uint64_t) + 2 * sizeof(uint64_t)]);
 
                 if (item.end <= item.start)
                     throw std::runtime_error("invalid entry in marker file: " + marker_path.string());
@@ -716,6 +723,23 @@ private:
     std::vector<marker> markers;
 };
 
+#ifdef USE_ROCKS_DB
+std::unordered_map<std::string, std::string> load_index(rocksdb::DB& db)
+{
+    std::unordered_map<std::string, std::string> index;
+
+    std::unique_ptr<rocksdb::Iterator> it;
+    it.reset(db.NewIterator(rocksdb::ReadOptions()));
+
+    for (it->SeekToFirst(); it->Valid(); it->Next())
+    {
+        auto key = it->key().ToString();
+        index[key] = "filename(key, name, limit)"; // something dummy for now
+    }
+
+    return index;
+}
+#else
 std::unordered_map<std::string, std::string> load_index(std::string const& name,
                                                         boost::filesystem::path const& path)
 {
@@ -750,6 +774,25 @@ std::unordered_map<std::string, std::string> load_index(std::string const& name,
 
     return index;
 }
+#endif
+class map_loader_internals_impl
+{
+public:
+    map_loader_internals_impl()
+#ifdef USE_ROCKS_DB
+    : ptr_rocks_db(nullptr)
+    , batch()
+#else
+    : ptransaction(detail::null_ptr_transaction())
+#endif
+    {}
+#ifdef USE_ROCKS_DB
+    std::unique_ptr<rocksdb::DB> ptr_rocks_db;
+    rocksdb::WriteBatch batch;
+#else
+    ptr_transaction ptransaction;
+#endif
+};
 
 map_loader_internals::map_loader_internals(std::string const& name,
                                            boost::filesystem::path const& path,
@@ -758,25 +801,67 @@ map_loader_internals::map_loader_internals(std::string const& name,
     : limit(limit)
     , name(name)
     , dir_path(path)
+#ifdef USE_ROCKS_DB
+    , index()
+#else
     , index(load_index(name, path))
+#endif
     , overlay()
     , ptr_utl(std::move(ptr_utl))
-    , ptransaction(detail::null_ptr_transaction())
-{}
+    , pimpl(new map_loader_internals_impl())
+{
+#ifdef USE_ROCKS_DB
+    throw std::runtime_error("map_loader_internals(): s.ok()");
+    rocksdb::Options options;
+    options.IncreaseParallelism();
+    options.OptimizeLevelStyleCompaction();
+    options.create_if_missing = true;
+    options.target_file_size_multiplier = 2;
+
+    rocksdb::DB* pdb = nullptr;
+    rocksdb::Status s;
+    s = rocksdb::DB::Open(options, (path / name).string(), &pdb);
+    if (!s.ok())
+        throw std::runtime_error("map_loader_internals(): s.ok()");
+
+    pimpl->ptr_rocks_db.reset(pdb);
+    rocksdb::DB& db = *pdb;
+
+    index = load_index(db);
+#endif
+}
 
 map_loader_internals::~map_loader_internals() = default;
 
 void map_loader_internals::load(std::string const& key) const
 {
+#ifdef USE_ROCKS_DB
+    rocksdb::DB& db = *pimpl->ptr_rocks_db;
+    std::string value_str;
+    rocksdb::Slice key_s(key);
+    auto s = db.Get(rocksdb::ReadOptions(), key_s, &value_str);
+    if(false == s.ok())
+        throw std::runtime_error("map_loader_internals::load(): pdb->Get()");
+
+    Data::StringBlockItem item;
+    if (false == detail::from_block_string(item, value_str, key, false, ptr_utl.get()))
+        throw std::runtime_error("map_loader_internals::load(): from_block_string()");
+
+    //  load item corresponding to key to overlay
+    overlay[key] = std::make_pair(std::move(item.item),
+                                  map_loader_internals::none);
+
+#else
     ptr_transaction item_ptransaction = detail::null_ptr_transaction();
 
     beltpp::finally guard1;
 
     //  ptransaction is a complex transaction consisting of
     //  smaller transactions of single file blocks
-    if (ptransaction)
+    if (pimpl->ptransaction)
     {
-        class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+        class_transaction& ref_class_transaction =
+                dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
 
         auto pair_res = ref_class_transaction.overlay.insert(
                     std::make_pair(filename(key, name, limit),
@@ -815,6 +900,7 @@ void map_loader_internals::load(std::string const& key) const
     //  load item corresponding to key to overlay
     overlay[key] = std::make_pair(std::move(temp->item),
                                   map_loader_internals::none);
+#endif
 }
 
 void map_loader_internals::save()
@@ -829,15 +915,22 @@ void map_loader_internals::save()
         discard();
     });
 
-    if (nullptr == ptransaction)
-        ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
+#ifdef USE_ROCKS_DB
+    auto& batch = pimpl->batch;
+    batch.Clear();
+#else
+    if (nullptr == pimpl->ptransaction)
+        pimpl->ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
 
-    class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+    class_transaction& ref_class_transaction =
+            dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
+#endif
 
     for (auto& item : overlay)
     {
         if (item.second.second == map_loader_internals::none)
             continue;
+#ifndef USE_ROCKS_DB
 
         //  let index block owner maintain the index transaction
         auto& ref_ptransaction_index = ref_class_transaction.index;
@@ -896,50 +989,100 @@ void map_loader_internals::save()
         {
             ref_ptransaction = std::move(temp.transaction());
         });
-
+#endif
         //  update the block
 
         if (item.second.second == map_loader_internals::deleted)
         {
+#ifdef USE_ROCKS_DB
+            rocksdb::Slice di_s(item.first);
+            batch.Delete(di_s);
+#else
             temp.erase();
 
             index_bl.erase();
             index.erase(item.first);
+#endif
         }
         else if (item.second.second == map_loader_internals::modified)
         {
+#ifdef USE_ROCKS_DB
+            rocksdb::Slice key_s(item.first);
+
+            Data::StringBlockItem store;
+            store.key = item.first;
+            store.item = std::move(item.second.first);
+
+            rocksdb::Slice value_s(store.to_string());
+
+            item.second.first = std::move(store.item);
+
+            batch.Put(key_s, value_s);
+#else
             temp->item = std::move(item.second.first);
             temp.save();
 
             index_bl.save();
             index.insert(std::make_pair(item.first, filename(item.first, name, limit)));
+#endif
         }
     }
 
+#ifndef USE_ROCKS_DB
     overlay.clear();
+#endif
 
     guard.dismiss();
 }
 
 void map_loader_internals::discard()
 {
-    if (ptransaction)
+#ifdef USE_ROCKS_DB
+    auto& batch = pimpl->batch;
+
+    batch.Clear();
+#else
+    if (pimpl->ptransaction)
     {
-        ptransaction->rollback();
-        ptransaction = detail::null_ptr_transaction();
+        pimpl->ptransaction->rollback();
+        pimpl->ptransaction = detail::null_ptr_transaction();
     }
+    index = load_index(name, dir_path);
+#endif
 
     overlay.clear();
-    index = load_index(name, dir_path);
 }
 
 void map_loader_internals::commit()
 {
-    if (ptransaction)
+#ifdef USE_ROCKS_DB
+    auto& batch = pimpl->batch;
+    auto& db = *pimpl->ptr_rocks_db.get();
+
+    if(batch.Count())
     {
-        ptransaction->commit();
-        ptransaction = detail::null_ptr_transaction();
+        auto s = db.Write(rocksdb::WriteOptions(), &batch);
+        if (!s.ok())
+            throw std::runtime_error("map_loader_internals::commit(): s.ok()");
+        batch.Clear();
     }
+    for (auto& item : overlay)
+    {
+        if (item.second.second == map_loader_internals::none)
+            continue;
+        if (item.second.second == map_loader_internals::deleted)
+            index.erase(item.first);
+        else if (item.second.second == map_loader_internals::modified)
+            index.insert(std::make_pair(item.first, filename(item.first, name, limit)));
+    }
+    overlay.clear();
+#else
+    if (pimpl->ptransaction)
+    {
+        pimpl->ptransaction->commit();
+        pimpl->ptransaction = detail::null_ptr_transaction();
+    }
+#endif
 }
 
 std::string map_loader_internals::filename(std::string const& key,
@@ -986,6 +1129,26 @@ size_t load_size(std::string const& name,
     return size;
 }
 
+
+class vector_loader_internals_impl
+{
+public:
+    vector_loader_internals_impl()
+#ifdef USE_ROCKS_DB
+    : ptr_rocks_db(nullptr)
+    , batch()
+#else
+    : ptransaction(detail::null_ptr_transaction())
+#endif
+    {}
+#ifdef USE_ROCKS_DB
+    std::unique_ptr<rocksdb::DB> ptr_rocks_db;
+    rocksdb::WriteBatch batch;
+#else
+    ptr_transaction ptransaction;
+#endif
+};
+
 vector_loader_internals::vector_loader_internals(std::string const& name,
                                                  boost::filesystem::path const& path,
                                                  size_t limit,
@@ -999,7 +1162,7 @@ vector_loader_internals::vector_loader_internals(std::string const& name,
     , size_with_overlay(size)
     , overlay()
     , ptr_utl(std::move(ptr_utl))
-    , ptransaction(detail::null_ptr_transaction())
+    , pimpl(new vector_loader_internals_impl())
 {}
 
 vector_loader_internals::~vector_loader_internals() = default;
@@ -1009,9 +1172,10 @@ void vector_loader_internals::load(size_t index) const
     ptr_transaction item_ptransaction = detail::null_ptr_transaction();
     beltpp::finally guard1;
 
-    if (ptransaction)
+    if (pimpl->ptransaction)
     {
-        class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+        class_transaction& ref_class_transaction =
+                dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
 
         auto pair_res = ref_class_transaction.overlay.insert(
                     std::make_pair(filename(index, name, limit, group),
@@ -1053,10 +1217,12 @@ void vector_loader_internals::save()
         discard();
     });
 
-    if (nullptr == ptransaction)
-        ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
+    if (nullptr == pimpl->ptransaction)
+        pimpl->ptransaction =
+                beltpp::new_dc_unique_ptr<beltpp::itransaction, class_transaction>();
 
-    class_transaction& ref_class_transaction = dynamic_cast<class_transaction&>(*ptransaction.get());
+    class_transaction& ref_class_transaction =
+            dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
 
     for (auto& item : overlay)
     {
@@ -1128,10 +1294,10 @@ void vector_loader_internals::save()
 
 void vector_loader_internals::discard()
 {
-    if (ptransaction)
+    if (pimpl->ptransaction)
     {
-        ptransaction->rollback();
-        ptransaction = detail::null_ptr_transaction();
+        pimpl->ptransaction->rollback();
+        pimpl->ptransaction = detail::null_ptr_transaction();
     }
 
     overlay.clear();
@@ -1141,10 +1307,10 @@ void vector_loader_internals::discard()
 
 void vector_loader_internals::commit()
 {
-    if (ptransaction)
+    if (pimpl->ptransaction)
     {
-        ptransaction->commit();
-        ptransaction = detail::null_ptr_transaction();
+        pimpl->ptransaction->commit();
+        pimpl->ptransaction = detail::null_ptr_transaction();
     }
 }
 
