@@ -703,6 +703,8 @@ private:
 
                     item.start -= shift;
                     item.end -= shift;
+
+                    start = item.end;
                 }
             }
 
