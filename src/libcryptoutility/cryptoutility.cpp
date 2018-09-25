@@ -601,65 +601,10 @@ bool wif_to_sk(const std::string & wif_str, CryptoPP::Integer& sk)
     return code;
 }
 
-//graphene
 std::string normalize_brain_key(const std::string & bk)
 {
-   size_t i = 0, n = bk.length();
-   std::string result;
-   char c;
-   result.reserve( n );
-
-   bool preceded_by_whitespace = false;
-   bool non_empty = false;
-   while( i < n )
-   {
-      c = bk[i++];
-      switch( c )
-      {
-      case ' ':  case '\t': case '\r': case '\n': case '\v': case '\f':
-         preceded_by_whitespace = true;
-         continue;
-
-      case 'a': c = 'A'; break;
-      case 'b': c = 'B'; break;
-      case 'c': c = 'C'; break;
-      case 'd': c = 'D'; break;
-      case 'e': c = 'E'; break;
-      case 'f': c = 'F'; break;
-      case 'g': c = 'G'; break;
-      case 'h': c = 'H'; break;
-      case 'i': c = 'I'; break;
-      case 'j': c = 'J'; break;
-      case 'k': c = 'K'; break;
-      case 'l': c = 'L'; break;
-      case 'm': c = 'M'; break;
-      case 'n': c = 'N'; break;
-      case 'o': c = 'O'; break;
-      case 'p': c = 'P'; break;
-      case 'q': c = 'Q'; break;
-      case 'r': c = 'R'; break;
-      case 's': c = 'S'; break;
-      case 't': c = 'T'; break;
-      case 'u': c = 'U'; break;
-      case 'v': c = 'V'; break;
-      case 'w': c = 'W'; break;
-      case 'x': c = 'X'; break;
-      case 'y': c = 'Y'; break;
-      case 'z': c = 'Z'; break;
-
-      default:
-         break;
-      }
-      if( preceded_by_whitespace && non_empty )
-         result.push_back(' ');
-      result.push_back(c);
-      preceded_by_whitespace = false;
-      non_empty = true;
-   }
-   return result;
+    return bk;
 }
-
-
 
 string pk_to_base58(std::string const& key)
 {
