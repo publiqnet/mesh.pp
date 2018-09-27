@@ -140,12 +140,15 @@ void default_block(Data::StringBlockItem& item, std::string const& key)
     item.key = key;
 }
 
-bool from_block_string(Data::StringBlockItem& item, std::string const& buffer, std::string const& key, bool accept, void* putl)
+bool from_block_string(Data::StringBlockItem& item, std::string const& buffer, std::string& key, bool accept, void* putl)
 {
     Data::StringBlockItem ob;
     ob.from_string(buffer, putl);
     if (ob.key == key || accept)
     {
+        if (accept)
+            key = ob.key;
+
         item = std::move(ob);
         return true;
     }
@@ -158,12 +161,15 @@ void default_block(Data::UInt64BlockItem& item, uint64_t key)
     item.key = key;
 }
 
-bool from_block_string(Data::UInt64BlockItem& item, std::string const& buffer, uint64_t key, bool accept, void* putl)
+bool from_block_string(Data::UInt64BlockItem& item, std::string const& buffer, uint64_t& key, bool accept, void* putl)
 {
     Data::UInt64BlockItem ob;
     ob.from_string(buffer, putl);
     if (ob.key == key || accept)
     {
+        if (accept)
+            key = ob.key;
+
         item = std::move(ob);
         return true;
     }
@@ -277,9 +283,7 @@ public:
     block_file_loader(boost::filesystem::path const& path,
                       std::vector<T_key> keys,
                       void* putl = nullptr,
-                      detail::ptr_transaction&& ptransaction_
-                      = detail::null_ptr_transaction(),
-                      e_load_option load_option = e_find)
+                      detail::ptr_transaction&& ptransaction_ = detail::null_ptr_transaction())
         : modified(false)
         , ptransaction(std::move(ptransaction_))
         , main_path(path)
@@ -333,35 +337,42 @@ public:
             }
         }
 
-        if (load_option == e_load_first)
+        std::istreambuf_iterator<char> end_contents, begin_contents;
+        boost::filesystem::ifstream fl_contents;
+        load_file(contents_path, fl_contents, begin_contents, end_contents);
+
+        size_t start_markers_index = 0;
+        bool load_all = keys.empty();
+        if (load_all)
         {
-            keys.clear();
-            keys.push_back(T_key());
+            if (begin_contents != end_contents)
+                keys.resize(markers.size());
+            else
+            {
+                assert(markers.empty());
+                load_all = false;
+                markers.clear();
+            }
         }
 
-        if (keys.empty())
-            throw std::runtime_error("block_file_loader(): nothing to do, keys are empty");
-
-        for (auto const& key : keys)
+        for (auto& key : keys)
         {
-            size_t& loaded_marker_index = values[key].loaded_marker_index;
-            auto& value = values[key].item;
-            detail::default_block(value, key);
+            //size_t& loaded_marker_index = values[key].loaded_marker_index;
+            //auto& value = values[key].item;
+            value new_value;
+            size_t& loaded_marker_index = new_value.loaded_marker_index;
+            auto& val = new_value.item;
 
-            auto load_option2 = load_option;
+            detail::default_block(val, key);
 
-            for (size_t index = 0; index < markers.size(); ++index)
+            for (size_t index = start_markers_index; index < markers.size(); ++index)
             {
                 auto const& item = markers[index];
 
                 if ((item.key == detail::key_to_uint64_t(key) ||
-                     load_option2 == e_load_first) &&
+                     load_all) &&
                     size_t(-1) == loaded_marker_index)
                 {
-                    std::istreambuf_iterator<char> end_contents, begin_contents;
-                    boost::filesystem::ifstream fl_contents;
-                    load_file(contents_path, fl_contents, begin_contents, end_contents);
-
                     if (end_contents != begin_contents)
                     {
                         std::string row;
@@ -377,20 +388,18 @@ public:
                               std::to_string(item.start) + "-" + std::to_string(item.end),
                               std::string());
 
-                        if (detail::from_block_string(value, row, key, (load_option2 == e_load_first), putl))
+                        if (detail::from_block_string(val, row, key, load_all, putl))
                         {
-                            if (load_option2 == e_find ||
-                                load_option2 == e_load_first)
-                            {
-                                loaded_marker_index = index;
-                            }
-                            else
-                            {
-                                detail::default_block(value, key);
-                                load_option2 = e_load_first;
-                            }
+                            loaded_marker_index = index;
+
+                            if (load_all)
+                                start_markers_index = index + 1;
                         }
                     }
+
+                    auto& member_value = values[key];
+                    member_value.loaded_marker_index = new_value.loaded_marker_index;
+                    member_value.item = std::move(new_value.item);
                 }
             }
         }
@@ -857,31 +866,18 @@ std::unordered_map<std::string, std::string> load_index(std::string const& name,
             temp(path / (name + ".index"),
                  std::vector<std::string>(),
                  ptr_utl.get(),
-                 detail::null_ptr_transaction(),
-                 index_loader::e_load_first);
+                 detail::null_ptr_transaction());
     std::unordered_set<std::string> keys;
-    while (temp.loaded(keys))
+    if (temp.loaded(keys))
     {
-        std::vector<std::string> continue_keys;
-
         for (auto const& key : keys)
         {
-            auto& temp_key = temp[key];
-
             Data::StringValue item;
-            std::move(temp_key.item).get(item);
-            std::string real_key = temp_key.key;
+            auto& temp_value = temp[key];
+            std::move(temp_value.item).get(item);
 
-            index[real_key] = item.value;
-
-            continue_keys.push_back(real_key);
+            index[key] = item.value;
         }
-
-        temp = index_loader(path / (name + ".index"),
-                            continue_keys,
-                            ptr_utl.get(),
-                            detail::null_ptr_transaction(),
-                            index_loader::e_load_next);
     }
 
     return index;
@@ -1280,8 +1276,7 @@ size_t load_size(std::string const& name,
             temp(path / (name + ".size"),
                  std::vector<uint64_t>(),
                  ptr_utl_local.get(),
-                 detail::null_ptr_transaction(),
-                 size_loader::e_load_first);
+                 detail::null_ptr_transaction());
 
     std::unordered_set<uint64_t> keys;
     if (temp.loaded(keys))
@@ -1487,8 +1482,7 @@ void vector_loader_internals::save()
             temp(dir_path / (name + ".size"),
                  std::vector<uint64_t>(),
                  ptr_utl_local.get(),
-                 std::move(ref_ptransaction_size),
-                 size_loader::e_load_first);
+                 std::move(ref_ptransaction_size));
 
     beltpp::finally guard_size([&ref_ptransaction_size, &temp]
     {
