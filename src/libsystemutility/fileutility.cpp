@@ -1480,7 +1480,7 @@ void vector_loader_internals::save()
 
     size_loader
             temp(dir_path / (name + ".size"),
-                 std::vector<uint64_t>(),
+                 std::vector<uint64_t>{0},
                  ptr_utl_local.get(),
                  std::move(ref_ptransaction_size));
 
