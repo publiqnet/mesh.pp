@@ -396,12 +396,12 @@ public:
                                 start_markers_index = index + 1;
                         }
                     }
-
-                    auto& member_value = values[key];
-                    member_value.loaded_marker_index = new_value.loaded_marker_index;
-                    member_value.item = std::move(new_value.item);
                 }
             }
+
+            auto& member_value = values[key];
+            member_value.loaded_marker_index = new_value.loaded_marker_index;
+            member_value.item = std::move(new_value.item);
         }
 
         guard.dismiss();
