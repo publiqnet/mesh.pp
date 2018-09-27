@@ -472,6 +472,8 @@ public:
         auto start_pos = size_t(-1);
         std::string bulk_buffer;
 
+        std::unordered_set<size_t> erase_indices;
+
         for (auto& value : values)
         {
             std::string buffer = value.second.item.to_string();
@@ -489,9 +491,11 @@ public:
             markers.back().end = seek_pos + buffer.size();
             markers.back().key = detail::key_to_uint64_t(value.first);
 
-            if (value.second.loaded_marker_index != size_t(-1))
-                markers.erase(markers.begin() + int64_t(value.second.loaded_marker_index));
+            if (size_t(-1) != value.second.loaded_marker_index)
+                erase_indices.insert(value.second.loaded_marker_index);
 
+            //  after erases are done, this indices will be wrong
+            //  but we don't rely on those, later
             value.second.loaded_marker_index = markers.size() - 1;
 
             if (nullptr == ptransaction)
@@ -506,6 +510,17 @@ public:
 
             bulk_buffer += buffer;
         }
+
+        size_t write_index = 0;
+        for (size_t index = 0; index < markers.size(); ++index)
+        {
+            if (erase_indices.end() == erase_indices.find(index))
+            {
+                markers[write_index] = markers[index];
+                ++write_index;
+            }
+        }
+        markers.resize(write_index);
 
         if (false == boost::filesystem::exists(file_path_tr()))
             boost::filesystem::ofstream(file_path_tr(), std::ios_base::trunc);
