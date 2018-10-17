@@ -298,7 +298,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         case beltpp::isocket_protocol_error::rtt:
         {
             beltpp::isocket_protocol_error msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
 
             m_pimpl->writeln("got error from bad guy " + current_connection.to_string());
             m_pimpl->writeln(msg.buffer);
@@ -317,22 +317,24 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         {
             //  may change some logic later
             beltpp::isocket_open_refused msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
             peer = "p2p: " + current_peer;
-            return_packets.emplace_back(msg);
+            auto msg_address = msg.address;
+            return_packets.emplace_back(std::move(msg));
 
-            remove_if_configured_address(m_pimpl, msg.address);
+            remove_if_configured_address(m_pimpl, msg_address);
             break;
         }
         case beltpp::isocket_open_error::rtt:
         {
             //  may change some logic later
             beltpp::isocket_open_error msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
             peer = "p2p: " + current_peer;
-            return_packets.emplace_back(msg);
+            auto msg_address = msg.address;
+            return_packets.emplace_back(std::move(msg));
 
-            remove_if_configured_address(m_pimpl, msg.address);
+            remove_if_configured_address(m_pimpl, msg_address);
             break;
         }
         case beltpp::isocket_drop::rtt:
@@ -353,7 +355,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         {
             m_pimpl->writeln("ping received");
             Ping msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
 
             if(!verify_signature(msg.nodeid, msg.nodeid, msg.signature))
             {
@@ -370,9 +372,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Pong msg_pong;
                 msg_pong.nodeid = state.name();
-                auto const& _sign = m_pimpl->_secret_key.sign(msg_pong.nodeid);
-                msg_pong.signature = _sign.base58;
-                sk.send(current_peer, msg_pong);
+                auto signed_nodeid = m_pimpl->_secret_key.sign(msg_pong.nodeid);
+                msg_pong.signature = std::move(signed_nodeid.base58);
+                sk.send(current_peer, std::move(msg_pong));
 
                 state.undo_remove(current_peer);
 
@@ -391,7 +393,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         {
             m_pimpl->writeln("pong received");
             Pong msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
 
             if (state.name() == msg.nodeid)
                 break;
@@ -408,27 +410,27 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             FindNode msg_fn;
             msg_fn.nodeid = state.name();
-            sk.send(current_peer, msg_fn);
+            sk.send(current_peer, std::move(msg_fn));
             break;
         }
         case FindNode::rtt:
         {
             m_pimpl->writeln("find node received");
             FindNode msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
 
             NodeDetails response;
             response.origin = state.name();
             response.nodeids = state.list_nearest_to(msg.nodeid);
 
-            sk.send(current_peer, response);
+            sk.send(current_peer, std::move(response));
             break;
         }
         case NodeDetails::rtt:
         {
             m_pimpl->writeln("node details received");
             NodeDetails msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
 
             vector<string> want_introduce =
                     state.process_node_details(current_peer,
@@ -440,7 +442,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 IntroduceTo msg_intro;
                 msg_intro.nodeid = intro;
 
-                sk.send(current_peer, msg_intro);
+                sk.send(current_peer, std::move(msg_intro));
             }
 
             break;
@@ -449,7 +451,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         {
             m_pimpl->writeln("introduce request received");
             IntroduceTo msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
 
             peer_id introduce_peer_id;
             if (state.process_introduce_request(msg.nodeid, introduce_peer_id))
@@ -459,12 +461,11 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 m_pimpl->writeln("sending connect info " + introduce_addr.to_string());
 
-                assign(msg_open.addr, introduce_addr);
+                assign(msg_open.addr, std::move(introduce_addr));
+                sk.send(current_peer, std::move(msg_open));
 
-                sk.send(current_peer, msg_open);
-
-                msg_open.addr = current_connection;
-                sk.send(introduce_peer_id, msg_open);
+                assign(msg_open.addr, std::move(current_connection));
+                sk.send(introduce_peer_id, std::move(msg_open));
             }
             break;
         }
@@ -473,10 +474,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln("connect info received");
 
             OpenConnectionWith msg;
-            received_packet.get(msg);
+            std::move(received_packet).get(msg);
 
             ip_address connect_to;
-            assign(connect_to, msg.addr);
+            assign(connect_to, std::move(msg.addr));
             connect_to.local = current_connection.local;
 
             m_pimpl->writeln("add_passive connect_to, 100: " + connect_to.to_string());
