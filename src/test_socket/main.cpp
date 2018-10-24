@@ -129,8 +129,8 @@ int main(int argc, char* argv[])
                 Sum msg_sum;
                 msg_sum.first = a;
                 msg_sum.second = b;
-                sk.send(peer, msg_sum);};
-
+                sk.send(peer, msg_sum);
+            };
         }
         else
         {
