@@ -43,7 +43,7 @@ public:
                         beltpp::ilog* _plogger,
                         meshpp::private_key const& sk)
         : m_ptr_socket(new beltpp::socket(
-            beltpp::getsocket<sf>(eh, std::move(putl))
+            beltpp::getsocket<sf>(eh, socket::option_reuse_port, std::move(putl))
                                           ))
         , m_ptr_state(getp2pstate(sk.get_public_key()))
         , plogger(_plogger)
