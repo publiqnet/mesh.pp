@@ -16,12 +16,14 @@ module P2PMessage
     class Ping
     {
         String nodeid
+        TimePoint stamp
         String signature
     }
 
     class Pong
     {
         String nodeid
+        TimePoint stamp
         String signature
     }
 
