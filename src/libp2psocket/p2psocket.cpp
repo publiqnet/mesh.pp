@@ -642,7 +642,7 @@ void p2psocket::timer_action()
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
-        auto  _sign = m_pimpl->_secret_key.sign(message);
+        auto const& _sign  = m_pimpl->_secret_key.sign(message);
         ping_msg.signature = _sign.base58;
         sk.send(item, ping_msg);
     }
