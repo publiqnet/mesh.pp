@@ -18,6 +18,7 @@ module P2PMessage
         String nodeid
         TimePoint stamp
         String signature
+        IPAddress connection_info
     }
 
     class Pong

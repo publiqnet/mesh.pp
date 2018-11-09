@@ -271,8 +271,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
-                auto _sign = m_pimpl->_secret_key.sign(message);
-                ping_msg.signature = _sign.base58;
+                auto signed_message = m_pimpl->_secret_key.sign(message);
+                ping_msg.signature = signed_message.base58;
                 m_pimpl->writeln("sending ping");
                 sk.send(current_peer, ping_msg);
                 m_pimpl->writeln("remove_later current_peer, 10, true: " + current_peer + ", " + current_connection.to_string());
@@ -360,17 +360,15 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             std::move(received_packet).get(msg);
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
-
-            if( chrono::seconds( -30 ) >  diff ||
-                chrono::seconds(  30 ) <= diff    )
-            {
-                m_pimpl->writeln("One minute has passed");
-                break;
-            }
-
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
 
-            if( !verify_signature(msg.nodeid, message, msg.signature) )
+            if (chrono::seconds(-30) > diff ||
+                chrono::seconds(30) <= diff)
+            {
+                m_pimpl->writeln("invalid ping timestamp");
+                break;
+            }
+            if (!verify_signature(msg.nodeid, message, msg.signature))
             {
                 m_pimpl->writeln("ping signature verification failed");
                 break;
@@ -387,8 +385,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 msg_pong.nodeid = state.name();
                 msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
-                auto signed_nodeid = m_pimpl->_secret_key.sign(message);
-                msg_pong.signature = std::move(signed_nodeid.base58);
+                auto signed_message = m_pimpl->_secret_key.sign(message);
+                msg_pong.signature = std::move(signed_message.base58);
                 sk.send(current_peer, std::move(msg_pong));
 
                 state.undo_remove(current_peer);
@@ -414,17 +412,15 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
-
-            if( chrono::seconds( -30 ) >  diff ||
-                chrono::seconds(  30 ) <= diff    )
-            {
-                m_pimpl->writeln("One minute has passed");
-                break;
-            }
-
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
 
-            if( !verify_signature(msg.nodeid, message, msg.signature) )
+            if (chrono::seconds(-30) >  diff ||
+                chrono::seconds(30) <= diff)
+            {
+                m_pimpl->writeln("invalid pong timestamp");
+                break;
+            }
+            if (!verify_signature(msg.nodeid, message, msg.signature))
             {
                 m_pimpl->writeln("pong signature verification failed");
                 break;
@@ -637,13 +633,13 @@ void p2psocket::timer_action()
 
     auto connected = state.get_connected_peerids();
     for (auto const& item : connected)
-    {       
+    {
         Ping ping_msg;
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
-        auto _sign  = m_pimpl->_secret_key.sign(message);
-        ping_msg.signature = _sign.base58;
+        auto signed_message  = m_pimpl->_secret_key.sign(message);
+        ping_msg.signature = signed_message.base58;
         sk.send(item, ping_msg);
     }
 }
