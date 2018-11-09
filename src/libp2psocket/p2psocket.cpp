@@ -270,7 +270,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 Ping ping_msg;
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
-                auto const& _sign = m_pimpl->_secret_key.sign(ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm));
+                string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
+                auto const& _sign = m_pimpl->_secret_key.sign(message);
                 ping_msg.signature = _sign.base58;
                 m_pimpl->writeln("sending ping");
                 sk.send(current_peer, ping_msg);
@@ -359,11 +360,17 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             std::move(received_packet).get(msg);
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
+
+            if( chrono::seconds( -30 ) <  diff &&
+                chrono::seconds(  30 ) >= diff    )
+            {
+                m_pimpl->writeln("One minute has passed");
+                break;
+            }
+
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
 
-            if( chrono::seconds( -30 ) < diff &&
-                chrono::seconds(  30 ) > diff &&
-                !verify_signature(msg.nodeid, message, msg.signature) )
+            if( !verify_signature(msg.nodeid, message, msg.signature) )
             {
                 m_pimpl->writeln("ping signature verification failed");
                 break;
@@ -379,7 +386,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 Pong msg_pong;
                 msg_pong.nodeid = state.name();
                 msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
-                auto signed_nodeid = m_pimpl->_secret_key.sign(msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm));
+                string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
+                auto signed_nodeid = m_pimpl->_secret_key.sign(message);
                 msg_pong.signature = std::move(signed_nodeid.base58);
                 sk.send(current_peer, std::move(msg_pong));
 
@@ -406,11 +414,17 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
+
+            if( chrono::seconds( -30 ) <  diff &&
+                chrono::seconds(  30 ) >= diff    )
+            {
+                m_pimpl->writeln("One minute has passed");
+                break;
+            }
+
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
 
-            if( chrono::seconds( -30 ) < diff &&
-                chrono::seconds(  30 ) > diff &&
-                !verify_signature(msg.nodeid, message, msg.signature) )
+            if( !verify_signature(msg.nodeid, message, msg.signature) )
             {
                 m_pimpl->writeln("pong signature verification failed");
                 break;
@@ -627,7 +641,8 @@ void p2psocket::timer_action()
         Ping ping_msg;
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
-        auto const& _sign = m_pimpl->_secret_key.sign(ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm));
+        string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
+        auto  _sign = m_pimpl->_secret_key.sign(message);
         ping_msg.signature = _sign.base58;
         sk.send(item, ping_msg);
     }
