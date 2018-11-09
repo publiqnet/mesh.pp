@@ -361,7 +361,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
 
-            if( chrono::seconds( -30 ) >  diff &&
+            if( chrono::seconds( -30 ) >  diff ||
                 chrono::seconds(  30 ) <= diff    )
             {
                 m_pimpl->writeln("One minute has passed");
@@ -415,7 +415,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
 
-            if( chrono::seconds( -30 ) >  diff &&
+            if( chrono::seconds( -30 ) >  diff ||
                 chrono::seconds(  30 ) <= diff    )
             {
                 m_pimpl->writeln("One minute has passed");
