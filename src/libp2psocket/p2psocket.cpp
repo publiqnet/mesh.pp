@@ -268,6 +268,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 state.add_active(current_connection, current_peer);
 
                 Ping ping_msg;
+
+                ip_address addr = sk.info(current_peer);
+                beltpp::assign(ping_msg.connection_info, addr);
+
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
@@ -358,6 +362,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln("ping received");
             Ping msg;
             std::move(received_packet).get(msg);
+
+            ip_address addr = sk.info(current_peer);
+            beltpp::assign(msg.connection_info, addr);
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
@@ -635,6 +642,10 @@ void p2psocket::timer_action()
     for (auto const& item : connected)
     {
         Ping ping_msg;
+
+        ip_address addr = sk.info(item);
+        beltpp::assign(ping_msg.connection_info, addr);
+
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
