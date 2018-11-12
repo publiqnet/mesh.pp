@@ -275,7 +275,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
-                m_pimpl->writeln("signing message");
+                m_pimpl->writeln("sending ping with signed message");
                 m_pimpl->writeln(message);
                 auto signed_message = m_pimpl->_secret_key.sign(message);
                 ping_msg.signature = signed_message.base58;
@@ -415,6 +415,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
                 auto signed_message = m_pimpl->_secret_key.sign(message);
+                m_pimpl->writeln("sending pong with signed message");
+                m_pimpl->writeln(message);
                 msg_pong.signature = std::move(signed_message.base58);
                 sk.send(current_peer, std::move(msg_pong));
 
@@ -449,6 +451,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 m_pimpl->writeln("invalid pong timestamp");
                 break;
             }
+            m_pimpl->writeln("verifying message");
+            m_pimpl->writeln(message);
             if (!verify_signature(msg.nodeid, message, msg.signature))
             {
                 m_pimpl->writeln("pong signature verification failed");
@@ -671,7 +675,7 @@ void p2psocket::timer_action()
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
-        m_pimpl->writeln("signing message");
+        m_pimpl->writeln("sending ping with signed message");
         m_pimpl->writeln(message);
         auto signed_message  = m_pimpl->_secret_key.sign(message);
         ping_msg.signature = signed_message.base58;
