@@ -269,8 +269,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Ping ping_msg;
 
-                ip_address addr = sk.info(current_peer);
-                beltpp::assign(ping_msg.connection_info, addr);
+                ip_address address = sk.info_fetch(current_peer);
+                beltpp::assign(ping_msg.connection_info, address);
 
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
@@ -279,7 +279,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 m_pimpl->writeln(message);
                 auto signed_message = m_pimpl->_secret_key.sign(message);
                 ping_msg.signature = signed_message.base58;
-                beltpp::assign(ping_msg.connection_info, sk.info(current_peer));
                 m_pimpl->writeln("sending ping");
                 sk.send(current_peer, ping_msg);
                 m_pimpl->writeln("remove_later current_peer, 10, true: " + current_peer + ", " + current_connection.to_string());
@@ -669,8 +668,8 @@ void p2psocket::timer_action()
     {
         Ping ping_msg;
 
-        ip_address addr = sk.info(item);
-        beltpp::assign(ping_msg.connection_info, addr);
+        ip_address address = sk.info_fetch(item);
+        beltpp::assign(ping_msg.connection_info, address);
 
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
