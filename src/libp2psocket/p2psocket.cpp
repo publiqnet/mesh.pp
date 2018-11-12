@@ -277,6 +277,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
                 auto signed_message = m_pimpl->_secret_key.sign(message);
                 ping_msg.signature = signed_message.base58;
+                beltpp::assign(ping_msg.connection_info, sk.info(current_peer));
                 m_pimpl->writeln("sending ping");
                 sk.send(current_peer, ping_msg);
                 m_pimpl->writeln("remove_later current_peer, 10, true: " + current_peer + ", " + current_connection.to_string());
@@ -363,8 +364,12 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             Ping msg;
             std::move(received_packet).get(msg);
 
-            ip_address addr = sk.info(current_peer);
-            beltpp::assign(msg.connection_info, addr);
+            ip_address external_address_ping, external_address_stored;
+            beltpp::assign(external_address_ping, msg.connection_info);
+            external_address_ping.local = external_address_ping.remote;
+            external_address_ping.remote = beltpp::ip_destination();
+
+            external_address_stored = m_pimpl->m_ptr_state->get_external_ip_address();
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
@@ -381,6 +386,19 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
             }
 
+            if (external_address_stored.local.empty() &&
+                external_address_stored.remote.empty())
+            {
+                external_address_stored = external_address_ping;
+                m_pimpl->m_ptr_state->set_external_ip_address(external_address_stored);
+            }
+
+            if (external_address_ping != external_address_stored)
+            {
+                m_pimpl->writeln("peer working on different route");
+                break;
+            }
+
             p2pstate::contact_status status =
                 state.add_contact(current_peer, msg.nodeid);
 
@@ -391,7 +409,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 Pong msg_pong;
                 msg_pong.nodeid = state.name();
                 msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
-                string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
+                string message = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
                 auto signed_message = m_pimpl->_secret_key.sign(message);
                 msg_pong.signature = std::move(signed_message.base58);
                 sk.send(current_peer, std::move(msg_pong));

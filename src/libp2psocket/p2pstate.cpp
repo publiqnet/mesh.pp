@@ -645,6 +645,15 @@ public:
         return fixed_local_port;
     }
 
+    void set_external_ip_address(beltpp::ip_address const& address) override
+    {
+        external_ip_address = address;
+    }
+    beltpp::ip_address get_external_ip_address() const override
+    {
+        return external_ip_address;
+    }
+
     void do_step() override
     {
         program_state.do_step();
@@ -863,6 +872,7 @@ public:
 
 private:
     unsigned short fixed_local_port;
+    beltpp::ip_address external_ip_address;
     string SelfID;
     KBucket<Konnection> kbucket;
     //  node lookup design is wrong, does not fit in

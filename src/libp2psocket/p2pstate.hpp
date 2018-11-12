@@ -26,6 +26,9 @@ public:
     virtual void set_fixed_local_port(unsigned short fixed_local_port) = 0;
     virtual unsigned short get_fixed_local_port() const = 0;
 
+    virtual void set_external_ip_address(beltpp::ip_address const& address) = 0;
+    virtual beltpp::ip_address get_external_ip_address() const = 0;
+
     virtual void do_step() = 0;
 
     virtual contact_status add_contact(beltpp::socket::peer_id const& peer_id,
