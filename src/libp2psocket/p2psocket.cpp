@@ -412,10 +412,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 Pong msg_pong;
                 msg_pong.nodeid = state.name();
                 msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
-                string message = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
-                auto signed_message = m_pimpl->_secret_key.sign(message);
+                string message_pong = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
+                auto signed_message = m_pimpl->_secret_key.sign(message_pong);
                 m_pimpl->writeln("sending pong with signed message");
-                m_pimpl->writeln(message);
+                m_pimpl->writeln(message_pong);
                 msg_pong.signature = std::move(signed_message.base58);
                 sk.send(current_peer, std::move(msg_pong));
 
