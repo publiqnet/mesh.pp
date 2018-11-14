@@ -269,7 +269,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Ping ping_msg;
 
-                ip_address address = sk.info_fetch(current_peer);
+                ip_address address = sk.info(current_peer);
                 beltpp::assign(ping_msg.connection_info, address);
 
                 ping_msg.nodeid = state.name();
@@ -668,7 +668,7 @@ void p2psocket::timer_action()
     {
         Ping ping_msg;
 
-        ip_address address = sk.info_fetch(item);
+        ip_address address = sk.info(item);
         beltpp::assign(ping_msg.connection_info, address);
 
         ping_msg.nodeid = state.name();
