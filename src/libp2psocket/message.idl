@@ -8,10 +8,12 @@ module P2PMessage
 
     class IPAddress
     {
-        Int ip_type
+        IPType ip_type
         IPDestination local
         IPDestination remote
     }
+
+    enum IPType {any ipv4 ipv6}
 
     class Ping
     {
