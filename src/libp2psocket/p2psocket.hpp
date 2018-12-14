@@ -54,6 +54,8 @@ public:
 
     std::string name() const;
 
+    beltpp::ip_address external_address() const;
+
     beltpp::ievent_item const& worker() const;
 
 private:

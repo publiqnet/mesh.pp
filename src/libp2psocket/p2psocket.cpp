@@ -688,6 +688,11 @@ string p2psocket::name() const
     return state.name();
 }
 
+beltpp::ip_address p2psocket::external_address() const
+{
+    return m_pimpl->m_ptr_state->get_external_ip_address();
+}
+
 beltpp::ievent_item const& p2psocket::worker() const
 {
     return *m_pimpl->m_ptr_socket.get();
