@@ -257,6 +257,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             } catch (...) {assert(false);}
         }
 
+        bool verify_pong_sig = true;
+        bool verify_ping_sig = true;
+        bool pong_sign = true;
+
         switch (received_packet.type())
         {
         case beltpp::isocket_join::rtt:
@@ -271,7 +275,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 ip_address address = sk.info(current_peer);
                 beltpp::assign(ping_msg.connection_info, address);
-
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
@@ -373,7 +376,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             external_address_stored = m_pimpl->m_ptr_state->get_external_ip_address();
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
-            string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
 
             if (chrono::seconds(-30) > diff ||
                 chrono::seconds(30) <= diff)
@@ -381,12 +383,19 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 m_pimpl->writeln("invalid ping timestamp");
                 break;
             }
-            m_pimpl->writeln("verifying message");
-            m_pimpl->writeln(message);
-            if (!verify_signature(msg.nodeid, message, msg.signature))
+
+            if (verify_ping_sig)
             {
-                m_pimpl->writeln("ping signature verification failed");
-                break;
+                string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
+                m_pimpl->writeln("verifying message");
+                m_pimpl->writeln(message);
+
+                if (!verify_signature(msg.nodeid, message, msg.signature))
+                {
+                    m_pimpl->writeln("ping signature verification failed");
+                    break;
+                }
+                verify_ping_sig = false;
             }
 
             if (external_address_stored.local.empty() &&
@@ -412,11 +421,22 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 Pong msg_pong;
                 msg_pong.nodeid = state.name();
                 msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
-                string message_pong = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
-                auto signed_message = m_pimpl->_secret_key.sign(message_pong);
-                m_pimpl->writeln("sending pong with signed message");
-                m_pimpl->writeln(message_pong);
-                msg_pong.signature = std::move(signed_message.base58);
+
+                if (pong_sign)
+                {
+                    string message_pong = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
+                    auto signed_message = m_pimpl->_secret_key.sign(message_pong);
+                    m_pimpl->writeln("sending pong with signed message");
+                    m_pimpl->writeln(message_pong);
+                    msg_pong.signature = std::move(signed_message.base58);
+                    pong_sign = false;
+                }
+                else
+                {
+                    m_pimpl->writeln("sending pong");
+                    msg_pong.signature = nullptr;
+                }
+
                 sk.send(current_peer, std::move(msg_pong));
 
                 state.undo_remove(current_peer);
@@ -442,20 +462,26 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
-            string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
-
             if (chrono::seconds(-30) >  diff ||
                 chrono::seconds(30) <= diff)
             {
                 m_pimpl->writeln("invalid pong timestamp");
                 break;
             }
-            m_pimpl->writeln("verifying message");
-            m_pimpl->writeln(message);
-            if (!verify_signature(msg.nodeid, message, msg.signature))
+
+            if (verify_pong_sig)
             {
-                m_pimpl->writeln("pong signature verification failed");
-                break;
+                string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
+                m_pimpl->writeln("verifying message");
+                m_pimpl->writeln(message);
+
+                if (!verify_signature(msg.nodeid, message, msg.signature))
+                {
+                    m_pimpl->writeln("pong signature verification failed");
+                    break;
+                }
+
+                verify_pong_sig = false;
             }
 
             state.update(current_peer, msg.nodeid);
@@ -670,14 +696,10 @@ void p2psocket::timer_action()
 
         ip_address address = sk.info(item);
         beltpp::assign(ping_msg.connection_info, address);
-
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
-        string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
-        m_pimpl->writeln("sending ping with signed message");
-        m_pimpl->writeln(message);
-        auto signed_message  = m_pimpl->_secret_key.sign(message);
-        ping_msg.signature = signed_message.base58;
+        m_pimpl->writeln("sending ping ");
+        ping_msg.signature = nullptr;
         sk.send(item, ping_msg);
     }
 }
