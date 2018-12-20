@@ -22,7 +22,7 @@
 ```console
 user@pc:~$ mkdir projects
 user@pc:~$ cd projects
-user@pc:~/projects$ git clone https://github.com/PubliqNetwork/mesh.pp
+user@pc:~/projects$ git clone https://github.com/publiqnet/mesh.pp
 user@pc:~/projects$ cd mesh.pp
 user@pc:~/projects/mesh.pp$ git submodule update --init --recursive
 user@pc:~/projects/mesh.pp$ cd ..
