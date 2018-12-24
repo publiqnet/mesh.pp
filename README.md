@@ -9,7 +9,7 @@
 + transactions - commit/rollback interface for storage related operations
 
 ## details on supported/unsupported features/technologies
-+ *dependencies?* [boost](https://www.boost.org "boost"), [crypto++](https://www.cryptopp.com/ "crypto++"), [belt.pp](https://github.com/publiqnet/belt.pp "belt.pp") and [a simple cmake utility](https://github.com/PUBLIQNetwork/cmake_utility "the simple title for the simple cmake utility")
++ *dependencies?* [boost](https://www.boost.org "boost"), [crypto++](https://www.cryptopp.com/ "crypto++"), [belt.pp](https://github.com/publiqnet/belt.pp "belt.pp") and [a simple cmake utility](https://github.com/publiqnet/cmake_utility "the simple title for the simple cmake utility")
 + *portable?* yes! it's a goal. clang, gcc, msvc working.
 + *build system?* cmake. refer to cmake project generator options for msvc, xcode, etc... project generation.
 + *static linking vs dynamic linking?* both supported, refer to BUILD_SHARED_LIBS cmake option
