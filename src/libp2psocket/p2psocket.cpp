@@ -434,7 +434,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 else
                 {
                     m_pimpl->writeln("sending pong");
-                    msg_pong.signature = nullptr;
+                    msg_pong.signature.clear();
                 }
 
                 sk.send(current_peer, std::move(msg_pong));
@@ -699,7 +699,7 @@ void p2psocket::timer_action()
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         m_pimpl->writeln("sending ping ");
-        ping_msg.signature = nullptr;
+        ping_msg.signature.clear();
         sk.send(item, ping_msg);
     }
 }
