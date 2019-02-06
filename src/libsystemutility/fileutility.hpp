@@ -1,7 +1,6 @@
 #pragma once
 
 #include "global.hpp"
-#include "data.hpp"
 
 #include <belt.pp/scope_helper.hpp>
 #include <belt.pp/packet.hpp>
