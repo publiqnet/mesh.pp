@@ -27,7 +27,8 @@ set(SRC_FILES
     log.hpp
     processutility.hpp
     p2psocket.hpp
-    rdbutility.hpp)
+    rdbutility.hpp
+    sessionutility.hpp)
 
 install(FILES
     ${SRC_FILES}
