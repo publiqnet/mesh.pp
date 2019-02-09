@@ -119,8 +119,10 @@ void session_manager::add(string const& nodeid,
 
     string peerid_update;
     bool errored = false;
-    bool action_inserted = false;
     bool update_last_contacted = false;
+    bool previous_completed = ( it_session->actions.empty() ||
+                                it_session->actions.back()->completed );
+
     for (auto&& action_item : actions)
     {
         auto const& o = *action_item.get();
@@ -128,14 +130,14 @@ void session_manager::add(string const& nodeid,
         auto it_find = existing_actions.find(ti.hash_code());
         if (it_find == existing_actions.end())
         {
-            if (false == action_inserted &&
-                    (it_session->actions.empty() ||
-                     it_session->actions.back()->completed)
-                )
+            if (previous_completed)
             {
                 action_item->initiate();
                 update_last_contacted = true;
-                peerid_update = action_item->peerid_update;
+                if (false == action_item->peerid_update.empty())
+                    peerid_update = action_item->peerid_update;
+                previous_completed = action_item->completed;
+
                 if (action_item->errored)
                 {
                     errored = true;
@@ -150,7 +152,6 @@ void session_manager::add(string const& nodeid,
                 item.actions.push_back(std::move(action_item));
             });
             assert(modified);
-            action_inserted = true;
         }
     }
 
@@ -197,7 +198,10 @@ bool session_manager::process(string const& peerid,
             action_item->initiate();
             errored = action_item->errored;
             peerid_update = action_item->peerid_update;
-            break;
+            if (false == action_item->completed)
+                //  if this one completed immediately on
+                //  initialize, then initialize next item too
+                break;
         }
         else if (action_item->process(std::move(package)))
         {
