@@ -1,3 +1,10 @@
+# generate pid.gen.hpp from pid.idl
+add_custom_command (
+  OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/pid.gen.hpp
+  MAIN_DEPENDENCY pid.idl
+  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/pid.idl ${CMAKE_CURRENT_SOURCE_DIR}/pid.gen.hpp
+)
+
 # generate file_attributes.gen.hpp from file_attributes.idl
 add_custom_command (
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.gen.hpp
@@ -27,8 +34,12 @@ add_library(systemutility
     file_attributes.gen.hpp
     fileutility.cpp
     fileutility.hpp
+    pid.hpp
+    pid.gen.hpp
     processutility.cpp
-    processutility.hpp)
+    processutility.hpp
+    settings.cpp
+    settings.hpp)
 
 if(TARGET rocksdb)
     target_sources(systemutility PRIVATE rdbutility.hpp)
@@ -63,6 +74,9 @@ install(TARGETS systemutility
 install(FILES
     global.hpp
     fileutility.hpp
+    pid.hpp
+    pid.gen.hpp
     processutility.hpp
     rdbutility.hpp
+    settings.hpp
     DESTINATION ${MESHPP_INSTALL_DESTINATION_INCLUDE}/libsystemutility)

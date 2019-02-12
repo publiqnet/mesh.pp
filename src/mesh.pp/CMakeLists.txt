@@ -27,10 +27,12 @@ set(SRC_FILES
     fileutility.hpp
     http.hpp
     log.hpp
+    pid.hpp
     processutility.hpp
     p2psocket.hpp
     rdbutility.hpp
-    sessionutility.hpp)
+    sessionutility.hpp
+    settings.hpp)
 
 install(FILES
     ${SRC_FILES}
