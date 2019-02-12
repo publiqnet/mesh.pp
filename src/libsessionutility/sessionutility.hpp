@@ -23,12 +23,11 @@ public:
     session_action(session_action const&) = default;
     virtual ~session_action() {}
 
-    virtual void initiate() = 0;
-    virtual bool process(beltpp::packet&& package) = 0;
+    virtual void initiate(session const& parent) = 0;
+    virtual bool process(beltpp::packet&& package, session const& parent) = 0;
 
     bool completed = false;
     bool errored = false;
-    session* parent = nullptr;
     size_t expected_next_package_type = size_t(-1);
     size_t max_steps_remaining = 0;
     std::string peerid_update;

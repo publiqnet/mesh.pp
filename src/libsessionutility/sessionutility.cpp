@@ -132,7 +132,7 @@ void session_manager::add(string const& nodeid,
         {
             if (previous_completed)
             {
-                action_item->initiate();
+                action_item->initiate(*it_session);
                 update_last_contacted = true;
                 if (false == action_item->peerid_update.empty())
                     peerid_update = action_item->peerid_update;
@@ -148,7 +148,6 @@ void session_manager::add(string const& nodeid,
             existing_actions.insert(ti.hash_code());
             modified = m_pimpl->sessions.modify(it_session, [&action_item](session& item)
             {
-                action_item->parent = &item;
                 item.actions.push_back(std::move(action_item));
             });
             assert(modified);
@@ -195,7 +194,7 @@ bool session_manager::process(string const& peerid,
     {
         if (initiate && errored == false)
         {
-            action_item->initiate();
+            action_item->initiate(current_session);
             errored = action_item->errored;
             peerid_update = action_item->peerid_update;
             if (false == action_item->completed)
@@ -203,7 +202,7 @@ bool session_manager::process(string const& peerid,
                 //  initialize, then initialize next item too
                 break;
         }
-        else if (action_item->process(std::move(package)))
+        else if (action_item->process(std::move(package), current_session))
         {
             --action_item->max_steps_remaining;
 
