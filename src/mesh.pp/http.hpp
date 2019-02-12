@@ -361,6 +361,10 @@ beltpp::e_three_state_result protocol(beltpp::detail::session_special_data& ssd,
 
             ssd.ptr_data = beltpp::t_unique_nullptr<beltpp::detail::iscan_status>();
         }
+        else if (pss->type == detail::scan_status::get)
+        {
+            return beltpp::e_three_state_result::success;
+        }
         else if (pss->type == detail::scan_status::post)
         {
             string cl = pss->resource.properties["Content-Length"];
