@@ -12,6 +12,7 @@ target_include_directories(mesh.pp INTERFACE
 # libraries this module links to
 target_link_libraries(mesh.pp INTERFACE
     belt.pp
+
     )
 
 # what to do on make install
@@ -24,6 +25,7 @@ set(SRC_FILES
     cryptoutility.hpp
     global.hpp
     fileutility.hpp
+    http.hpp
     log.hpp
     processutility.hpp
     p2psocket.hpp
