@@ -222,9 +222,9 @@ beltpp::e_three_state_result protocol(beltpp::detail::session_special_data& ssd,
                                       string::const_iterator& iter_scan_begin,
                                       string::const_iterator const& iter_scan_end,
                                       string::const_iterator& iter_fallback,
-                                      size_t enough_length, // 1000
-                                      size_t header_max_size,// 64*1024
-                                      size_t content_max_size)//
+                                      size_t enough_length,
+                                      size_t header_max_size,
+                                      size_t content_max_size)
 {
     string const value_post = "POST ", value_get = "GET ", value_options = "OPTIONS ";
 
@@ -309,7 +309,7 @@ beltpp::e_three_state_result protocol(beltpp::detail::session_special_data& ssd,
         string scanned_begin(iter_scan_begin, iter_scan_check_end.first);
         string scanned_ending(iter_scan_check_end.first, iter_scan_check_end.second);
 
-        if (scanned_ending.empty() && enough_length)
+        if (scanned_ending.empty() && long_enough_message)
             return beltpp::e_three_state_result::error;
         else if (scanned_ending != value_ending)
         {
