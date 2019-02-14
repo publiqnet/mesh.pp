@@ -18,6 +18,7 @@ SYSTEMUTILITYSHARED_EXPORT void create_data_directory();
 SYSTEMUTILITYSHARED_EXPORT boost::filesystem::path config_file_path(std::string const& file);
 SYSTEMUTILITYSHARED_EXPORT boost::filesystem::path data_file_path(std::string const& file);
 SYSTEMUTILITYSHARED_EXPORT boost::filesystem::path data_directory_path(std::string const& dir);
+SYSTEMUTILITYSHARED_EXPORT boost::filesystem::path data_directory_path(std::string const& dir1, std::string const& dir2);
 
 
 class SYSTEMUTILITYSHARED_EXPORT settings

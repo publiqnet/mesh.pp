@@ -954,6 +954,8 @@ map_loader_internals::map_loader_internals(std::string const& name,
 #endif
 }
 
+map_loader_internals::map_loader_internals(map_loader_internals&&) = default;
+
 map_loader_internals::~map_loader_internals() = default;
 
 void map_loader_internals::load(std::string const& key) const
@@ -1217,7 +1219,7 @@ void map_loader_internals::discard()
 
     batch.Clear();
 #else
-    if (pimpl->ptransaction)
+    if (pimpl && pimpl->ptransaction)
     {
         pimpl->ptransaction->rollback();
         pimpl->ptransaction = detail::null_ptr_transaction();
@@ -1252,7 +1254,7 @@ void map_loader_internals::commit()
     }
     overlay.clear();
 #else
-    if (pimpl->ptransaction)
+    if (pimpl && pimpl->ptransaction)
     {
         pimpl->ptransaction->commit();
         pimpl->ptransaction = detail::null_ptr_transaction();
@@ -1343,6 +1345,8 @@ vector_loader_internals::vector_loader_internals(std::string const& name,
     , ptr_utl(std::move(ptr_utl))
     , pimpl(new vector_loader_internals_impl())
 {}
+
+vector_loader_internals::vector_loader_internals(vector_loader_internals&&) = default;
 
 vector_loader_internals::~vector_loader_internals() = default;
 
@@ -1516,7 +1520,7 @@ void vector_loader_internals::save()
 
 void vector_loader_internals::discard()
 {
-    if (pimpl->ptransaction)
+    if (pimpl && pimpl->ptransaction)
     {
         pimpl->ptransaction->rollback();
         pimpl->ptransaction = detail::null_ptr_transaction();
@@ -1529,7 +1533,7 @@ void vector_loader_internals::discard()
 
 void vector_loader_internals::commit()
 {
-    if (pimpl->ptransaction)
+    if (pimpl && pimpl->ptransaction)
     {
         pimpl->ptransaction->commit();
         pimpl->ptransaction = detail::null_ptr_transaction();

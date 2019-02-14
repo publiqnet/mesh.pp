@@ -351,6 +351,7 @@ public:
                          boost::filesystem::path const& path,
                          size_t limit,
                          beltpp::void_unique_ptr&& ptr_utl);
+    map_loader_internals(map_loader_internals&&);
     ~map_loader_internals();
 
     void load(std::string const& key) const;
@@ -386,6 +387,7 @@ public:
                beltpp::void_unique_ptr&& ptr_utl)
         : data(name, path, limit, std::move(ptr_utl))
     {}
+    map_loader(map_loader&&) = default;
     ~map_loader()
     {
         commit();
@@ -631,6 +633,7 @@ public:
                             size_t limit,
                             size_t group,
                             beltpp::void_unique_ptr&& ptr_utl);
+    vector_loader_internals(vector_loader_internals&&);
     ~vector_loader_internals();
 
     void load(size_t index) const;
@@ -670,6 +673,7 @@ public:
                   beltpp::void_unique_ptr&& ptr_utl)
         : data(name, path, limit, group, std::move(ptr_utl))
     {}
+    vector_loader(vector_loader&&) = default;
     ~vector_loader()
     {
         commit();
