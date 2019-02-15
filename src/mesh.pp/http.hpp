@@ -218,6 +218,24 @@ string http_response(beltpp::detail::session_special_data& ssd,
 }
 
 inline
+string http_not_found(beltpp::detail::session_special_data& ssd,
+                      string const& buffer)
+{
+    ssd.session_specal_handler = nullptr;
+
+    string str_result;
+    str_result += "HTTP/1.1 404 Not Found\r\n";
+    str_result += "Content-Type: text/plain\r\n";
+    str_result += "Access-Control-Allow-Origin: *\r\n";
+    str_result += "Content-Length: ";
+    str_result += std::to_string(buffer.size());
+    str_result += "\r\n\r\n";
+    str_result += buffer;
+
+    return str_result;
+}
+
+inline
 beltpp::e_three_state_result protocol(beltpp::detail::session_special_data& ssd,
                                       string::const_iterator& iter_scan_begin,
                                       string::const_iterator const& iter_scan_end,
