@@ -145,16 +145,20 @@ void session_manager::add(string const& nodeid,
                 }
             }
 
-            existing_actions.insert(ti.hash_code());
-            modified = m_pimpl->sessions.modify(it_session, [&action_item](session& item)
+            if (false == action_item->completed ||
+                false == action_item->permanent())
             {
-                item.actions.push_back(std::move(action_item));
-            });
-            assert(modified);
+                existing_actions.insert(ti.hash_code());
+                modified = m_pimpl->sessions.modify(it_session, [&action_item](session& item)
+                {
+                    item.actions.push_back(std::move(action_item));
+                });
+                assert(modified);
+            }
         }
     }
 
-    if (errored)
+    if (errored || it_session->actions.empty())
     {
         index_by_peerid.erase(it_session);
     }
@@ -169,8 +173,6 @@ void session_manager::add(string const& nodeid,
                 item.last_contacted = std::chrono::steady_clock::now();
         });
         assert(modified);
-
-        //it_session = index_by_peerid.find(peerid_update);
     }
 }
 
@@ -190,6 +192,8 @@ bool session_manager::process(string const& peerid,
     bool errored = false;
     bool update_last_contacted = false;
     session const& current_session = *it_session;
+    size_t dispose_count = 0;
+
     for (auto& action_item : current_session.actions)
     {
         if (initiate && errored == false)
@@ -197,10 +201,13 @@ bool session_manager::process(string const& peerid,
             action_item->initiate(current_session);
             errored = action_item->errored;
             peerid_update = action_item->peerid_update;
+
             if (false == action_item->completed)
                 //  if this one completed immediately on
                 //  initialize, then initialize next item too
                 break;
+            else if (false == action_item->permanent())
+                ++dispose_count;
         }
         else if (action_item->process(std::move(package), current_session))
         {
@@ -209,13 +216,18 @@ bool session_manager::process(string const& peerid,
             errored = action_item->errored;
             peerid_update = action_item->peerid_update;
             update_last_contacted = true;
-            initiate = true;
+            if (action_item->completed)
+            {
+                initiate = true;
+                if (false == action_item->permanent())
+                    ++dispose_count;
+            }
         }
     }
 
     bool modified;
     B_UNUSED(modified);
-    if (errored)
+    if (errored || dispose_count == current_session.actions.size())
     {
         index_by_peerid.erase(it_session);
     }
@@ -224,14 +236,21 @@ bool session_manager::process(string const& peerid,
     {
         modified = m_pimpl->sessions.modify(it_session, [&peerid_update, update_last_contacted](session& item)
         {
+
             if (false == peerid_update.empty())
                 item.peerid = peerid_update;
             if (update_last_contacted)
                 item.last_contacted = std::chrono::steady_clock::now();
+
+            auto it_end = std::remove_if(item.actions.begin(), item.actions.end(),
+                [](std::unique_ptr<session_action> const& paction)
+            {
+                return paction->completed && (false == paction->permanent());
+            });
+            item.actions.erase(it_end, item.actions.end());
+            assert(false == item.actions.empty());
         });
         assert(modified);
-
-        //it_session = index_by_peerid.find(peerid_update);
     }
 
     return update_last_contacted;

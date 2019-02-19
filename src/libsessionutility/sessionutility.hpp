@@ -25,6 +25,7 @@ public:
 
     virtual void initiate(session const& parent) = 0;
     virtual bool process(beltpp::packet&& package, session const& parent) = 0;
+    virtual bool permanent() const = 0;
 
     bool completed = false;
     bool errored = false;
