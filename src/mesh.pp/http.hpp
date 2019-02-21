@@ -199,10 +199,8 @@ public:
 
 inline
 string http_response(beltpp::detail::session_special_data& ssd,
-                     beltpp::packet const& pc)
+                     string const& buffer)
 {
-    string buffer = pc.to_string();
-
     ssd.session_specal_handler = nullptr;
 
     string str_result;
