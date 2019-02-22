@@ -269,7 +269,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Ping ping_msg;
 
-                ip_address address = sk.info(current_peer);
+                ip_address address = sk.info_connection(current_peer);
                 beltpp::assign(ping_msg.connection_info, address);
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
@@ -387,7 +387,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 m_pimpl->writeln("ping signature verification failed");
                 break;
             }
-
 
             if (external_address_stored.local.empty() &&
                 external_address_stored.remote.empty())
@@ -669,7 +668,7 @@ void p2psocket::timer_action()
     {
         Ping ping_msg;
 
-        ip_address address = sk.info(item);
+        ip_address address = sk.info_connection(item);
         beltpp::assign(ping_msg.connection_info, address);
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
