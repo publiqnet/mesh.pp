@@ -783,28 +783,6 @@ public:
     size_t size() const
     {
         return data.size_with_overlay;
-        /*size_t size = data.size;
-
-        for (auto const& item : data.overlay)
-        {
-            if (item.second.second != internal::deleted &&
-                item.first >= size)
-                size = item.first + 1;
-            else if (item.second.second == internal::deleted &&
-                     size > item.first)
-                size = item.first;
-        }
-
-        for (auto const& item : data.overlay)
-        {
-            if ((item.second.second != internal::deleted &&
-                 item.first >= size) ||
-                (item.second.second == internal::deleted &&
-                 (size > item.first || item.first >= data.size)))
-                throw std::runtime_error(data.name + ": vector loader overlay integrity check error");
-        }
-
-        return size;*/
     }
 
     void save()
