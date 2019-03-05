@@ -25,7 +25,6 @@ set(SRC_FILES
     cryptoutility.hpp
     global.hpp
     fileutility.hpp
-    http.hpp
     log.hpp
     pid.hpp
     processutility.hpp
