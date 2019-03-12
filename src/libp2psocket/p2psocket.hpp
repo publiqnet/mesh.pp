@@ -55,6 +55,7 @@ public:
     std::string name() const;
 
     beltpp::ip_address external_address() const;
+    beltpp::ip_address info_connection(peer_id const& peer) const;
 
     beltpp::ievent_item const& worker() const;
 

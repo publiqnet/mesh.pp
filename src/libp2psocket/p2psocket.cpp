@@ -692,6 +692,17 @@ beltpp::ip_address p2psocket::external_address() const
     return m_pimpl->m_ptr_state->get_external_ip_address();
 }
 
+beltpp::ip_address p2psocket::info_connection(peer_id const& peer) const
+{
+    p2pstate& state = *m_pimpl->m_ptr_state.get();
+    peer_id p2p_peerid;
+
+    if (state.get_peer_id(peer, p2p_peerid))
+        return m_pimpl->m_ptr_socket->info_connection(p2p_peerid);
+    else
+        throw std::runtime_error("no such node: " + peer);
+}
+
 beltpp::ievent_item const& p2psocket::worker() const
 {
     return *m_pimpl->m_ptr_socket.get();

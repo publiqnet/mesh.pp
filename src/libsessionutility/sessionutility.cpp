@@ -27,7 +27,7 @@ public:
     {
         inline static std::string extract(session const& ob)
         {
-            return ob.address.to_string();
+            return ob.header.address.to_string();
         }
     };
 
@@ -35,7 +35,7 @@ public:
     {
         inline static std::string extract(session const& ob)
         {
-            return ob.peerid;
+            return ob.header.peerid;
         }
     };
 
@@ -43,7 +43,7 @@ public:
     {
         inline static std::string extract(session const& ob)
         {
-            return ob.nodeid;
+            return ob.header.nodeid;
         }
     };
 
@@ -91,8 +91,8 @@ void session_manager::add(string const& nodeid,
         throw std::logic_error("session_manager::add - actions cannot be empty");
 
     session session_item;
-    session_item.address = address;
-    session_item.nodeid = nodeid;
+    session_item.header.address = address;
+    session_item.header.nodeid = nodeid;
 
     auto& index_by_peerid = m_pimpl->sessions.template get<session_container::by_peer_id>();
 
@@ -101,8 +101,8 @@ void session_manager::add(string const& nodeid,
 
     if (false == insert_result.second &&
         (
-            it_session->nodeid != nodeid ||
-            it_session->address != address
+            it_session->header.nodeid != nodeid ||
+            it_session->header.address != address
         ))
         return;
 
@@ -117,11 +117,12 @@ void session_manager::add(string const& nodeid,
     bool modified;
     B_UNUSED(modified);
 
-    string peerid_update;
     bool errored = false;
     bool update_last_contacted = false;
     bool previous_completed = ( it_session->actions.empty() ||
                                 it_session->actions.back()->completed );
+
+    session_header header_update = it_session->header;
 
     for (auto&& action_item : actions)
     {
@@ -132,10 +133,8 @@ void session_manager::add(string const& nodeid,
         {
             if (previous_completed)
             {
-                action_item->initiate(*it_session);
+                action_item->initiate(header_update);
                 update_last_contacted = true;
-                if (false == action_item->peerid_update.empty())
-                    peerid_update = action_item->peerid_update;
                 previous_completed = action_item->completed;
 
                 if (action_item->errored)
@@ -146,7 +145,7 @@ void session_manager::add(string const& nodeid,
             }
 
             if (false == action_item->completed ||
-                false == action_item->permanent())
+                true == action_item->permanent())
             {
                 existing_actions.insert(ti.hash_code());
                 modified = m_pimpl->sessions.modify(it_session, [&action_item](session& item)
@@ -162,13 +161,12 @@ void session_manager::add(string const& nodeid,
     {
         index_by_peerid.erase(it_session);
     }
-    else if (false == peerid_update.empty() ||
+    else if (header_update != it_session->header ||
              update_last_contacted)
     {
-        modified = m_pimpl->sessions.modify(it_session, [&peerid_update, update_last_contacted](session& item)
+        modified = m_pimpl->sessions.modify(it_session, [&header_update, update_last_contacted](session& item)
         {
-            if (false == peerid_update.empty())
-                item.peerid = peerid_update;
+            item.header = header_update;
             if (update_last_contacted)
                 item.last_contacted = std::chrono::steady_clock::now();
         });
@@ -187,20 +185,19 @@ bool session_manager::process(string const& peerid,
     if (it_session == index_by_peerid.end())
         return false;
 
-    string peerid_update;
     bool initiate = false;
     bool errored = false;
     bool update_last_contacted = false;
     session const& current_session = *it_session;
+    session_header header_update = current_session.header;
     size_t dispose_count = 0;
 
     for (auto& action_item : current_session.actions)
     {
         if (initiate && errored == false)
         {
-            action_item->initiate(current_session);
+            action_item->initiate(header_update);
             errored = action_item->errored;
-            peerid_update = action_item->peerid_update;
 
             if (false == action_item->completed)
                 //  if this one completed immediately on
@@ -209,18 +206,20 @@ bool session_manager::process(string const& peerid,
             else if (false == action_item->permanent())
                 ++dispose_count;
         }
-        else if (action_item->process(std::move(package), current_session))
+        else
         {
-            --action_item->max_steps_remaining;
+            assert(header_update.peerid == peerid);
 
-            errored = action_item->errored;
-            peerid_update = action_item->peerid_update;
-            update_last_contacted = true;
-            if (action_item->completed)
+            if (action_item->process(std::move(package), header_update))
             {
-                initiate = true;
-                if (false == action_item->permanent())
-                    ++dispose_count;
+                errored = action_item->errored;
+                update_last_contacted = true;
+                if (action_item->completed)
+                {
+                    initiate = true;
+                    if (false == action_item->permanent())
+                        ++dispose_count;
+                }
             }
         }
     }
@@ -231,14 +230,13 @@ bool session_manager::process(string const& peerid,
     {
         index_by_peerid.erase(it_session);
     }
-    else if (false == peerid_update.empty() ||
+    else if (header_update != current_session.header ||
              update_last_contacted)
     {
-        modified = m_pimpl->sessions.modify(it_session, [&peerid_update, update_last_contacted](session& item)
+        modified = m_pimpl->sessions.modify(it_session, [&header_update, update_last_contacted](session& item)
         {
+            item.header = header_update;
 
-            if (false == peerid_update.empty())
-                item.peerid = peerid_update;
             if (update_last_contacted)
                 item.last_contacted = std::chrono::steady_clock::now();
 

@@ -16,6 +16,26 @@ namespace meshpp
 {
 class session;
 
+class SESSIONUTILITYSHARED_EXPORT session_header
+{
+public:
+    beltpp::ip_address address;
+    std::string peerid;
+    std::string nodeid;
+
+    bool operator == (session_header const& other) const
+    {
+        return address == other.address &&
+                peerid == other.peerid &&
+                nodeid == other.nodeid;
+    }
+
+    bool operator != (session_header const& other) const
+    {
+        return !(operator == (other));
+    }
+};
+
 class SESSIONUTILITYSHARED_EXPORT session_action
 {
 public:
@@ -23,24 +43,20 @@ public:
     session_action(session_action const&) = default;
     virtual ~session_action() {}
 
-    virtual void initiate(session const& parent) = 0;
-    virtual bool process(beltpp::packet&& package, session const& parent) = 0;
+    virtual void initiate(session_header& header) = 0;
+    virtual bool process(beltpp::packet&& package, session_header& header) = 0;
     virtual bool permanent() const = 0;
 
     bool completed = false;
     bool errored = false;
     size_t expected_next_package_type = size_t(-1);
-    size_t max_steps_remaining = 0;
-    std::string peerid_update;
 };
 
 class SESSIONUTILITYSHARED_EXPORT session
 {
 public:
+    session_header header;
     std::chrono::steady_clock::time_point last_contacted{};
-    beltpp::ip_address address;
-    std::string peerid;
-    std::string nodeid;
     std::vector<std::unique_ptr<session_action>> actions;
 };
 
