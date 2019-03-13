@@ -56,7 +56,8 @@ class SESSIONUTILITYSHARED_EXPORT session
 {
 public:
     session_header header;
-    std::chrono::steady_clock::time_point last_contacted{};
+    std::chrono::steady_clock::time_point wait_for_contact{};
+    std::chrono::steady_clock::duration wait_duration{};
     std::vector<std::unique_ptr<session_action>> actions;
 };
 
@@ -73,12 +74,13 @@ public:
 
     void add(std::string const& nodeid,
              beltpp::ip_address const& address,
-             std::vector<std::unique_ptr<session_action>>&& actions);
+             std::vector<std::unique_ptr<session_action>>&& actions,
+             std::chrono::steady_clock::duration wait_duration);
 
     bool process(std::string const& peerid,
                  beltpp::packet&& package);
 
-    void erase_before(std::chrono::steady_clock::time_point const& tp);
+    void erase_all_pending();
 
     std::unique_ptr<detail::session_manager_impl> m_pimpl;
 };

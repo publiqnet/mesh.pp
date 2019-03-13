@@ -47,11 +47,11 @@ public:
         }
     };
 
-    struct by_last_contacted
+    struct by_wait_for_contact
     {
         inline static std::chrono::steady_clock::time_point extract(session const& ob)
         {
-            return ob.last_contacted;
+            return ob.wait_for_contact;
         }
     };
 
@@ -63,8 +63,8 @@ public:
             boost::multi_index::global_fun<session const&, std::string, &by_address::extract>>,
         boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_nodeid>,
             boost::multi_index::global_fun<session const&, std::string, &by_nodeid::extract>>,
-        boost::multi_index::ordered_non_unique<boost::multi_index::tag<struct by_last_contacted>,
-            boost::multi_index::global_fun<session const&, std::chrono::steady_clock::time_point, &by_last_contacted::extract>>
+        boost::multi_index::ordered_non_unique<boost::multi_index::tag<struct by_wait_for_contact>,
+            boost::multi_index::global_fun<session const&, std::chrono::steady_clock::time_point, &by_wait_for_contact::extract>>
     >>;
 };
 
@@ -85,7 +85,8 @@ session_manager::~session_manager() = default;
 
 void session_manager::add(string const& nodeid,
                           beltpp::ip_address const& address,
-                          vector<unique_ptr<session_action>>&& actions)
+                          vector<unique_ptr<session_action>>&& actions,
+                          std::chrono::steady_clock::duration wait_duration)
 {
     if (actions.empty())
         throw std::logic_error("session_manager::add - actions cannot be empty");
@@ -93,6 +94,7 @@ void session_manager::add(string const& nodeid,
     session session_item;
     session_item.header.address = address;
     session_item.header.nodeid = nodeid;
+    session_item.wait_duration = wait_duration;
 
     auto& index_by_peerid = m_pimpl->sessions.template get<session_container::by_peer_id>();
 
@@ -164,11 +166,15 @@ void session_manager::add(string const& nodeid,
     else if (header_update != it_session->header ||
              update_last_contacted)
     {
-        modified = m_pimpl->sessions.modify(it_session, [&header_update, update_last_contacted](session& item)
+        modified = m_pimpl->sessions.modify(it_session,
+        [&header_update, update_last_contacted, &wait_duration]
+        (session& item)
         {
             item.header = header_update;
+            if (item.wait_duration > wait_duration)
+                item.wait_duration = wait_duration;
             if (update_last_contacted)
-                item.last_contacted = std::chrono::steady_clock::now();
+                item.wait_for_contact = std::chrono::steady_clock::now() + item.wait_duration;
         });
         assert(modified);
     }
@@ -238,7 +244,7 @@ bool session_manager::process(string const& peerid,
             item.header = header_update;
 
             if (update_last_contacted)
-                item.last_contacted = std::chrono::steady_clock::now();
+                item.wait_for_contact = std::chrono::steady_clock::now() + item.wait_duration;
 
             auto it_end = std::remove_if(item.actions.begin(), item.actions.end(),
                 [](std::unique_ptr<session_action> const& paction)
@@ -254,13 +260,14 @@ bool session_manager::process(string const& peerid,
     return update_last_contacted;
 }
 
-void session_manager::erase_before(std::chrono::steady_clock::time_point const& tp)
+void session_manager::erase_all_pending()
 {
-    auto& index_by_last_contacted = m_pimpl->sessions.template get<session_container::by_last_contacted>();
+    std::chrono::steady_clock::time_point tp = std::chrono::steady_clock::now();
+    auto& index_by_wait_for_contact = m_pimpl->sessions.template get<session_container::by_wait_for_contact>();
 
-    auto it_last = index_by_last_contacted.upper_bound(tp);
+    auto it_last = index_by_wait_for_contact.upper_bound(tp);
 
-    index_by_last_contacted.erase(index_by_last_contacted.begin(), it_last);
+    index_by_wait_for_contact.erase(index_by_wait_for_contact.begin(), it_last);
 }
 
 }
