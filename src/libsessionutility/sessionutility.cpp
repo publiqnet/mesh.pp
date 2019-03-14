@@ -1,6 +1,7 @@
 #include "sessionutility.hpp"
 
 #include <belt.pp/packet.hpp>
+#include <belt.pp/scope_helper.hpp>
 
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -126,6 +127,11 @@ void session_manager::add(string const& nodeid,
 
     session_header header_update = it_session->header;
 
+    beltpp::on_failure guard([&index_by_peerid, &it_session]
+    {
+        index_by_peerid.erase(it_session);
+    });
+
     for (auto&& action_item : actions)
     {
         auto const& o = *action_item.get();
@@ -158,6 +164,7 @@ void session_manager::add(string const& nodeid,
             }
         }
     }
+    guard.dismiss();
 
     if (errored || it_session->actions.empty())
     {
@@ -198,6 +205,11 @@ bool session_manager::process(string const& peerid,
     session_header header_update = current_session.header;
     size_t dispose_count = 0;
 
+    beltpp::on_failure guard([&index_by_peerid, &it_session]
+    {
+        index_by_peerid.erase(it_session);
+    });
+
     for (auto& action_item : current_session.actions)
     {
         if (initiate && errored == false)
@@ -229,6 +241,8 @@ bool session_manager::process(string const& peerid,
             }
         }
     }
+
+    guard.dismiss();
 
     bool modified;
     B_UNUSED(modified);
