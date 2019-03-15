@@ -187,6 +187,14 @@ void session_manager::add(string const& nodeid,
     }
 }
 
+void session_manager::remove(std::string const& peerid)
+{
+    auto& index_by_peerid = m_pimpl->sessions.template get<session_container::by_peer_id>();
+    auto it = index_by_peerid.find(peerid);
+    if (it != index_by_peerid.end())
+        index_by_peerid.erase(it);
+}
+
 bool session_manager::process(string const& peerid,
                               packet&& package)
 {

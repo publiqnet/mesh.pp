@@ -77,6 +77,8 @@ public:
              std::vector<std::unique_ptr<session_action>>&& actions,
              std::chrono::steady_clock::duration wait_duration);
 
+    void remove(std::string const& peerid);
+
     bool process(std::string const& peerid,
                  beltpp::packet&& package);
 
