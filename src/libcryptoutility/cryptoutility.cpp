@@ -76,7 +76,7 @@ private_key::private_key(string const& base58_wif_)
 {
     CryptoPP::Integer sk;
     if (false == detail::wif_to_sk(base58_wif, sk))
-        throw runtime_error("invalid private key: \"" + base58_wif + "\"");
+        throw exception_private_key(base58_wif);
 }
 
 private_key::private_key(private_key const& other)
