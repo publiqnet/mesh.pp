@@ -59,7 +59,8 @@ public:
                               bool send_drop) = 0;
     virtual bool remove_later(beltpp::ip_address const& addr,
                               size_t step,
-                              bool send_drop) = 0;
+                              bool send_drop,
+                              bool only_if_passive) = 0;
     virtual void undo_remove(beltpp::socket::peer_id const& peer_id) = 0;
     //
     //  has to take care of kbucket clean up

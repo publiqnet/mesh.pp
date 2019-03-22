@@ -138,7 +138,7 @@ static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_inter
     if (configured_address)
     {
         pimpl->writeln("remove_later item, 0, false: " + item.to_string());
-        pimpl->m_ptr_state->remove_later(item, 0, false);
+        pimpl->m_ptr_state->remove_later(item, 0, false, false /*not sure*/);
     }
 }
 
@@ -293,11 +293,14 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             else
             {
                 sk.send(current_peer, beltpp::isocket_drop());
-                current_connection.local.port = state.get_fixed_local_port();
-                m_pimpl->writeln("remove_later current_connection, 0, false: " + current_connection.to_string() + ", " + current_peer);
-                state.remove_later(current_connection, 0, false);
-                m_pimpl->writeln("add_passive current_connection: " + current_connection.to_string());
-                state.add_passive(current_connection);
+
+                if (state.remove_later(current_connection, 0, false, true))
+                {
+                    current_connection.local.port = state.get_fixed_local_port();
+                    m_pimpl->writeln("remove_later current_connection, 0, false: " + current_connection.to_string() + ", " + current_peer);
+                    m_pimpl->writeln("add_passive current_connection: " + current_connection.to_string());
+                    state.add_passive(current_connection);
+                }
             }
 
             break;

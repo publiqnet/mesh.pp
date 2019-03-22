@@ -371,12 +371,17 @@ public:
         }
     }
 
-    bool remove_later(ip_address const& addr, size_t step, bool send_drop)
+    bool remove_later(ip_address const& addr, size_t step, bool send_drop, bool only_if_passive)
     {
         auto it_find_addr = map_by_address.find(address_key(addr));
         if (it_find_addr != map_by_address.end())
         {
-            map_to_remove[it_find_addr->second] = std::make_pair(step, send_drop);
+            auto index = it_find_addr->second;
+            if (only_if_passive &&
+                peers[index].state() != state_item::e_state::passive)
+                return false;
+
+            map_to_remove[index] = std::make_pair(step, send_drop);
             return true;
         }
         return false;
@@ -762,9 +767,9 @@ public:
     {
         return program_state.remove_later(p, step, send_drop);
     }
-    bool remove_later(ip_address const& addr, size_t step, bool send_drop) override
+    bool remove_later(ip_address const& addr, size_t step, bool send_drop, bool only_if_passive) override
     {
-        return program_state.remove_later(addr, step, send_drop);
+        return program_state.remove_later(addr, step, send_drop, only_if_passive);
     }
     void undo_remove(peer_id const& peerid) override
     {
