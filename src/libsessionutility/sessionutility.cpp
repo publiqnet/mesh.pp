@@ -21,12 +21,16 @@ using beltpp::packet;
 
 namespace meshpp
 {
-class session_container
+template <typename T_session_header>
+class session_container;
+
+template <>
+class session_container<nodeid_session_header>
 {
 public:
     struct by_address
     {
-        inline static std::string extract(session const& ob)
+        inline static std::string extract(session<nodeid_session_header> const& ob)
         {
             return ob.header.address.to_string();
         }
@@ -34,7 +38,7 @@ public:
 
     struct by_peer_id
     {
-        inline static std::string extract(session const& ob)
+        inline static std::string extract(session<nodeid_session_header> const& ob)
         {
             return ob.header.peerid;
         }
@@ -42,7 +46,7 @@ public:
 
     struct by_nodeid
     {
-        inline static std::string extract(session const& ob)
+        inline static std::string extract(session<nodeid_session_header> const& ob)
         {
             return ob.header.nodeid;
         }
@@ -50,63 +54,104 @@ public:
 
     struct by_wait_for_contact
     {
-        inline static std::chrono::steady_clock::time_point extract(session const& ob)
+        inline static std::chrono::steady_clock::time_point extract(session<nodeid_session_header> const& ob)
         {
             return ob.wait_for_contact;
         }
     };
 
-    using type = ::boost::multi_index_container<session,
+    using type = ::boost::multi_index_container<session<nodeid_session_header>,
     boost::multi_index::indexed_by<
         boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_peer_id>,
-            boost::multi_index::global_fun<session const&, std::string, &by_peer_id::extract>>,
+            boost::multi_index::global_fun<session<nodeid_session_header> const&, std::string, &by_peer_id::extract>>,
         boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_address>,
-            boost::multi_index::global_fun<session const&, std::string, &by_address::extract>>,
+            boost::multi_index::global_fun<session<nodeid_session_header> const&, std::string, &by_address::extract>>,
         boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_nodeid>,
-            boost::multi_index::global_fun<session const&, std::string, &by_nodeid::extract>>,
+            boost::multi_index::global_fun<session<nodeid_session_header> const&, std::string, &by_nodeid::extract>>,
         boost::multi_index::ordered_non_unique<boost::multi_index::tag<struct by_wait_for_contact>,
-            boost::multi_index::global_fun<session const&, std::chrono::steady_clock::time_point, &by_wait_for_contact::extract>>
+            boost::multi_index::global_fun<session<nodeid_session_header> const&, std::chrono::steady_clock::time_point, &by_wait_for_contact::extract>>
+    >>;
+};
+
+template <>
+class session_container<session_header>
+{
+public:
+
+    struct by_peer_id
+    {
+        inline static std::string extract(session<session_header> const& ob)
+        {
+            return ob.header.peerid;
+        }
+    };
+
+    struct by_wait_for_contact
+    {
+        inline static std::chrono::steady_clock::time_point extract(session<session_header> const& ob)
+        {
+            return ob.wait_for_contact;
+        }
+    };
+
+    using type = ::boost::multi_index_container<session<session_header>,
+    boost::multi_index::indexed_by<
+        boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_peer_id>,
+            boost::multi_index::global_fun<session<session_header> const&, std::string, &by_peer_id::extract>>,
+        boost::multi_index::ordered_non_unique<boost::multi_index::tag<struct by_wait_for_contact>,
+            boost::multi_index::global_fun<session<session_header> const&, std::chrono::steady_clock::time_point, &by_wait_for_contact::extract>>
     >>;
 };
 
 namespace detail
 {
+template <typename T_session_header>
 class session_manager_impl
 {
 public:
-    session_container::type sessions;
+    typename session_container<T_session_header>::type sessions;
 };
+
+bool keys_same(nodeid_session_header const& first,
+               nodeid_session_header const& second)
+{
+    return first.nodeid == second.nodeid &&
+           first.address == second.address;
 }
 
-session_manager::session_manager()
-    : m_pimpl(new detail::session_manager_impl())
+bool keys_same(session_header const&/* first*/,
+               session_header const&/* second*/)
+{
+    return true;
+}
+}
+
+template <typename T_session_header>
+session_manager<T_session_header>::session_manager()
+    : m_pimpl(new detail::session_manager_impl<T_session_header>())
 {}
+template <typename T_session_header>
+session_manager<T_session_header>::~session_manager() = default;
 
-session_manager::~session_manager() = default;
-
-void session_manager::add(string const& nodeid,
-                          beltpp::ip_address const& address,
-                          vector<unique_ptr<session_action>>&& actions,
-                          std::chrono::steady_clock::duration wait_duration)
+template <typename T_session_header>
+void session_manager<T_session_header>::add(T_session_header const& header,
+                                            vector<unique_ptr<session_action<T_session_header>>>&& actions,
+                                            std::chrono::steady_clock::duration wait_duration)
 {
     if (actions.empty())
         throw std::logic_error("session_manager::add - actions cannot be empty");
 
-    session session_item;
-    session_item.header.address = address;
-    session_item.header.nodeid = nodeid;
+    session<T_session_header> session_item;
+    session_item.header = header;
     session_item.wait_duration = wait_duration;
 
-    auto& index_by_peerid = m_pimpl->sessions.template get<session_container::by_peer_id>();
+    auto& index_by_peerid = m_pimpl->sessions.template get<typename session_container<T_session_header>::by_peer_id>();
 
     auto insert_result = index_by_peerid.insert(std::move(session_item));
     auto it_session = insert_result.first;
 
     if (false == insert_result.second &&
-        (
-            it_session->header.nodeid != nodeid ||
-            it_session->header.address != address
-        ))
+        false == detail::keys_same(it_session->header, header))
         return;
 
     unordered_set<size_t> existing_actions;
@@ -125,7 +170,7 @@ void session_manager::add(string const& nodeid,
     bool previous_completed = ( it_session->actions.empty() ||
                                 it_session->actions.back()->completed );
 
-    session_header header_update = it_session->header;
+    T_session_header header_update = it_session->header;
 
     beltpp::on_failure guard([&index_by_peerid, &it_session]
     {
@@ -156,7 +201,7 @@ void session_manager::add(string const& nodeid,
                 true == action_item->permanent())
             {
                 existing_actions.insert(ti.hash_code());
-                modified = m_pimpl->sessions.modify(it_session, [&action_item](session& item)
+                modified = m_pimpl->sessions.modify(it_session, [&action_item](session<T_session_header>& item)
                 {
                     item.actions.push_back(std::move(action_item));
                 });
@@ -175,7 +220,7 @@ void session_manager::add(string const& nodeid,
     {
         modified = m_pimpl->sessions.modify(it_session,
         [&header_update, update_last_contacted, &wait_duration]
-        (session& item)
+        (session<T_session_header>& item)
         {
             item.header = header_update;
             if (item.wait_duration > wait_duration)
@@ -187,21 +232,23 @@ void session_manager::add(string const& nodeid,
     }
 }
 
-void session_manager::remove(std::string const& peerid)
+template <typename T_session_header>
+void session_manager<T_session_header>::remove(std::string const& peerid)
 {
-    auto& index_by_peerid = m_pimpl->sessions.template get<session_container::by_peer_id>();
+    auto& index_by_peerid = m_pimpl->sessions.template get<typename session_container<T_session_header>::by_peer_id>();
     auto it = index_by_peerid.find(peerid);
     if (it != index_by_peerid.end())
         index_by_peerid.erase(it);
 }
 
-bool session_manager::process(string const& peerid,
-                              packet&& package)
+template <typename T_session_header>
+bool session_manager<T_session_header>::process(string const& peerid,
+                                                packet&& package)
 {
     if (peerid.empty())
         return false;
 
-    auto& index_by_peerid = m_pimpl->sessions.template get<session_container::by_peer_id>();
+    auto& index_by_peerid = m_pimpl->sessions.template get<typename session_container<T_session_header>::by_peer_id>();
     auto it_session = index_by_peerid.find(peerid);
     if (it_session == index_by_peerid.end())
         return false;
@@ -209,8 +256,8 @@ bool session_manager::process(string const& peerid,
     bool initiate = false;
     bool errored = false;
     bool update_last_contacted = false;
-    session const& current_session = *it_session;
-    session_header header_update = current_session.header;
+    session<T_session_header> const& current_session = *it_session;
+    T_session_header header_update = current_session.header;
     size_t dispose_count = 0;
 
     beltpp::on_failure guard([&index_by_peerid, &it_session]
@@ -261,7 +308,7 @@ bool session_manager::process(string const& peerid,
     else if (header_update != current_session.header ||
              update_last_contacted)
     {
-        modified = m_pimpl->sessions.modify(it_session, [&header_update, update_last_contacted](session& item)
+        modified = m_pimpl->sessions.modify(it_session, [&header_update, update_last_contacted](session<T_session_header>& item)
         {
             item.header = header_update;
 
@@ -269,7 +316,7 @@ bool session_manager::process(string const& peerid,
                 item.wait_for_contact = std::chrono::steady_clock::now() + item.wait_duration;
 
             auto it_end = std::remove_if(item.actions.begin(), item.actions.end(),
-                [](std::unique_ptr<session_action> const& paction)
+                [](std::unique_ptr<session_action<T_session_header>> const& paction)
             {
                 return paction->completed && (false == paction->permanent());
             });
@@ -282,14 +329,18 @@ bool session_manager::process(string const& peerid,
     return update_last_contacted;
 }
 
-void session_manager::erase_all_pending()
+template <typename T_session_header>
+void session_manager<T_session_header>::erase_all_pending()
 {
     std::chrono::steady_clock::time_point tp = std::chrono::steady_clock::now();
-    auto& index_by_wait_for_contact = m_pimpl->sessions.template get<session_container::by_wait_for_contact>();
+    auto& index_by_wait_for_contact = m_pimpl->sessions.template get<typename session_container<T_session_header>::by_wait_for_contact>();
 
     auto it_last = index_by_wait_for_contact.upper_bound(tp);
 
     index_by_wait_for_contact.erase(index_by_wait_for_contact.begin(), it_last);
 }
+
+template class session_manager<nodeid_session_header>;
+template class session_manager<session_header>;
 
 }
