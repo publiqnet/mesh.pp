@@ -67,6 +67,12 @@ public:
     size_t expected_next_package_type = size_t(-1);
 };
 
+//  below explicit instantiation is absolutely important for windows
+//  weird bug, templating the base class session_action prevents
+//  typeid to detect the actual type properly, explicit instantiation fixes this
+template class session_action<nodeid_session_header>;
+template class session_action<session_header>;
+
 template <typename T_session_header>
 class session
 {
