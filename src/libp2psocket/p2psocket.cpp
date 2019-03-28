@@ -165,6 +165,11 @@ void p2psocket::prepare_wait()
 
         m_pimpl->writeln("start to listen on " + item.to_string());
 
+        beltpp::on_failure guard_failure([&state, &item]
+        {
+            state.remove_from_todo_list(item);
+        });
+
         peer_ids peers = sk.listen(item);
 
         for (auto const& peer_item : peers)
@@ -174,6 +179,8 @@ void p2psocket::prepare_wait()
 
             state.add_active(conn_item, peer_item);
         }
+
+        guard_failure.dismiss();
     }   //  for to_listen
 
     auto to_connect = state.get_to_connect();
