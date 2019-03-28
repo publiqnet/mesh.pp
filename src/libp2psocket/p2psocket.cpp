@@ -138,7 +138,7 @@ static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_inter
     if (configured_address)
     {
         pimpl->writeln("remove_later item, 0, false: " + item.to_string());
-        pimpl->m_ptr_state->remove_later(item, 0, false, false /*not sure*/);
+        pimpl->m_ptr_state->remove_later(item, 0, false, true);
     }
 }
 
