@@ -5,6 +5,7 @@
 #include <belt.pp/packet.hpp>
 #include <belt.pp/utility.hpp>
 #include <belt.pp/scope_helper.hpp>
+#include <belt.pp/timer.hpp>
 
 #include <exception>
 #include <string>
@@ -50,6 +51,7 @@ public:
         , connect_to_addresses(connect_to_addresses_)
         , receive_attempt_count(0)
         , _secret_key(sk)
+        , m_configured_connect_timer()
     {
         if (bind_to_address.local.empty() &&
             connect_to_addresses.empty())
@@ -78,6 +80,8 @@ public:
 
         for (auto const& item : connect_to_addresses)
             state.add_passive(item);
+
+        m_configured_connect_timer.set(std::chrono::seconds(1));
     }
 
     void writeln(string const& value)
@@ -93,6 +97,7 @@ public:
     std::vector<ip_address> connect_to_addresses;
     size_t receive_attempt_count;
     meshpp::private_key _secret_key;
+    beltpp::timer m_configured_connect_timer;
 };
 }
 
@@ -186,19 +191,14 @@ void p2psocket::prepare_wait()
     auto to_connect = state.get_to_connect();
 
     if (to_connect.empty() &&
-        state.get_connected_peerids().empty())
+        state.get_connected_peerids().empty() &&
+        m_pimpl->m_configured_connect_timer.expired())
     {
+        m_pimpl->m_configured_connect_timer.update();
         for (auto const& item : m_pimpl->connect_to_addresses)
         {
             m_pimpl->writeln("add_passive item: " + item.to_string());
             state.add_passive(item);
-        }
-        to_connect = state.get_to_connect();
-        if (false == to_connect.empty())
-        {
-            //  be lazy, sleep a little bit - in case there was nothing to do
-            //  but only to reconnect
-            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
 
