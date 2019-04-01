@@ -156,7 +156,7 @@ void p2psocket::prepare_wait()
     for (auto const& remove_sk : to_remove)
     {
         m_pimpl->writeln("sending drop");
-        sk.send(remove_sk, beltpp::isocket_drop());
+        sk.send(remove_sk, beltpp::packet(beltpp::isocket_drop()));
     }
 
     auto to_listen = state.get_to_listen();
@@ -286,7 +286,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 auto signed_message = m_pimpl->_secret_key.sign(message);
                 ping_msg.signature = signed_message.base58;
                 m_pimpl->writeln("sending ping");
-                sk.send(current_peer, ping_msg);
+                sk.send(current_peer, beltpp::packet(ping_msg));
                 m_pimpl->writeln("remove_later current_peer, 10, true: " + current_peer + ", " + current_connection.to_string());
                 state.remove_later(current_peer, 10, true);
 
@@ -299,7 +299,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             else
             {
-                sk.send(current_peer, beltpp::isocket_drop());
+                sk.send(current_peer, beltpp::packet(beltpp::isocket_drop()));
 
                 if (state.remove_later(current_connection, 0, false, true))
                 {
@@ -428,7 +428,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 m_pimpl->writeln(message_pong);
                 msg_pong.signature = std::move(signed_message.base58);
 
-                sk.send(current_peer, std::move(msg_pong));
+                sk.send(current_peer, beltpp::packet(std::move(msg_pong)));
 
                 state.undo_remove(current_peer);
 
@@ -474,7 +474,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             FindNode msg_fn;
             msg_fn.nodeid = state.name();
-            sk.send(current_peer, std::move(msg_fn));
+            sk.send(current_peer, beltpp::packet(std::move(msg_fn)));
             break;
         }
         case FindNode::rtt:
@@ -487,7 +487,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             response.origin = state.name();
             response.nodeids = state.list_nearest_to(msg.nodeid);
 
-            sk.send(current_peer, std::move(response));
+            sk.send(current_peer, beltpp::packet(std::move(response)));
             break;
         }
         case NodeDetails::rtt:
@@ -506,7 +506,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 IntroduceTo msg_intro;
                 msg_intro.nodeid = intro;
 
-                sk.send(current_peer, std::move(msg_intro));
+                sk.send(current_peer, beltpp::packet(std::move(msg_intro)));
             }
 
             break;
@@ -526,10 +526,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 m_pimpl->writeln("sending connect info " + introduce_addr.to_string());
 
                 assign(msg_open.addr, std::move(introduce_addr));
-                sk.send(current_peer, std::move(msg_open));
+                sk.send(current_peer, beltpp::packet(std::move(msg_open)));
 
                 assign(msg_open.addr, std::move(current_connection));
-                sk.send(introduce_peer_id, std::move(msg_open));
+                sk.send(introduce_peer_id, beltpp::packet(std::move(msg_open)));
             }
             break;
         }
@@ -657,7 +657,7 @@ void p2psocket::send(peer_id const& peer,
         {
             Other wrapper;
             wrapper.contents = std::move(pack);
-            m_pimpl->m_ptr_socket->send(p2p_peerid, std::move(wrapper));
+            m_pimpl->m_ptr_socket->send(p2p_peerid, beltpp::packet(std::move(wrapper)));
         }
     }
     else
@@ -687,7 +687,7 @@ void p2psocket::timer_action()
         m_pimpl->writeln(message);
         auto signed_message  = m_pimpl->_secret_key.sign(message);
         ping_msg.signature = signed_message.base58;
-        sk.send(item, ping_msg);
+        sk.send(item, beltpp::packet(ping_msg));
     }
 }
 

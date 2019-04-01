@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
                             msg_result.value = msg_sum.first + msg_sum.second;
 
                             cout << msg_sum.first << " + " << msg_sum.second << endl;
-                            sk.send(peer, msg_result);
+                            sk.send(peer, beltpp::packet(std::move(msg_result)));
                             break;
                         }
                         default:
@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
                 Sum msg_sum;
                 msg_sum.first = a;
                 msg_sum.second = b;
-                sk.send(peer, msg_sum);
+                sk.send(peer, beltpp::packet(msg_sum));
             };
         }
         else
@@ -161,7 +161,7 @@ int main(int argc, char* argv[])
                 if (packet.type() == beltpp::isocket_join::rtt)
                 {
                     cout << "joined: " << peer << endl;
-                    sk.send(peer, beltpp::isocket_drop());
+                    sk.send(peer, beltpp::packet(beltpp::isocket_drop()));
                 }
                 else if (packet.type() == beltpp::isocket_open_refused::rtt)
                 {
