@@ -133,6 +133,26 @@ session_manager<T_session_header>::session_manager()
 template <typename T_session_header>
 session_manager<T_session_header>::~session_manager() = default;
 
+template <typename T_session_header, typename T_index, typename T_iter>
+void cleanup(detail::session_manager_impl<T_session_header>& impl,
+             T_index& index_by_peerid,
+             T_iter& it_session)
+{
+    bool modified;
+    modified = impl.sessions.modify(it_session, [](session<T_session_header>& item)
+    {
+        for (auto it = item.actions.rbegin();
+             it != item.actions.rend();
+             ++it)
+        {
+            (*it)->errored = true;
+            it->reset();
+        }
+    });
+    assert(modified);
+    index_by_peerid.erase(it_session);
+};
+
 template <typename T_session_header>
 void session_manager<T_session_header>::add(T_session_header const& header,
                                             vector<unique_ptr<session_action<T_session_header>>>&& actions,
@@ -172,9 +192,9 @@ void session_manager<T_session_header>::add(T_session_header const& header,
 
     T_session_header header_update = it_session->header;
 
-    beltpp::on_failure guard([&index_by_peerid, &it_session]
+    beltpp::on_failure guard([this, &index_by_peerid, &it_session]()
     {
-        index_by_peerid.erase(it_session);
+        cleanup(*m_pimpl.get(), index_by_peerid, it_session);
     });
 
     for (auto&& action_item : actions)
@@ -211,10 +231,10 @@ void session_manager<T_session_header>::add(T_session_header const& header,
     }
     guard.dismiss();
 
-    if (errored || it_session->actions.empty())
-    {
+    if (errored)
+        cleanup(*m_pimpl.get(), index_by_peerid, it_session);
+    else if (it_session->actions.empty())
         index_by_peerid.erase(it_session);
-    }
     else if (header_update != it_session->header ||
              update_last_contacted)
     {
@@ -260,14 +280,17 @@ bool session_manager<T_session_header>::process(string const& peerid,
     T_session_header header_update = current_session.header;
     size_t dispose_count = 0;
 
-    beltpp::on_failure guard([&index_by_peerid, &it_session]
+    beltpp::on_failure guard([this, &index_by_peerid, &it_session]()
     {
-        index_by_peerid.erase(it_session);
+        cleanup(*m_pimpl.get(), index_by_peerid, it_session);
     });
 
     for (auto& action_item : current_session.actions)
     {
-        if (initiate && errored == false)
+        if (errored)
+            break;
+
+        if (initiate)
         {
             action_item->initiate(header_update);
             errored = action_item->errored;
@@ -285,7 +308,6 @@ bool session_manager<T_session_header>::process(string const& peerid,
 
             if (action_item->process(std::move(package), header_update))
             {
-                errored = action_item->errored;
                 update_last_contacted = true;
                 if (action_item->completed)
                 {
@@ -294,6 +316,7 @@ bool session_manager<T_session_header>::process(string const& peerid,
                         ++dispose_count;
                 }
             }
+            errored = action_item->errored;
         }
     }
 
@@ -301,10 +324,11 @@ bool session_manager<T_session_header>::process(string const& peerid,
 
     bool modified;
     B_UNUSED(modified);
-    if (errored || dispose_count == current_session.actions.size())
-    {
+
+    if (errored)
+        cleanup(*m_pimpl.get(), index_by_peerid, it_session);
+    else if (dispose_count == current_session.actions.size())
         index_by_peerid.erase(it_session);
-    }
     else if (header_update != current_session.header ||
              update_last_contacted)
     {
