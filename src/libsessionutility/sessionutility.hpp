@@ -96,7 +96,7 @@ public:
     session_manager();
     ~session_manager();
 
-    void add(T_session_header const& header,
+    bool add(T_session_header const& header,
              std::vector<std::unique_ptr<session_action<T_session_header>>>&& actions,
              std::chrono::steady_clock::duration wait_duration);
 

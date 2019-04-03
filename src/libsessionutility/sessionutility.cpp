@@ -155,7 +155,7 @@ void cleanup(detail::session_manager_impl<T_session_header>& impl,
 };
 
 template <typename T_session_header>
-void session_manager<T_session_header>::add(T_session_header const& header,
+bool session_manager<T_session_header>::add(T_session_header const& header,
                                             vector<unique_ptr<session_action<T_session_header>>>&& actions,
                                             std::chrono::steady_clock::duration wait_duration)
 {
@@ -173,7 +173,7 @@ void session_manager<T_session_header>::add(T_session_header const& header,
 
     if (false == insert_result.second &&
         false == detail::keys_same(it_session->header, header))
-        return;
+        return false;
 
     unordered_set<size_t> existing_actions;
     for (auto const& item : it_session->actions)
@@ -251,6 +251,8 @@ void session_manager<T_session_header>::add(T_session_header const& header,
         });
         assert(modified);
     }
+
+    return true;
 }
 
 template <typename T_session_header>
