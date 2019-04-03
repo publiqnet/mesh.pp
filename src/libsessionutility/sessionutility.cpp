@@ -139,6 +139,7 @@ void cleanup(detail::session_manager_impl<T_session_header>& impl,
              T_iter& it_session)
 {
     bool modified;
+    B_UNUSED(modified);
     modified = impl.sessions.modify(it_session, [](session<T_session_header>& item)
     {
         for (auto it = item.actions.rbegin();
