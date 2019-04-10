@@ -16,6 +16,7 @@ class CRYPTOUTILITYSHARED_EXPORT config
 {
 public:
     static void set_public_key_prefix(std::string const& prefix);
+    static std::string public_key_prefix();
 };
 
 class CRYPTOUTILITYSHARED_EXPORT random_seed

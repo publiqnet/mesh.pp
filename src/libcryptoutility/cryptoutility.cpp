@@ -49,6 +49,11 @@ void config::set_public_key_prefix(std::string const& prefix)
     g_public_key_prefix = prefix;
 }
 
+std::string config::public_key_prefix()
+{
+    return g_public_key_prefix;
+}
+
 random_seed::random_seed(string const& brain_key_)
     : brain_key(brain_key_)
 {
