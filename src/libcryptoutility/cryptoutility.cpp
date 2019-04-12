@@ -159,6 +159,11 @@ public_key::public_key(string const& str_base58_)
     CryptoPP::ECP::Point pk;
     if (false == detail::base58_to_pk(str_base58, pk))
         throw exception_public_key(g_public_key_prefix + str_base58);
+
+    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+
+    if (detail::pk_to_base58(detail::ECPoint_to_zstr(secp256k1, pk)) != str_base58)
+        throw exception_public_key(g_public_key_prefix + str_base58);
 }
 
 public_key::public_key(public_key const& other)
