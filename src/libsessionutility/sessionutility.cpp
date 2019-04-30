@@ -24,6 +24,25 @@ namespace meshpp
 template <typename T_session_header>
 class session_container;
 
+template <typename T_session_header>
+class session
+{
+public:
+    T_session_header header;
+    std::chrono::steady_clock::time_point wait_for_contact{};
+    std::chrono::steady_clock::duration wait_duration{};
+    std::vector<std::unique_ptr<session_action<T_session_header>>> actions;
+};
+
+//  below explicit instantiation is absolutely important for windows
+//  weird bug, templating the base class session_action prevents
+//  typeid to detect the actual type properly, explicit instantiation fixes this
+
+//  probably the template class is instansiated differently in different
+//  cpp files leading to actual different classes with same name
+template class session_action<nodeid_session_header>;
+template class session_action<session_header>;
+
 template <>
 class session_container<nodeid_session_header>
 {

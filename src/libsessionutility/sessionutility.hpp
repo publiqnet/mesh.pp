@@ -51,16 +51,10 @@ public:
 };
 
 template <typename T_session_header>
-class session_action
+class SESSIONUTILITYSHARED_EXPORT session_action
 {
 public:
-    session_action()
-    {
-        //  these are only used to have full template instantiation
-        completed = false;
-        errored = false;
-        expected_next_package_type = size_t(-1);
-    }
+    session_action() = default;
     session_action(session_action const&) = default;
     virtual ~session_action() {}
 
@@ -71,16 +65,6 @@ public:
     bool completed = false;
     bool errored = false;
     size_t expected_next_package_type = size_t(-1);
-};
-
-template <typename T_session_header>
-class session
-{
-public:
-    T_session_header header;
-    std::chrono::steady_clock::time_point wait_for_contact{};
-    std::chrono::steady_clock::duration wait_duration{};
-    std::vector<std::unique_ptr<session_action<T_session_header>>> actions;
 };
 
 namespace detail
