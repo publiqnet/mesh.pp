@@ -556,8 +556,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             assign(connect_to, std::move(msg.addr));
             connect_to.local = current_connection.local;
 
-            m_pimpl->writeln("add_passive connect_to, 100: " + connect_to.to_string());
-            state.add_passive(connect_to, 100);
+            m_pimpl->writeln("add_passive connect_to, 1000: " + connect_to.to_string());
+            state.add_passive(connect_to, 1000);
             break;
         }
         case Other::rtt:
