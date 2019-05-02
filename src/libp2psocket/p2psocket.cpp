@@ -52,10 +52,11 @@ public:
         , receive_attempt_count(0)
         , _secret_key(sk)
         , m_configured_connect_timer()
+        , m_configured_reconnect_timer()
     {
         if (bind_to_address.local.empty() &&
             connect_to_addresses.empty())
-            throw std::runtime_error("dummy socket");
+            throw std::logic_error("dummy socket");
 
         p2pstate& state = *m_ptr_state.get();
 
@@ -82,6 +83,7 @@ public:
             state.add_passive(item);
 
         m_configured_connect_timer.set(std::chrono::seconds(1));
+        m_configured_reconnect_timer.set(std::chrono::minutes(5));
     }
 
     void writeln(string const& value)
@@ -98,6 +100,7 @@ public:
     size_t receive_attempt_count;
     meshpp::private_key _secret_key;
     beltpp::timer m_configured_connect_timer;
+    beltpp::timer m_configured_reconnect_timer;
 };
 }
 
@@ -195,6 +198,15 @@ void p2psocket::prepare_wait()
         m_pimpl->m_configured_connect_timer.expired())
     {
         m_pimpl->m_configured_connect_timer.update();
+        for (auto const& item : m_pimpl->connect_to_addresses)
+        {
+            m_pimpl->writeln("add_passive item: " + item.to_string());
+            state.add_passive(item);
+        }
+    }
+    if (m_pimpl->m_configured_reconnect_timer.expired())
+    {
+        m_pimpl->m_configured_reconnect_timer.update();
         for (auto const& item : m_pimpl->connect_to_addresses)
         {
             m_pimpl->writeln("add_passive item: " + item.to_string());
