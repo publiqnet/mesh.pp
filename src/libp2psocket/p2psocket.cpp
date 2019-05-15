@@ -230,6 +230,8 @@ void p2psocket::prepare_wait()
         m_pimpl->writeln("connect to " + item.to_string());
         sk.open(item, attempts);
 
+        state.remove_later(item, 30, false, true);
+
         guard_failure.dismiss();
     }   //  for to_connect
 
@@ -558,6 +560,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             m_pimpl->writeln("add_passive connect_to, 1000: " + connect_to.to_string());
             state.add_passive(connect_to, 1000);
+
             break;
         }
         case Other::rtt:
