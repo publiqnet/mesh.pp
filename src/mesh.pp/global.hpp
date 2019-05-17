@@ -4,6 +4,7 @@
 
 #define MESH_EXPORT BELT_EXPORT
 #define MESH_IMPORT BELT_IMPORT
+#define MESH_LOCAL BELT_LOCAL
 
 #ifdef B_OS_LINUX
 #define M_OS_LINUX

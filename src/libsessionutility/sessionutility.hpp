@@ -14,7 +14,7 @@
 
 namespace meshpp
 {
-class nodeid_session_header
+class SESSIONUTILITYSHARED_EXPORT nodeid_session_header
 {
 public:
     beltpp::ip_address address;
@@ -34,7 +34,7 @@ public:
     }
 };
 
-class session_header
+class SESSIONUTILITYSHARED_EXPORT session_header
 {
 public:
     std::string peerid;

@@ -2,21 +2,21 @@
 add_custom_command (
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/pid.gen.hpp
   MAIN_DEPENDENCY pid.idl
-  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/pid.idl ${CMAKE_CURRENT_SOURCE_DIR}/pid.gen.hpp
+  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/pid.idl ${CMAKE_CURRENT_SOURCE_DIR}/pid.gen
 )
 
 # generate file_attributes.gen.hpp from file_attributes.idl
 add_custom_command (
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.gen.hpp
   MAIN_DEPENDENCY file_attributes.idl
-  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.idl ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.gen.hpp
+  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.idl ${CMAKE_CURRENT_SOURCE_DIR}/file_attributes.gen
 )
 
 # generate data.gen.hpp from data.idl
 add_custom_command (
   OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/data.gen.hpp
   MAIN_DEPENDENCY data.idl
-  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/data.idl ${CMAKE_CURRENT_SOURCE_DIR}/data.gen.hpp
+  COMMAND idl ${CMAKE_CURRENT_SOURCE_DIR}/data.idl ${CMAKE_CURRENT_SOURCE_DIR}/data.gen
 )
 
 add_definitions(-DSYSTEMUTILITY_LIBRARY)
