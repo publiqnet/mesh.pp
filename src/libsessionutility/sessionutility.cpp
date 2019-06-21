@@ -194,12 +194,13 @@ bool session_manager<T_session_header>::add(T_session_header const& header,
         false == detail::keys_same(it_session->header, header))
         return false;
 
-    unordered_set<size_t> existing_actions;
+    unordered_set<size_t> existing_permanent_actions;
     for (auto const& item : it_session->actions)
     {
         auto const& o = *item.get();
         auto const& ti = typeid(o);
-        existing_actions.insert(ti.hash_code());
+        if (o.permanent())
+            existing_permanent_actions.insert(ti.hash_code());
     }
 
     bool modified;
@@ -221,8 +222,8 @@ bool session_manager<T_session_header>::add(T_session_header const& header,
     {
         auto const& o = *action_item.get();
         auto const& ti = typeid(o);
-        auto it_find = existing_actions.find(ti.hash_code());
-        if (it_find == existing_actions.end())
+        auto it_find = existing_permanent_actions.find(ti.hash_code());
+        if (it_find == existing_permanent_actions.end())
         {
             if (previous_completed)
             {
@@ -240,7 +241,8 @@ bool session_manager<T_session_header>::add(T_session_header const& header,
             if (false == action_item->completed ||
                 true == action_item->permanent())
             {
-                existing_actions.insert(ti.hash_code());
+                if (action_item->permanent())
+                    existing_permanent_actions.insert(ti.hash_code());
                 modified = m_pimpl->sessions.modify(it_session, [&action_item](session<T_session_header>& item)
                 {
                     item.actions.push_back(std::move(action_item));
