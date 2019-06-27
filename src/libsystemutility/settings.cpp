@@ -205,8 +205,8 @@ filesystem::path data_directory_path(string const& dir1, string const& dir2)
     return file_path({dir1, dir2}, string(), config_data::data);
 }
 
-string settings::s_data_dir = config_directory_path().string();
 string settings::s_application_name = "mesh_application";
+string settings::s_data_dir = config_directory_path().string();
 
 void settings::set_data_directory(string const& data_dir)
 {
