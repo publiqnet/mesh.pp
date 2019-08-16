@@ -66,14 +66,10 @@ namespace meshpp
 filesystem::path home_directory_path()
 {
 #ifdef M_OS_LINUX
-    char* home = getenv("XDG_CONFIG_HOME");
+    char* home = getenv("HOME");
     if (nullptr == home)
-    {
-        home = getenv("HOME");
-        if (nullptr == home)
-            throw runtime_error("neither XDG_CONFIG_HOME nor HOME environment"
-                                " variable is specified");
-    }
+        throw runtime_error("HOME environment"
+                            " variable is specified");
 
     filesystem::path fs_home(home);
 
@@ -105,22 +101,27 @@ filesystem::path home_directory_path()
 filesystem::path config_directory_path()
 {
 #ifdef M_OS_LINUX
-    char* home = getenv("XDG_CONFIG_HOME");
-    if (nullptr == home)
+    filesystem::path fs_config;
+
+    char* config_home = getenv("XDG_CONFIG_HOME");
+
+    if (nullptr != config_home)
     {
-        home = getenv("HOME");
+        fs_config = filesystem::path(config_home);
+    }
+    else
+    {
+        char* home = getenv("HOME");
         if (nullptr == home)
             throw runtime_error("neither XDG_CONFIG_HOME nor HOME environment"
                                 " variable is specified");
+
+        fs_config = filesystem::path(home) / ".config";
     }
 
-    filesystem::path fs_home(home);
-
-    if (fs_home.empty() ||
-        false == filesystem::is_directory(fs_home))
-        throw runtime_error("detected invalid home directory: " + fs_home.string());
-
-    filesystem::path fs_config = fs_home / ".config";
+    if (fs_config.empty() ||
+        false == filesystem::is_directory(fs_config))
+        throw runtime_error("detected invalid config directory: " + fs_config.string());
 
 #elif defined(M_OS_WINDOWS)
     wchar_t appdata[MAX_PATH];
