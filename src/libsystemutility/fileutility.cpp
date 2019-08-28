@@ -340,12 +340,13 @@ public:
         std::istreambuf_iterator<char> end_contents, begin_contents;
         boost::filesystem::ifstream fl_contents;
         load_file(contents_path, fl_contents, begin_contents, end_contents);
+        bool contents_exist = (begin_contents != end_contents);
 
         size_t start_markers_index = 0;
         bool load_all = keys.empty();
         if (load_all)
         {
-            if (begin_contents != end_contents)
+            if (contents_exist)
                 keys.resize(markers.size());
             else
             {
@@ -357,14 +358,13 @@ public:
 
         for (auto& key : keys)
         {
-            //size_t& loaded_marker_index = values[key].loaded_marker_index;
-            //auto& value = values[key].item;
             value new_value;
             size_t& loaded_marker_index = new_value.loaded_marker_index;
             auto& val = new_value.item;
 
             detail::default_block(val, key);
 
+            if (contents_exist)
             for (size_t index = start_markers_index; index < markers.size(); ++index)
             {
                 auto const& item = markers[index];
@@ -373,28 +373,25 @@ public:
                      load_all) &&
                     size_t(-1) == loaded_marker_index)
                 {
-                    if (end_contents != begin_contents)
+                    std::string row;
+                    row.resize(item.end - item.start);
+                    fl_contents.seekg(int64_t(item.start), std::ios_base::beg);
+                    check(fl_contents, contents_path, "block_file_loader",
+                          "seekg",
+                          std::to_string(item.start) + "-beg",
+                          std::string());
+                    fl_contents.read(&row[0], int64_t(item.end - item.start));
+                    check(fl_contents, contents_path, "block_file_loader",
+                          "read",
+                          std::to_string(item.start) + "-" + std::to_string(item.end),
+                          std::string());
+
+                    if (detail::from_block_string(val, row, key, load_all, putl))
                     {
-                        std::string row;
-                        row.resize(item.end - item.start);
-                        fl_contents.seekg(int64_t(item.start), std::ios_base::beg);
-                        check(fl_contents, contents_path, "block_file_loader",
-                              "seekg",
-                              std::to_string(item.start) + "-beg",
-                              std::string());
-                        fl_contents.read(&row[0], int64_t(item.end - item.start));
-                        check(fl_contents, contents_path, "block_file_loader",
-                              "read",
-                              std::to_string(item.start) + "-" + std::to_string(item.end),
-                              std::string());
+                        loaded_marker_index = index;
 
-                        if (detail::from_block_string(val, row, key, load_all, putl))
-                        {
-                            loaded_marker_index = index;
-
-                            if (load_all)
-                                start_markers_index = index + 1;
-                        }
+                        if (load_all)
+                            start_markers_index = index + 1;
                     }
                 }
             }
