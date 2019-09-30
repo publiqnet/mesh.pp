@@ -546,7 +546,7 @@ public:
         return all_keys;
     }
 
-    bool contains (std::string const& key) const
+    bool contains(std::string const& key) const
     {
         auto set_keys = keys();
         return set_keys.find(key) != set_keys.end();
