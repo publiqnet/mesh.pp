@@ -369,6 +369,7 @@ public:
     std::string name;
     boost::filesystem::path dir_path;
     std::unordered_map<std::string, std::string> index;
+    std::unordered_map<std::string, std::string> index_to_rollback;
     mutable std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
     ptr_map_loader_internals_impl pimpl;

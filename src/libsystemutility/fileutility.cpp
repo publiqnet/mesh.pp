@@ -925,6 +925,7 @@ map_loader_internals::map_loader_internals(std::string const& name,
     , index()
 #else
     , index(load_index(name, path))
+    , index_to_rollback(index)
 #endif
     , overlay()
     , ptr_utl(std::move(ptr_utl))
@@ -1220,8 +1221,14 @@ void map_loader_internals::discard()
     {
         pimpl->ptransaction->rollback();
         pimpl->ptransaction = detail::null_ptr_transaction();
+        index = index_to_rollback;
     }
-    index = load_index(name, dir_path);
+    else
+    {
+        assert(index == index_to_rollback);
+        if (index != index_to_rollback)
+            throw std::logic_error("index != index_to_rollback");
+    }
 #endif
 
     overlay.clear();
@@ -1255,6 +1262,7 @@ void map_loader_internals::commit()
     {
         pimpl->ptransaction->commit();
         pimpl->ptransaction = detail::null_ptr_transaction();
+        index_to_rollback = index;
     }
 #endif
 }
