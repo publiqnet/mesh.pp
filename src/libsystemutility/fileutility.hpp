@@ -549,8 +549,11 @@ public:
 
     bool contains(std::string const& key) const
     {
-        auto set_keys = keys();
-        return set_keys.find(key) != set_keys.end();
+        auto it_overlay = data.overlay.find(key);
+        if (it_overlay != data.overlay.end())
+            return (it_overlay->second.second != internal::deleted);
+
+        return (data.index.count(key) > 0);
     }
 
     void save()
