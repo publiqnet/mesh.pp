@@ -287,7 +287,7 @@ int main()
     auto it_begin = test1.begin();
     auto it_end = test1.end();
 
-    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, limit, proot);
+    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, limit, 10, proot);
 
     cout << &(*it_begin) << endl;
     if (beltpp::e_three_state_result::error == code)
@@ -307,7 +307,7 @@ int main()
     auto it_begin = test1.begin();
     auto it_end = test1.end();
 
-    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, limit, proot);
+    auto code = beltpp::json::parse_stream(pexp, it_begin, it_end, limit, 10, proot);
 
     cout << &(*it_begin) << endl;
     if (beltpp::e_three_state_result::error == code)
