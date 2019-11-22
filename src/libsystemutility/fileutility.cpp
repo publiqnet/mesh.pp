@@ -32,10 +32,12 @@ static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
 #include <thread>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 using std::string;
 using std::vector;
 using std::unordered_map;
+using std::unordered_set;
 
 namespace meshpp
 {
@@ -373,7 +375,7 @@ public:
                 value new_value;
                 new_value.item.from_string(row, putl);
 
-                auto it_key = it_uint64_keys_ex->second.end();
+                typename unordered_map<T_key, bool>::iterator it_key;
                 if (false == load_all)
                     it_key = it_uint64_keys_ex->second.find(new_value.item.key);
 
@@ -440,7 +442,7 @@ public:
         return *this;
     }
 
-    bool loaded(std::unordered_set<T_key>& keys) const
+    bool loaded(unordered_set<T_key>& keys) const
     {
         keys.clear();
         for (auto const& value : values)
@@ -454,7 +456,7 @@ public:
 
     bool loaded() const
     {
-        std::unordered_set<T_key> keys;
+        unordered_set<T_key> keys;
 
         for (auto const& value : values)
         {
@@ -473,7 +475,7 @@ public:
         auto start_pos = size_t(-1);
         string bulk_buffer;
 
-        std::unordered_set<size_t> erase_indices;
+        unordered_set<size_t> erase_indices;
 
         for (auto& value : values)
         {
@@ -566,7 +568,7 @@ public:
 
     void erase()
     {
-        std::unordered_set<size_t> erase_indices;
+        unordered_set<size_t> erase_indices;
         for (auto const& value : values)
         {
             if (size_t(-1) != value.second.loaded_marker_index)
@@ -844,15 +846,15 @@ private:
     bool modified;
     detail::ptr_transaction ptransaction;
     boost::filesystem::path main_path;
-    std::unordered_map<T_key, value> values;
+    unordered_map<T_key, value> values;
     void* putl;
     vector<marker> markers;
 };
 
 #ifdef USE_ROCKS_DB
-std::unordered_map<string, string> load_index(rocksdb::DB& db)
+unordered_map<string, string> load_index(rocksdb::DB& db)
 {
-    std::unordered_map<string, string> index;
+    unordered_map<string, string> index;
 
     std::unique_ptr<rocksdb::Iterator> it;
     it.reset(db.NewIterator(rocksdb::ReadOptions()));
@@ -866,12 +868,12 @@ std::unordered_map<string, string> load_index(rocksdb::DB& db)
     return index;
 }
 #else
-std::unordered_map<string, string> load_index(string const& name,
+unordered_map<string, string> load_index(string const& name,
                                               boost::filesystem::path const& path)
 {
     auto ptr_utl = meshpp::detail::get_putl();
 
-    std::unordered_map<string, string> index;
+    unordered_map<string, string> index;
 
     using index_loader = block_file_loader<string,
                                             Data::StringBlockItem,
@@ -883,7 +885,7 @@ std::unordered_map<string, string> load_index(string const& name,
                  vector<string>(),
                  ptr_utl.get(),
                  detail::null_ptr_transaction());
-    std::unordered_set<string> keys;
+    unordered_set<string> keys;
     if (temp.loaded(keys))
     {
         for (auto const& key : keys)
@@ -1132,8 +1134,8 @@ void map_loader_internals::save()
             ref_ptransaction_index = std::move(index_bl.transaction());
         });
 
-        std::unordered_map<string, vector<string>> file_name_to_keys;
-        std::unordered_set<string> loaded_keys;
+        unordered_map<string, vector<string>> file_name_to_keys;
+        unordered_set<string> loaded_keys;
         index_bl.loaded(loaded_keys);
 
         for (auto const& key : group_keys)
@@ -1304,7 +1306,7 @@ size_t load_size(string const& name,
                  ptr_utl_local.get(),
                  detail::null_ptr_transaction());
 
-    std::unordered_set<uint64_t> keys;
+    unordered_set<uint64_t> keys;
     if (temp.loaded(keys))
     {
         for (auto const& key : keys)
@@ -1436,7 +1438,7 @@ void vector_loader_internals::save()
         if (group_keys.empty())
             continue;
 
-        std::unordered_map<string, vector<uint64_t>> file_name_to_keys;
+        unordered_map<string, vector<uint64_t>> file_name_to_keys;
 
         for (auto const& key : group_keys)
         {
