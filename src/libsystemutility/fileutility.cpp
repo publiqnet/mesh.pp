@@ -31,6 +31,11 @@ static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <unordered_map>
+
+using std::string;
+using std::vector;
+using std::unordered_map;
 
 namespace meshpp
 {
@@ -74,7 +79,7 @@ bool create_lock_file(intptr_t& native_handle, boost::filesystem::path const& pa
 #endif
 }
 
-bool write_to_lock_file(intptr_t native_handle, std::string const& value)
+bool write_to_lock_file(intptr_t native_handle, string const& value)
 {
 #ifdef B_OS_WINDOWS
     DWORD len = DWORD(-1);
@@ -123,59 +128,33 @@ uint64_t key_to_uint64_t(uint64_t key)
     return key;
 }
 
-uint64_t key_to_uint64_t(std::string const& key)
+uint64_t key_to_uint64_t(string const& key)
 {
-    std::hash<std::string> hasher;
+    std::hash<string> hasher;
 
     if (key.empty())
         return hasher(key);
 
-    std::string key_temp(key);
+    string key_temp(key);
     ++key_temp.at(0);
     return hasher(key_temp);
 }
 
-void default_block(Data::StringBlockItem& item, std::string const& key)
-{
-    item.key = key;
-}
-
-bool from_block_string(Data::StringBlockItem& item, std::string const& buffer, std::string& key, bool accept, void* putl)
+/*void from_block_string(Data::StringBlockItem& item, string const& buffer, void* putl)
 {
     Data::StringBlockItem ob;
     ob.from_string(buffer, putl);
-    if (ob.key == key || accept)
-    {
-        if (accept)
-            key = ob.key;
 
-        item = std::move(ob);
-        return true;
-    }
-
-    return false;
+    item = std::move(ob);
 }
 
-void default_block(Data::UInt64BlockItem& item, uint64_t key)
-{
-    item.key = key;
-}
-
-bool from_block_string(Data::UInt64BlockItem& item, std::string const& buffer, uint64_t& key, bool accept, void* putl)
+void from_block_string(Data::UInt64BlockItem& item, string const& buffer, void* putl)
 {
     Data::UInt64BlockItem ob;
     ob.from_string(buffer, putl);
-    if (ob.key == key || accept)
-    {
-        if (accept)
-            key = ob.key;
 
-        item = std::move(ob);
-        return true;
-    }
-
-    return false;
-}
+    item = std::move(ob);
+}*/
 
 void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
 {
@@ -194,8 +173,8 @@ void dostuff(intptr_t native_handle, boost::filesystem::path const& path)
 
 template <typename T_key,
           typename T,
-          void(T::*from_string)(std::string const&, void*),
-          std::string(T::*to_string)()const
+          void(T::*from_string)(string const&, void*),
+          string(T::*to_string)()const
           >
 class block_file_loader
 {
@@ -281,7 +260,7 @@ public:
     using value_type = T;
 
     block_file_loader(boost::filesystem::path const& path,
-                      std::vector<T_key> keys,
+                      vector<T_key> keys,
                       void* putl = nullptr,
                       detail::ptr_transaction&& ptransaction_ = detail::null_ptr_transaction())
         : modified(false)
@@ -316,7 +295,7 @@ public:
         load_file(marker_path, fl, begin, end);
         if (begin != end)
         {
-            std::vector<char> buf_markers(begin, end);
+            vector<char> buf_markers(begin, end);
             if (0 != buf_markers.size() % (3 * sizeof(uint64_t)))
                 throw std::runtime_error("invalid marker file size: " + marker_path.string());
 
@@ -342,63 +321,88 @@ public:
         load_file(contents_path, fl_contents, begin_contents, end_contents);
         bool contents_exist = (begin_contents != end_contents);
 
-        size_t start_markers_index = 0;
         bool load_all = keys.empty();
         if (load_all)
         {
             if (contents_exist)
-                keys.resize(markers.size());
+            {
+                //keys.resize(markers.size());
+            }
             else
             {
                 assert(markers.empty());
-                load_all = false;
+                //load_all = false;
                 markers.clear();
             }
         }
 
-        for (auto& key : keys)
+        unordered_map<uint64_t, unordered_map<T_key, bool>> uint64_keys_ex;
+        for (auto const& key : keys)
         {
-            value new_value;
-            size_t& loaded_marker_index = new_value.loaded_marker_index;
-            auto& val = new_value.item;
+            auto insert_res =
+                    uint64_keys_ex.insert({detail::key_to_uint64_t(key), {}});
 
-            detail::default_block(val, key);
+            insert_res.first->second.insert({key, false});
+        }
 
-            if (contents_exist)
-            for (size_t index = start_markers_index; index < markers.size(); ++index)
+        if (contents_exist)
+        for (size_t index = 0; index < markers.size(); ++index)
+        {
+            auto const& item = markers[index];
+
+            auto it_uint64_keys_ex = uint64_keys_ex.end();
+            if (false == load_all)
+                it_uint64_keys_ex = uint64_keys_ex.find(item.key);
+
+            if (load_all ||
+                it_uint64_keys_ex != uint64_keys_ex.end())
             {
-                auto const& item = markers[index];
+                string row;
+                row.resize(item.end - item.start);
+                fl_contents.seekg(int64_t(item.start), std::ios_base::beg);
+                check(fl_contents, contents_path, "block_file_loader",
+                      "seekg",
+                      std::to_string(item.start) + "-beg",
+                      string());
+                fl_contents.read(&row[0], int64_t(item.end - item.start));
+                check(fl_contents, contents_path, "block_file_loader",
+                      "read",
+                      std::to_string(item.start) + "-" + std::to_string(item.end),
+                      string());
 
-                if ((item.key == detail::key_to_uint64_t(key) ||
-                     load_all) &&
-                    size_t(-1) == loaded_marker_index)
+                value new_value;
+                new_value.item.from_string(row, putl);
+
+                auto it_key = it_uint64_keys_ex->second.end();
+                if (false == load_all)
+                    it_key = it_uint64_keys_ex->second.find(new_value.item.key);
+
+                if (load_all || it_key != it_uint64_keys_ex->second.end())
                 {
-                    std::string row;
-                    row.resize(item.end - item.start);
-                    fl_contents.seekg(int64_t(item.start), std::ios_base::beg);
-                    check(fl_contents, contents_path, "block_file_loader",
-                          "seekg",
-                          std::to_string(item.start) + "-beg",
-                          std::string());
-                    fl_contents.read(&row[0], int64_t(item.end - item.start));
-                    check(fl_contents, contents_path, "block_file_loader",
-                          "read",
-                          std::to_string(item.start) + "-" + std::to_string(item.end),
-                          std::string());
+                    new_value.loaded_marker_index = index;
 
-                    if (detail::from_block_string(val, row, key, load_all, putl))
-                    {
-                        loaded_marker_index = index;
+                    if (false == load_all)
+                        it_key->second = true;
 
-                        if (load_all)
-                            start_markers_index = index + 1;
-                    }
+                    auto& member_value = values[new_value.item.key];
+                    member_value.loaded_marker_index = new_value.loaded_marker_index;
+                    member_value.item = std::move(new_value.item);
                 }
             }
+        }
 
-            auto& member_value = values[key];
-            member_value.loaded_marker_index = new_value.loaded_marker_index;
-            member_value.item = std::move(new_value.item);
+        for (auto const& uint64_key : uint64_keys_ex)
+        for (auto const& key_item : uint64_key.second)
+        {
+            if (key_item.second == false)
+            {
+                value new_value;
+                new_value.item.key = key_item.first;
+
+                auto& member_value = values[new_value.item.key];
+                member_value.loaded_marker_index = new_value.loaded_marker_index;
+                member_value.item = std::move(new_value.item);
+            }
         }
 
         guard.dismiss();
@@ -467,13 +471,13 @@ public:
             return;
 
         auto start_pos = size_t(-1);
-        std::string bulk_buffer;
+        string bulk_buffer;
 
         std::unordered_set<size_t> erase_indices;
 
         for (auto& value : values)
         {
-            std::string buffer = value.second.item.to_string();
+            string buffer = value.second.item.to_string();
 
             //  will append this item in the end of file
             auto seek_pos = size_t(0);
@@ -533,7 +537,7 @@ public:
                 throw std::runtime_error("save(): unable to open fstream: " + file_path_tr().string());
 
             fl.seekg(0, std::ios_base::end);
-            check(fl, file_path_tr(), "save", "seekg", "end", std::string());
+            check(fl, file_path_tr(), "save", "seekg", "end", string());
 
             size_t size_when_opened = size_t(fl.tellg());
 
@@ -639,18 +643,18 @@ public:
 private:
     void check(std::basic_ios<char>& fl,
                boost::filesystem::path const& path,
-               std::string const& function,
-               std::string const& what,
-               std::string const& where,
-               std::string const& info) const
+               string const& function,
+               string const& what,
+               string const& where,
+               string const& info) const
     {
         auto state_flags = fl.rdstate();
         if (state_flags & std::ios_base::badbit)
-            throw std::runtime_error(function + "(): badbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+            throw std::runtime_error(function + "(): badbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? string() : " - " + info));
         if (state_flags & std::ios_base::eofbit)
-            throw std::runtime_error(function + "(): eofbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+            throw std::runtime_error(function + "(): eofbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? string() : " - " + info));
         if (state_flags & std::ios_base::failbit)
-            throw std::runtime_error(function + "(): failbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+            throw std::runtime_error(function + "(): failbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? string() : " - " + info));
     }
 
     void compact()
@@ -679,7 +683,7 @@ private:
                 throw std::runtime_error("compact(): unable to open fstream: " + file_path_tr().string());
 
             fl.seekg(0, std::ios_base::end);
-            check(fl, file_path_tr(), "compact", "seekg", "end", std::string());
+            check(fl, file_path_tr(), "compact", "seekg", "end", string());
 
             size_when_opened = size_t(fl.tellg());
         }
@@ -741,7 +745,7 @@ private:
 
                 if (shift)
                 {
-                    std::vector<char> buffer;
+                    vector<char> buffer;
                     buffer.resize(item.end - item.start);
 
                     fl.seekg(int64_t(item.start + shift), std::ios_base::beg);
@@ -842,13 +846,13 @@ private:
     boost::filesystem::path main_path;
     std::unordered_map<T_key, value> values;
     void* putl;
-    std::vector<marker> markers;
+    vector<marker> markers;
 };
 
 #ifdef USE_ROCKS_DB
-std::unordered_map<std::string, std::string> load_index(rocksdb::DB& db)
+std::unordered_map<string, string> load_index(rocksdb::DB& db)
 {
-    std::unordered_map<std::string, std::string> index;
+    std::unordered_map<string, string> index;
 
     std::unique_ptr<rocksdb::Iterator> it;
     it.reset(db.NewIterator(rocksdb::ReadOptions()));
@@ -862,24 +866,24 @@ std::unordered_map<std::string, std::string> load_index(rocksdb::DB& db)
     return index;
 }
 #else
-std::unordered_map<std::string, std::string> load_index(std::string const& name,
-                                                        boost::filesystem::path const& path)
+std::unordered_map<string, string> load_index(string const& name,
+                                              boost::filesystem::path const& path)
 {
     auto ptr_utl = meshpp::detail::get_putl();
 
-    std::unordered_map<std::string, std::string> index;
+    std::unordered_map<string, string> index;
 
-    using index_loader = block_file_loader<std::string,
+    using index_loader = block_file_loader<string,
                                             Data::StringBlockItem,
                                             &Data::StringBlockItem::from_string,
                                             &Data::StringBlockItem::to_string>;
 
     index_loader
             temp(path / (name + ".index"),
-                 std::vector<std::string>(),
+                 vector<string>(),
                  ptr_utl.get(),
                  detail::null_ptr_transaction());
-    std::unordered_set<std::string> keys;
+    std::unordered_set<string> keys;
     if (temp.loaded(keys))
     {
         for (auto const& key : keys)
@@ -914,7 +918,7 @@ public:
 #endif
 };
 
-map_loader_internals::map_loader_internals(std::string const& name,
+map_loader_internals::map_loader_internals(string const& name,
                                            boost::filesystem::path const& path,
                                            size_t limit,
                                            beltpp::void_unique_ptr&& ptr_utl)
@@ -956,11 +960,11 @@ map_loader_internals::map_loader_internals(map_loader_internals&&) = default;
 
 map_loader_internals::~map_loader_internals() = default;
 
-void map_loader_internals::load(std::string const& key) const
+void map_loader_internals::load(string const& key) const
 {
 #ifdef USE_ROCKS_DB
     rocksdb::DB& db = *pimpl->ptr_rocks_db;
-    std::string value_str;
+    string value_str;
     rocksdb::Slice key_s(key);
     auto s = db.Get(rocksdb::ReadOptions(), key_s, &value_str);
     if(false == s.ok())
@@ -1003,12 +1007,12 @@ void map_loader_internals::load(std::string const& key) const
 
     //  let file block owner maintain the transaction
     //  that belongs to it
-    block_file_loader<std::string,
+    block_file_loader<string,
                       Data::StringBlockItem,
                       &Data::StringBlockItem::from_string,
                       &Data::StringBlockItem::to_string>
             temp(dir_path / filename(key, name, limit),
-                 std::vector<std::string>{key},
+                 vector<string>{key},
                  ptr_utl.get(),
                  std::move(item_ptransaction));
 
@@ -1091,8 +1095,8 @@ void map_loader_internals::save()
     class_transaction& ref_class_transaction =
             dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
 
-    std::vector<std::string> modified_keys;
-    std::vector<std::string> erased_keys;
+    vector<string> modified_keys;
+    vector<string> erased_keys;
     for (auto& item : overlay)
     {
         if (item.second.second == map_loader_internals::modified)
@@ -1102,8 +1106,8 @@ void map_loader_internals::save()
     }
 
     enum e_op {e_op_erase = 0, e_op_modify = 1};
-    std::vector<std::vector<std::string>> all_keys = {std::move(erased_keys),
-                                                      std::move(modified_keys)};
+    vector<vector<string>> all_keys = {std::move(erased_keys),
+                                       std::move(modified_keys)};
 
     for (size_t i = 0; i < all_keys.size(); ++i)
     {
@@ -1112,7 +1116,7 @@ void map_loader_internals::save()
             continue;
         //  let index block owner maintain the index transaction
         auto& ref_ptransaction_index = ref_class_transaction.index;
-        block_file_loader<std::string,
+        block_file_loader<string,
                           Data::StringBlockItem,
                           &Data::StringBlockItem::from_string,
                           &Data::StringBlockItem::to_string>
@@ -1128,15 +1132,15 @@ void map_loader_internals::save()
             ref_ptransaction_index = std::move(index_bl.transaction());
         });
 
-        std::unordered_map<std::string, std::vector<std::string>> file_name_to_keys;
-        std::unordered_set<std::string> loaded_keys;
+        std::unordered_map<string, vector<string>> file_name_to_keys;
+        std::unordered_set<string> loaded_keys;
         index_bl.loaded(loaded_keys);
 
         for (auto const& key : group_keys)
         {
             if (loaded_keys.end() == loaded_keys.find(key))
             {
-                std::string str_filename = filename(key, name, limit);
+                string str_filename = filename(key, name, limit);
                 Data::StringValue index_item;
                 index_item.value = str_filename;
                 index_bl[key].item.set(std::move(index_item));
@@ -1157,7 +1161,7 @@ void map_loader_internals::save()
 
         for (auto const& per_file : file_name_to_keys)
         {
-            std::string const& str_filename = per_file.first;
+            string const& str_filename = per_file.first;
             auto const& file_keys = per_file.second;
 
             auto pair_res = ref_class_transaction.overlay.insert(
@@ -1167,7 +1171,7 @@ void map_loader_internals::save()
 
             //  let file block owner maintain the transaction
             //  that belongs to it
-            block_file_loader<std::string,
+            block_file_loader<string,
                               Data::StringBlockItem,
                               &Data::StringBlockItem::from_string,
                               &Data::StringBlockItem::to_string>
@@ -1186,7 +1190,7 @@ void map_loader_internals::save()
 
             if (i == e_op_erase)
             {
-                for (std::string const& key : file_keys)
+                for (string const& key : file_keys)
                     index.erase(key);
 
                 temp.erase();
@@ -1267,22 +1271,22 @@ void map_loader_internals::commit()
 #endif
 }
 
-std::string map_loader_internals::filename(std::string const& key,
-                                           std::string const& name,
-                                           size_t limit)
+string map_loader_internals::filename(string const& key,
+                                      string const& name,
+                                      size_t limit)
 {
     assert(limit > 0);
-    std::hash<std::string> hasher;
+    std::hash<string> hasher;
     size_t h = hasher(key) % limit;
 
-    std::string strh = std::to_string(h);
+    string strh = std::to_string(h);
     while (strh.length() < 4)
         strh = "0" + strh;
 
     return name + "." + strh;
 }
 
-size_t load_size(std::string const& name,
+size_t load_size(string const& name,
                  boost::filesystem::path const& path)
 {
     auto ptr_utl_local = meshpp::detail::get_putl();
@@ -1296,7 +1300,7 @@ size_t load_size(std::string const& name,
 
     size_loader
             temp(path / (name + ".size"),
-                 std::vector<uint64_t>(),
+                 vector<uint64_t>(),
                  ptr_utl_local.get(),
                  detail::null_ptr_transaction());
 
@@ -1335,7 +1339,7 @@ public:
 #endif
 };
 
-vector_loader_internals::vector_loader_internals(std::string const& name,
+vector_loader_internals::vector_loader_internals(string const& name,
                                                  boost::filesystem::path const& path,
                                                  size_t limit,
                                                  size_t group,
@@ -1381,7 +1385,7 @@ void vector_loader_internals::load(size_t index) const
                       &Data::UInt64BlockItem::from_string,
                       &Data::UInt64BlockItem::to_string>
             temp(dir_path / filename(index, name, limit, group),
-                 std::vector<uint64_t>{index},
+                 vector<uint64_t>{index},
                  ptr_utl.get(),
                  std::move(item_ptransaction));
 
@@ -1412,8 +1416,8 @@ void vector_loader_internals::save()
     class_transaction& ref_class_transaction =
             dynamic_cast<class_transaction&>(*pimpl->ptransaction.get());
 
-    std::vector<uint64_t> modified_keys;
-    std::vector<uint64_t> erased_keys;
+    vector<uint64_t> modified_keys;
+    vector<uint64_t> erased_keys;
     for (auto& item : overlay)
     {
         if (item.second.second == vector_loader_internals::modified)
@@ -1423,7 +1427,7 @@ void vector_loader_internals::save()
     }
 
     enum e_op {e_op_erase = 0, e_op_modify = 1};
-    std::vector<std::vector<uint64_t>> all_keys = {std::move(erased_keys),
+    vector<vector<uint64_t>> all_keys = {std::move(erased_keys),
                                                    std::move(modified_keys)};
 
     for (size_t i = 0; i < all_keys.size(); ++i)
@@ -1432,17 +1436,17 @@ void vector_loader_internals::save()
         if (group_keys.empty())
             continue;
 
-        std::unordered_map<std::string, std::vector<uint64_t>> file_name_to_keys;
+        std::unordered_map<string, vector<uint64_t>> file_name_to_keys;
 
         for (auto const& key : group_keys)
         {
-            std::string str_filename = filename(key, name, limit, group);
+            string str_filename = filename(key, name, limit, group);
             file_name_to_keys[str_filename].push_back(key);
         }
 
         for (auto const& per_file : file_name_to_keys)
         {
-            std::string const& str_filename = per_file.first;
+            string const& str_filename = per_file.first;
             auto const& file_keys = per_file.second;
 
             auto pair_res = ref_class_transaction.overlay.insert(
@@ -1504,7 +1508,7 @@ void vector_loader_internals::save()
 
     size_loader
             temp(dir_path / (name + ".size"),
-                 std::vector<uint64_t>{0},
+                 vector<uint64_t>{0},
                  ptr_utl_local.get(),
                  std::move(ref_ptransaction_size));
 
@@ -1545,14 +1549,14 @@ void vector_loader_internals::commit()
     }
 }
 
-std::string vector_loader_internals::filename(size_t index,
-                                              std::string const& name,
-                                              size_t limit,
-                                              size_t group)
+string vector_loader_internals::filename(size_t index,
+                                         string const& name,
+                                         size_t limit,
+                                         size_t group)
 {
     assert(group > 0);
     assert(limit > 0);
-    std::string strh = std::to_string((index / group) % limit);
+    string strh = std::to_string((index / group) % limit);
     while (strh.length() < 4)
         strh = "0" + strh;
 
