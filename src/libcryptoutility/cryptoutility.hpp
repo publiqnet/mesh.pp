@@ -149,11 +149,11 @@ std::string from_base58(InputIt first, InputIt last)
     return from_base58(std::string(first, last));
 }
 
-CRYPTOUTILITYSHARED_EXPORT std::string to_base64(std::string const & raw_str);
+CRYPTOUTILITYSHARED_EXPORT std::string to_base64(std::string const & raw_str, bool insertLineBreaks);
 template <typename InputIt>
-std::string to_base64(InputIt first, InputIt last)
+std::string to_base64(InputIt first, InputIt last, bool insertLineBreaks)
 {
-    return to_base64(std::string(first, last));
+    return to_base64(std::string(first, last), insertLineBreaks);
 }
 
 CRYPTOUTILITYSHARED_EXPORT std::string from_base64(std::string const& data);

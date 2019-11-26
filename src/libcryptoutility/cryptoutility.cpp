@@ -437,11 +437,11 @@ string from_base64(string const& data)
     return result;
 }
 
-string to_base64(string const& data)
+string to_base64(string const& data, bool insertLineBreaks)
 {
     using namespace CryptoPP;
     string result;
-    StringSource ss(data, true, new Base64Encoder(new StringSink(result)));
+    StringSource ss(data, true, new Base64Encoder(new StringSink(result), insertLineBreaks));
     return result;
 }
 
