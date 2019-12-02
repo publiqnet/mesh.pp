@@ -1285,8 +1285,7 @@ void map_loader_internals::save()
             string const& str_filename = per_file.first;
             auto const& file_keys = per_file.second;
 
-            ref_class_transaction.overlay.insert({str_filename,
-                                                  detail::null_ptr_transaction()});
+            ref_class_transaction.overlay.insert(std::make_pair(str_filename, detail::null_ptr_transaction()));
 
             if (i == e_op_erase)
             {
@@ -1552,8 +1551,7 @@ void vector_loader_internals::save()
             string const& str_filename = per_file.first;
             auto const& file_keys = per_file.second;
 
-            ref_class_transaction.overlay.insert({str_filename,
-                                                  detail::null_ptr_transaction()});
+            ref_class_transaction.overlay.insert(std::make_pair(str_filename, detail::null_ptr_transaction()));
 
             if (i == e_op_erase)
             {
