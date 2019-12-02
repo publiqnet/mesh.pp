@@ -57,6 +57,11 @@ target_link_libraries(systemutility
         utility
     )
 
+if(NOT WIN32 AND NOT APPLE)
+    find_package(Threads REQUIRED)
+    target_link_libraries(systemutility PRIVATE Threads::Threads)
+endif()
+
 if(TARGET rocksdb)
     target_link_libraries(systemutility
         PRIVATE
