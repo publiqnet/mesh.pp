@@ -1081,6 +1081,7 @@ namespace
 {
 enum e_op {e_op_erase = 0, e_op_modify = 1};
 }
+
 template <typename value_type, // string vs uint64_t
           typename BlockItemType, // Data::StringBlockItem vs Data::UInt64BlockItem
           typename class_transaction,
@@ -1124,55 +1125,71 @@ void file_saver_helper(unordered_map<string, vector<value_type>> const& file_nam
         pool_index = pool_index % async_count;
     }
 
-    auto file_processor = [&ref_class_transaction,
-                          pthis,
-                          i](per_async_info* pool_item)
+    class file_processor_class
     {
-        assert(pool_item);
-        if (nullptr == pool_item)
-            throw std::logic_error("nullptr == pool_item");
+    public:
+        class_transaction& ref_class_transaction;
+        loader_internals const* pthis;
+        size_t i;
 
-        for (auto const& per_file : pool_item->files)
+        file_processor_class(class_transaction& ref_class_transaction_,
+                             loader_internals const* pthis_,
+                             size_t i_)
+            : ref_class_transaction(ref_class_transaction_)
+            , pthis(pthis_)
+            , i(i_)
+        {}
+
+        void operator()(per_async_info* pool_item) const
         {
-            string const& str_filename = *per_file.str_filename;
-            auto const& file_keys = *per_file.file_keys;
+            assert(pool_item);
+            if (nullptr == pool_item)
+                throw std::logic_error("nullptr == pool_item");
 
-            auto it_ptransaction = ref_class_transaction.overlay.find(str_filename);
-            assert(it_ptransaction != ref_class_transaction.overlay.end());
-            if (it_ptransaction == ref_class_transaction.overlay.end())
-                throw std::logic_error("it_ptransaction == ref_class_transaction.overlay.end()");
-            auto& ref_ptransaction = it_ptransaction->second;
-
-            //  let file block owner maintain the transaction
-            //  that belongs to it
-            block_file_loader<value_type,
-                              BlockItemType,
-                              &BlockItemType::from_string,
-                              &BlockItemType::to_string>
-                    temp(pthis->dir_path / str_filename,
-                         file_keys,
-                         pthis->ptr_utl.get(),
-                         std::move(ref_ptransaction));
-
-            //  make sure guard_item will take the transaction back eventually
-            //  in the end of this for step
-            //  thus "temp" will be destructed without owning a transaction
-            beltpp::finally guard_item([&ref_ptransaction, &temp]
+            for (auto const& per_file : pool_item->files)
             {
-                ref_ptransaction = std::move(temp.transaction());
-            });
+                string const& str_filename = *per_file.str_filename;
+                auto const& file_keys = *per_file.file_keys;
 
-            if (i == e_op_erase)
-                temp.erase();
-            else
-            {
-                for (auto const& key : file_keys)
-                    temp[key].item = std::move(pthis->overlay[key].first);
+                auto it_ptransaction = ref_class_transaction.overlay.find(str_filename);
+                assert(it_ptransaction != ref_class_transaction.overlay.end());
+                if (it_ptransaction == ref_class_transaction.overlay.end())
+                    throw std::logic_error("it_ptransaction == ref_class_transaction.overlay.end()");
+                auto& ref_ptransaction = it_ptransaction->second;
 
-                temp.save();
+                //  let file block owner maintain the transaction
+                //  that belongs to it
+                block_file_loader<value_type,
+                                  BlockItemType,
+                                  &BlockItemType::from_string,
+                                  &BlockItemType::to_string>
+                        temp(pthis->dir_path / str_filename,
+                             file_keys,
+                             pthis->ptr_utl.get(),
+                             std::move(ref_ptransaction));
+
+                //  make sure guard_item will take the transaction back eventually
+                //  in the end of this for step
+                //  thus "temp" will be destructed without owning a transaction
+                beltpp::finally guard_item([&ref_ptransaction, &temp]
+                {
+                    ref_ptransaction = std::move(temp.transaction());
+                });
+
+                if (i == e_op_erase)
+                    temp.erase();
+                else
+                {
+                    for (auto const& key : file_keys)
+                        temp[key].item = std::move(pthis->overlay[key].first);
+
+                    temp.save();
+                }
             }
         }
     };
+
+    auto file_processor = file_processor_class(ref_class_transaction, pthis, i);
 
     for (auto& pool_item : pool)
     {
