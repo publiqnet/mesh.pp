@@ -1125,6 +1125,30 @@ void file_saver_helper(unordered_map<string, vector<value_type>> const& file_nam
         pool_index = pool_index % async_count;
     }
 
+    class guard_functor_class
+    {
+    public:
+        ptr_transaction& ref_ptransaction;
+        block_file_loader<value_type,
+                          BlockItemType,
+                          &BlockItemType::from_string,
+                          &BlockItemType::to_string>& temp;
+
+        guard_functor_class(ptr_transaction& ref_ptransaction_,
+                            block_file_loader<value_type,
+                            BlockItemType,
+                            &BlockItemType::from_string,
+                            &BlockItemType::to_string>& temp_)
+            : ref_ptransaction(ref_ptransaction_)
+            , temp(temp_)
+        {}
+
+        void operator()() const
+        {
+            ref_ptransaction = std::move(temp.transaction());
+        }
+    };
+
     class file_processor_class
     {
     public:
@@ -1171,10 +1195,8 @@ void file_saver_helper(unordered_map<string, vector<value_type>> const& file_nam
                 //  make sure guard_item will take the transaction back eventually
                 //  in the end of this for step
                 //  thus "temp" will be destructed without owning a transaction
-                beltpp::finally guard_item([&ref_ptransaction, &temp]
-                {
-                    ref_ptransaction = std::move(temp.transaction());
-                });
+                guard_functor_class guard_functor(ref_ptransaction, temp);
+                beltpp::finally guard_item(guard_functor);
 
                 if (i == e_op_erase)
                     temp.erase();
