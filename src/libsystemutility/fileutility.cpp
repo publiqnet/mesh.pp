@@ -1125,6 +1125,8 @@ void file_saver_helper(unordered_map<string, vector<value_type>> const& file_nam
         pool_index = pool_index % async_count;
     }
 
+    //  the two functor classes are here to avoid weird compiler error
+    //  on gcc 7.3.0 related to lambda visibility ...
     class guard_functor_class
     {
     public:
