@@ -278,6 +278,12 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             } catch (...) {assert(false);}
         }
 
+        auto current_peer_nodeid = state.get_nodeid(current_peer);
+
+        /*beltpp::finally guard([this](){m_pimpl->plogger->disable();});
+        if (current_peer_nodeid == "TPBQ8mogwgutXv1hJnuYXrQF9z6AeMU69TpVeau7qhwoshCEpSQEbt")
+            m_pimpl->plogger->enable();*/
+
         switch (received_packet.type())
         {
         case beltpp::isocket_join::rtt:
@@ -339,8 +345,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                              current_connection.to_string());
             state.remove_later(current_peer, 0, true);
 
-            peer = state.get_nodeid(current_peer);
-            if (false == peer.empty())
+            peer = current_peer_nodeid;
+            if (false == current_peer_nodeid.empty())
                 return_packets.emplace_back(std::move(msg));
             break;
         }
@@ -376,15 +382,15 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                              current_connection.to_string());
             state.remove_later(current_peer, 0, false);
 
-            peer = state.get_nodeid(current_peer);
-            if (false == peer.empty())
+            peer = current_peer_nodeid;
+            if (false == current_peer_nodeid.empty())
                 return_packets.emplace_back(beltpp::isocket_drop());
 
             break;
         }
         case Ping::rtt:
         {
-            m_pimpl->writeln("ping received");
+            m_pimpl->writeln("ping received from " + current_peer + " (" + current_peer_nodeid + ")");
             Ping msg;
             std::move(received_packet).get(msg);
 
@@ -422,6 +428,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             if (external_address_ping != external_address_stored)
             {
                 m_pimpl->writeln("peer working on different route");
+                m_pimpl->writeln("stored external address is: " + external_address_stored.to_string());
+                m_pimpl->writeln("ping external address is: " + external_address_ping.to_string());
                 break;
             }
 
@@ -444,6 +452,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 sk.send(current_peer, beltpp::packet(std::move(msg_pong)));
 
+                m_pimpl->writeln("undo remove");
                 state.undo_remove(current_peer);
 
                 if (false == msg.nodeid.empty() &&
@@ -459,7 +468,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         }
         case Pong::rtt:
         {
-            m_pimpl->writeln("pong received");
+            m_pimpl->writeln("pong received from " + current_peer + " (" + current_peer_nodeid + ")");
             Pong msg;
             std::move(received_packet).get(msg);
 
@@ -567,8 +576,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         {
             m_pimpl->writeln("sending extension data");
 
-            peer = state.get_nodeid(current_peer);
-            if (false == peer.empty())
+            peer = current_peer_nodeid;
+            if (false == current_peer_nodeid.empty())
             {
                 Other pack;
                 std::move(received_packet).get(pack);
