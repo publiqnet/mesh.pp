@@ -280,9 +280,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
         auto current_peer_nodeid = state.get_nodeid(current_peer);
 
-        /*beltpp::finally guard([this](){m_pimpl->plogger->disable();});
-        if (current_peer_nodeid == "TPBQ8mogwgutXv1hJnuYXrQF9z6AeMU69TpVeau7qhwoshCEpSQEbt")
-            m_pimpl->plogger->enable();*/
+        beltpp::finally guard([this](){m_pimpl->plogger->disable();});
+        if (current_peer_nodeid == "TPBQ7vkv2YrHBYkKd6JmRErxzoXLY7de1ohpTVd3XvMCejRRTwDvzk")
+            m_pimpl->plogger->enable();
 
         switch (received_packet.type())
         {
