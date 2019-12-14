@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <memory>
+#include <utility>
 
 namespace meshpp
 {
@@ -56,15 +57,17 @@ public:
 
     virtual bool remove_later(beltpp::socket::peer_id const& p,
                               size_t step,
-                              bool send_drop) = 0;
+                              bool send_drop,
+                              bool must_notify) = 0;
     virtual bool remove_later(beltpp::ip_address const& addr,
                               size_t step,
                               bool send_drop,
-                              bool only_if_passive) = 0;
+                              bool only_if_passive,
+                              bool must_notify) = 0;
     virtual void undo_remove(beltpp::socket::peer_id const& peer_id) = 0;
     //
     //  has to take care of kbucket clean up
-    virtual std::vector<beltpp::socket::peer_id> remove_pending() = 0;
+    virtual std::pair<std::vector<std::pair<std::string, bool>>, std::vector<beltpp::socket::peer_id>> remove_pending() = 0;
 
     virtual std::vector<std::string> list_nearest_to(std::string const& nodeid) = 0;
 

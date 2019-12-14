@@ -12,6 +12,7 @@
 #include <memory>
 #include <chrono>
 #include <thread>
+#include <unordered_set>
 
 using namespace P2PMessage;
 
@@ -26,6 +27,7 @@ using chrono::steady_clock;
 using std::string;
 using std::vector;
 using std::unique_ptr;
+using std::unordered_set;
 
 using sf = beltpp::socket_family_t<&message_list_load>;
 
@@ -101,6 +103,7 @@ public:
     meshpp::private_key _secret_key;
     beltpp::timer m_configured_connect_timer;
     beltpp::timer m_configured_reconnect_timer;
+    unordered_set<p2psocket::peer_id> notify_removed_peers;
 };
 }
 
@@ -146,7 +149,7 @@ static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_inter
     if (configured_address)
     {
         pimpl->writeln("remove_later item, 0, false: " + item.to_string());
-        pimpl->m_ptr_state->remove_later(item, 0, false, true);
+        pimpl->m_ptr_state->remove_later(item, 0, false, true, false);
     }
 }
 
@@ -156,7 +159,12 @@ void p2psocket::prepare_wait()
     socket& sk = *m_pimpl->m_ptr_socket.get();
 
     auto to_remove = state.remove_pending();
-    for (auto const& remove_sk : to_remove)
+    for (auto const& to_remove_item : to_remove.first)
+    {
+        if (to_remove_item.second)
+            m_pimpl->notify_removed_peers.insert(to_remove_item.first);
+    }
+    for (auto const& remove_sk : to_remove.second)
     {
         m_pimpl->writeln("sending drop");
         sk.send(remove_sk, beltpp::packet(beltpp::isocket_drop()));
@@ -230,7 +238,7 @@ void p2psocket::prepare_wait()
         m_pimpl->writeln("connect to " + item.to_string());
         sk.open(item, attempts);
 
-        state.remove_later(item, 30, false, true);
+        state.remove_later(item, 30, false, true, false);
 
         guard_failure.dismiss();
     }   //  for to_connect
@@ -255,6 +263,16 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
     peer_id current_peer;
     ip_address current_connection;
+
+    if (false == m_pimpl->notify_removed_peers.empty())
+    {
+        auto it_begin = m_pimpl->notify_removed_peers.begin();
+        peer = *it_begin;
+        m_pimpl->notify_removed_peers.erase(it_begin);
+
+        return_packets.emplace_back(beltpp::isocket_drop());
+        return return_packets;
+    }
 
     packets received_packets = sk.receive(current_peer);
 
@@ -307,8 +325,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 ping_msg.signature = signed_message.base58;
                 m_pimpl->writeln("sending ping");
                 sk.send(current_peer, beltpp::packet(ping_msg));
-                m_pimpl->writeln("remove_later current_peer, 10, true: " + current_peer + ", " + current_connection.to_string());
-                state.remove_later(current_peer, 10, true);
+                m_pimpl->writeln("remove_later current_peer, 10, true, false: " + current_peer + ", " + current_connection.to_string());
+                state.remove_later(current_peer, 10, true, false);
 
                 state.set_fixed_local_port(current_connection.local.port);
 
@@ -321,7 +339,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             {
                 sk.send(current_peer, beltpp::packet(beltpp::isocket_drop()));
 
-                if (state.remove_later(current_connection, 0, false, true))
+                if (state.remove_later(current_connection, 0, false, true, false))
                 {
                     current_connection.local.port = state.get_fixed_local_port();
                     m_pimpl->writeln("remove_later current_connection, 0, false: " + current_connection.to_string() + ", " + current_peer);
@@ -343,7 +361,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln("remove_later current_peer, 0, true: " +
                              current_peer + ", " +
                              current_connection.to_string());
-            state.remove_later(current_peer, 0, true);
+            state.remove_later(current_peer, 0, true, false);
 
             peer = current_peer_nodeid;
             if (false == current_peer_nodeid.empty())
@@ -380,7 +398,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln("remove_later current_peer, 0, true: " +
                              current_peer + ", " +
                              current_connection.to_string());
-            state.remove_later(current_peer, 0, false);
+            state.remove_later(current_peer, 0, false, false);
 
             peer = current_peer_nodeid;
             if (false == current_peer_nodeid.empty())
@@ -399,7 +417,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             external_address_ping.local = external_address_ping.remote;
             external_address_ping.remote = beltpp::ip_destination();
 
-            external_address_stored = m_pimpl->m_ptr_state->get_external_ip_address();
+            external_address_stored = state.get_external_ip_address();
+            if (state.get_connected_peerids().empty())
+                external_address_stored = beltpp::ip_address();
+
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
 
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
@@ -422,11 +443,18 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 external_address_stored.remote.empty())
             {
                 external_address_stored = external_address_ping;
-                m_pimpl->m_ptr_state->set_external_ip_address(external_address_stored);
+                state.set_external_ip_address(external_address_stored);
             }
 
             if (external_address_ping != external_address_stored)
             {
+                beltpp::finally guard;
+                if (m_pimpl->plogger &&
+                    false == m_pimpl->plogger->enabled())
+                {
+                    guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
+                    m_pimpl->plogger->enable();
+                }
                 m_pimpl->writeln("peer working on different route");
                 m_pimpl->writeln("stored external address is: " + external_address_stored.to_string());
                 m_pimpl->writeln("ping external address is: " + external_address_ping.to_string());
@@ -452,8 +480,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 sk.send(current_peer, beltpp::packet(std::move(msg_pong)));
 
-                m_pimpl->writeln("undo remove");
-                state.undo_remove(current_peer);
+                m_pimpl->writeln("remove_later current_peer, 10, true, true: " + current_peer + ", " + current_connection.to_string());
+                state.remove_later(current_peer, 10, true, true);
+                /*m_pimpl->writeln("undo remove");
+                state.undo_remove(current_peer);*/
 
                 if (false == msg.nodeid.empty() &&
                     p2pstate::contact_status::new_contact == status)
@@ -675,7 +705,7 @@ void p2psocket::send(peer_id const& peer,
         if (pack.type() == beltpp::isocket_drop::rtt)
         {
             m_pimpl->writeln("remove_later p2p_peerid, 0, true: " + p2p_peerid);
-            state.remove_later(p2p_peerid, 0, true);
+            state.remove_later(p2p_peerid, 0, true, false);
         }
         else
         {

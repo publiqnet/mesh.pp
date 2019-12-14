@@ -194,7 +194,7 @@ public:
 
         if (it_find != map_by_address.end() &&
             it_find_to_remove != map_to_remove.end() &&
-            it_find_to_remove->second.first == 0 &&
+            it_find_to_remove->second.steps == 0 &&
             peers[index].state() != state_item::e_state::active)
         {
             map_to_remove.erase(it_find_to_remove);
@@ -366,12 +366,12 @@ public:
     {
         for (auto& item : map_to_remove)
         {
-            if (item.second.first != 0)
-                --item.second.first;
+            if (item.second.steps != 0)
+                --item.second.steps;
         }
     }
 
-    bool remove_later(ip_address const& addr, size_t step, bool send_drop, bool only_if_passive)
+    bool remove_later(ip_address const& addr, size_t step, bool send_drop, bool only_if_passive, bool must_notify)
     {
         auto it_find_addr = map_by_address.find(address_key(addr));
         if (it_find_addr != map_by_address.end())
@@ -381,18 +381,18 @@ public:
                 peers[index].state() != state_item::e_state::passive)
                 return false;
 
-            map_to_remove[index] = std::make_pair(step, send_drop);
+            map_to_remove[index] = to_remove_info{step, send_drop, must_notify};
             return true;
         }
         return false;
     }
 
-    bool remove_later(peer_id const& p, size_t step, bool send_drop)
+    bool remove_later(peer_id const& p, size_t step, bool send_drop, bool must_notify)
     {
         auto it_find_peer_id = map_by_peer_id.find(p);
         if (it_find_peer_id != map_by_peer_id.end())
         {
-            map_to_remove[it_find_peer_id->second] = std::make_pair(step, send_drop);
+            map_to_remove[it_find_peer_id->second] = to_remove_info{step, send_drop, must_notify};
             return true;
         }
         return false;
@@ -409,18 +409,18 @@ public:
         }
     }
 
-    pair<vector<typename T_value::key_type>,
-        vector<peer_id>> remove_pending()
+    pair<vector<pair<typename T_value::key_type, bool>>,
+         vector<peer_id>> remove_pending()
     {
-        pair<vector<typename T_value::key_type>,
-            vector<peer_id>> result;
+        pair<vector<pair<typename T_value::key_type, bool>>,
+             vector<peer_id>> result;
         vector<size_t> indices;
 
         auto iter_remove = map_to_remove.begin();
         while (iter_remove != map_to_remove.end())
         {
             auto const& pair_item = *iter_remove;
-            if (pair_item.second.first != 0)
+            if (pair_item.second.steps != 0)
             {
                 ++iter_remove;
                 continue;
@@ -431,8 +431,8 @@ public:
             auto const& stored_item = peers[index];
 
             if (stored_item.value.key() != typename T_value::key_type())
-                result.first.push_back(stored_item.value.key());
-            if (iter_remove->second.second)
+                result.first.push_back(std::make_pair(stored_item.value.key(), pair_item.second.must_notify));
+            if (iter_remove->second.send_drop)
                 result.second.push_back(stored_item.get_peer());
 
             indices.push_back(index);
@@ -452,8 +452,7 @@ public:
                 auto it_find = map_to_remove.find(index2);
                 if (map_to_remove.end() != it_find)
                 {
-                    std::pair<size_t, std::pair<size_t, bool>> insert_item =
-                            *it_find;
+                    std::pair<size_t, to_remove_info> insert_item = *it_find;
                     insert_item.first--;
                     map_to_remove.insert(insert_item);
                     map_to_remove.erase(it_find);
@@ -481,15 +480,13 @@ public:
         while (it != set_to_listen.end())
         {
             auto index = *it;
+            ++it;
+
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
-                iter_remove->second.first == 0)
-            {
-                ++it;
+                iter_remove->second.steps == 0)
                 continue;
-            }
 
-            ++it;
             state_item const& stored_item = peers[index];
             result.push_back(stored_item.get_address());
         }
@@ -505,15 +502,13 @@ public:
         while (it != set_to_connect.end())
         {
             auto index = *it;
+            ++it;
+
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
-                iter_remove->second.first == 0)
-            {
-                ++it;
+                iter_remove->second.steps == 0)
                 continue;
-            }
 
-            ++it;
             state_item const& stored_item = peers[index];
             result.push_back(stored_item.get_address());
         }
@@ -547,7 +542,7 @@ public:
 
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
-                iter_remove->second.first == 0)
+                iter_remove->second.steps == 0)
                 continue;
 
             if (stored_item.state() == state_item::e_state::active &&
@@ -568,7 +563,7 @@ public:
 
             auto iter_remove = map_to_remove.find(index);
             if (iter_remove != map_to_remove.end() &&
-                iter_remove->second.first == 0)
+                iter_remove->second.steps == 0)
                 continue;
 
             if (stored_item.state() == state_item::e_state::active &&
@@ -611,7 +606,15 @@ public:
     unordered_map<typename T_value::key_type, size_t> map_by_key;
     unordered_set<size_t> set_to_listen;
     unordered_set<size_t> set_to_connect;
-    unordered_map<size_t, pair<size_t, bool>> map_to_remove;
+
+    struct to_remove_info
+    {
+        size_t steps;
+        bool send_drop;
+        bool must_notify;
+    };
+
+    unordered_map<size_t, to_remove_info> map_to_remove;
 };
 
 class p2pstate_ex : public meshpp::p2pstate
@@ -763,27 +766,28 @@ public:
         return attempts;
     }
 
-    bool remove_later(peer_id const& p, size_t step, bool send_drop) override
+    bool remove_later(peer_id const& p, size_t step, bool send_drop, bool must_notify) override
     {
-        return program_state.remove_later(p, step, send_drop);
+        return program_state.remove_later(p, step, send_drop, must_notify);
     }
-    bool remove_later(ip_address const& addr, size_t step, bool send_drop, bool only_if_passive) override
+    bool remove_later(ip_address const& addr, size_t step, bool send_drop, bool only_if_passive, bool must_notify) override
     {
-        return program_state.remove_later(addr, step, send_drop, only_if_passive);
+        return program_state.remove_later(addr, step, send_drop, only_if_passive, must_notify);
     }
     void undo_remove(peer_id const& peerid) override
     {
         program_state.undo_remove(peerid);
     }
 
-    vector<peer_id> remove_pending() override
+    pair<vector<pair<string, bool>>,
+         vector<peer_id>> remove_pending() override
     {
         auto to_remove = program_state.remove_pending();
 
         for (auto const& key_item : to_remove.first)
-            kbucket.erase(Konnection(key_item));
+            kbucket.erase(Konnection(key_item.first));
 
-        return to_remove.second;
+        return to_remove;
     }
 
     vector<string> list_nearest_to(string const& nodeid) override
