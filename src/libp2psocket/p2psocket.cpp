@@ -718,18 +718,6 @@ void p2psocket::send(peer_id const& peer,
         }
         else
         {
-            beltpp::finally guard;
-            if (peer == "TPBQ8bAai4jHRDXeE5yGHJDYzDYGkveifpyq9nEQkj4PvoWrKrSfbK")
-            {
-                if (m_pimpl->plogger &&
-                    false == m_pimpl->plogger->enabled())
-                {
-                    guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
-                    m_pimpl->plogger->enable();
-                }
-
-                m_pimpl->writeln("\tattention: sending " + std::to_string(pack.type()));
-            }
             Other wrapper;
             wrapper.contents = std::move(pack);
             m_pimpl->m_ptr_socket->send(p2p_peerid, beltpp::packet(std::move(wrapper)));
