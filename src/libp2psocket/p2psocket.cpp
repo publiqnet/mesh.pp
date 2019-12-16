@@ -236,7 +236,11 @@ void p2psocket::prepare_wait()
         size_t attempts = state.get_open_attempts(item);
 
         m_pimpl->writeln("connect to " + item.to_string());
-        sk.open(item, attempts);
+        auto open_res = sk.open(item, attempts);
+        for (auto const& open_res_item : open_res)
+        {
+            m_pimpl->writeln("peerid " + open_res_item);
+        }
 
         state.remove_later(item, 30, false, true, false);
 
@@ -298,6 +302,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
         auto current_peer_nodeid = state.get_nodeid(current_peer);
 
+        m_pimpl->writeln("received current_connection, current_peer: " + current_connection.to_string() + ", " + current_peer);
+
         /*beltpp::finally guard([this](){m_pimpl->plogger->disable();});
         if (current_peer_nodeid == "TPBQ7vkv2YrHBYkKd6JmRErxzoXLY7de1ohpTVd3XvMCejRRTwDvzk")
             m_pimpl->plogger->enable();*/
@@ -319,12 +325,13 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
-                m_pimpl->writeln("sending ping with signed message");
-                m_pimpl->writeln(message);
                 auto signed_message = m_pimpl->_secret_key.sign(message);
                 ping_msg.signature = signed_message.base58;
-                m_pimpl->writeln("sending ping");
+
+                m_pimpl->writeln("sending ping with signed message");
+                m_pimpl->writeln(ping_msg.to_string());
                 sk.send(current_peer, beltpp::packet(ping_msg));
+
                 m_pimpl->writeln("remove_later current_peer, 10, true, false: " + current_peer + ", " + current_connection.to_string());
                 state.remove_later(current_peer, 10, true, false);
 
@@ -341,8 +348,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 if (state.remove_later(current_connection, 0, false, true, false))
                 {
-                    current_connection.local.port = state.get_fixed_local_port();
                     m_pimpl->writeln("remove_later current_connection, 0, false: " + current_connection.to_string() + ", " + current_peer);
+
+                    current_connection.local.port = state.get_fixed_local_port();
+
                     m_pimpl->writeln("add_passive current_connection: " + current_connection.to_string());
                     state.add_passive(current_connection);
                 }
@@ -738,7 +747,7 @@ void p2psocket::timer_action()
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
         m_pimpl->writeln("sending ping with signed message");
-        m_pimpl->writeln(message);
+        m_pimpl->writeln(ping_msg.to_string());
         auto signed_message  = m_pimpl->_secret_key.sign(message);
         ping_msg.signature = signed_message.base58;
         sk.send(item, beltpp::packet(ping_msg));
