@@ -427,7 +427,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             external_address_ping.remote = beltpp::ip_destination();
 
             external_address_stored = state.get_external_ip_address();
-            if (state.get_connected_peerids().empty())
+            if (state.contacts_empty())
                 external_address_stored = beltpp::ip_address();
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();

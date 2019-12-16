@@ -679,6 +679,11 @@ public:
             return contact_status::no_contact;
     }
 
+    bool contacts_empty() const override
+    {
+        return kbucket.cend() == kbucket.cbegin();
+    }
+
     void set_active_nodeid(peer_id const& peerid, string const& nodeid) override
     {
         peer_state value;

@@ -35,6 +35,8 @@ public:
     virtual contact_status add_contact(beltpp::socket::peer_id const& peer_id,
                                        std::string const& nodeid) = 0;
 
+    virtual bool contacts_empty() const = 0;
+
     virtual void set_active_nodeid(beltpp::socket::peer_id const& peer_id,
                                    std::string const& nodeid) = 0;
 
