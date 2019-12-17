@@ -79,6 +79,9 @@ public:
                 item.remote = item.local;
                 item.local = beltpp::ip_destination();
             }
+
+            if (false == bind_to_address.local.empty())
+                item.local.port = bind_to_address.local.port;
         }
 
         for (auto const& item : connect_to_addresses)
@@ -344,6 +347,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             }
             else
             {
+                assert(false);
+                throw std::logic_error("code is updated so that all connections must have the same fixed local port from beginning");
                 sk.send(current_peer, beltpp::packet(beltpp::isocket_drop()));
 
                 if (state.remove_later(current_connection, 0, false, true, false))
