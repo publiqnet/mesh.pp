@@ -370,6 +370,7 @@ public:
     boost::filesystem::path dir_path;
     std::unordered_map<std::string, std::string> index;
     std::unordered_map<std::string, std::string> index_to_rollback;
+    std::unordered_set<std::string> keys_with_overlay;
     mutable std::unordered_map<std::string, std::pair<beltpp::packet, ecode>> overlay;
     beltpp::void_unique_ptr ptr_utl;
     ptr_map_loader_internals_impl pimpl;
@@ -471,6 +472,7 @@ public:
         auto it_overlay = data.overlay.find(key);
         if (it_overlay != data.overlay.end() &&
             it_overlay->second.second != internal::deleted)
+            //  already exists in overlay
             return false;
 
         if (it_overlay == data.overlay.end())
@@ -485,9 +487,17 @@ public:
         }
         else
         {
+            //  marked as deleted in overlay
+            assert(it_overlay->second.second == internal::deleted);
+
             it_overlay->second.first.set(value);
             it_overlay->second.second = internal::modified;
         }
+
+        auto insert_res = data.keys_with_overlay.insert(key);
+        assert(insert_res.second == true);
+        if (insert_res.second == false)
+            throw std::logic_error("insert_res.second == false");
 
         return true;
     }
@@ -497,7 +507,7 @@ public:
         auto it_overlay = data.overlay.find(key);
         if (it_overlay != data.overlay.end() &&
             it_overlay->second.second == internal::deleted)
-            //  already erased in overlay
+            //  already marked as deleted in overlay
             return 0;
 
         auto it_index = data.index.find(key);
@@ -512,11 +522,19 @@ public:
         }
         else
         {
+            //  exists in overlay
+            assert(it_overlay->second.second != internal::deleted);
+
             if (it_index == data.index.end())
                 data.overlay.erase(it_overlay);
             else
                 it_overlay->second.second = internal::deleted;
         }
+
+        size_t erased_from_keys_with_overlay = data.keys_with_overlay.erase(key);
+        assert(erased_from_keys_with_overlay == 1);
+        if (erased_from_keys_with_overlay != 1)
+            throw std::logic_error("erased_from_keys_with_overlay != 1");
 
         return 1;
     }
@@ -544,16 +562,28 @@ public:
                 all_keys.insert(item.first);
         }
 
+        assert(all_keys == data.keys_with_overlay);
+        if (all_keys != data.keys_with_overlay)
+            throw std::logic_error("all_keys != data.keys_with_overlay");
+
         return all_keys;
     }
 
     bool contains(std::string const& key) const
     {
+        bool res;
+
         auto it_overlay = data.overlay.find(key);
         if (it_overlay != data.overlay.end())
-            return (it_overlay->second.second != internal::deleted);
+            res = (it_overlay->second.second != internal::deleted);
+        else
+            res = (data.index.count(key) > 0);
 
-        return (data.index.count(key) > 0);
+        bool res_new = (data.keys_with_overlay.count(key) == 1);
+
+        assert(res_new == res);
+        if (res_new != res)
+            throw std::logic_error("res_new != res");
     }
 
     void save()

@@ -918,6 +918,15 @@ public:
 #endif
 };
 
+unordered_set<string> keys(unordered_map<string, string> const& index)
+{
+    unordered_set<string> result;
+    for (auto const& item : index)
+        result.insert(item.first);
+
+    return result;
+}
+
 map_loader_internals::map_loader_internals(string const& name,
                                            boost::filesystem::path const& path,
                                            size_t limit,
@@ -930,6 +939,7 @@ map_loader_internals::map_loader_internals(string const& name,
 #else
     , index(load_index(name, path))
     , index_to_rollback(index)
+    , keys_with_overlay(keys(index))
 #endif
     , overlay()
     , ptr_utl(std::move(ptr_utl))
@@ -1369,6 +1379,7 @@ void map_loader_internals::discard()
         pimpl->ptransaction->rollback();
         pimpl->ptransaction = detail::null_ptr_transaction();
         index = index_to_rollback;
+        keys_with_overlay = keys(index);
     }
     else
     {
