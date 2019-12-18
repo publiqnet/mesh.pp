@@ -584,6 +584,17 @@ public:
         assert(res_new == res);
         if (res_new != res)
             throw std::logic_error("res_new != res");
+
+        return res_new;
+    }
+
+    void clear()
+    {
+        data.overlay.clear();
+        data.keys_with_overlay.clear();
+
+        for (auto const& pair : data.index)
+            data.overlay.insert(std::make_pair(pair.first, std::make_pair(beltpp::packet(), internal::deleted)));
     }
 
     void save()
@@ -795,23 +806,30 @@ public:
 
     void pop_back()
     {
-        size_t length = size();
-
-        if (0 == length)
+        if (0 == data.size_with_overlay)
             throw std::runtime_error(data.name + ": container empty");
 
-        auto it_overlay = data.overlay.find(length - 1);
+        auto it_overlay = data.overlay.find(data.size_with_overlay - 1);
 
         if (it_overlay == data.overlay.end())
-            data.overlay.insert(std::make_pair(length - 1, std::make_pair(beltpp::packet(), internal::deleted)));
+            data.overlay.insert(std::make_pair(data.size_with_overlay - 1, std::make_pair(beltpp::packet(), internal::deleted)));
         else
         {
-            if (data.size <= length - 1)
+            if (data.size <= data.size_with_overlay - 1)
                 data.overlay.erase(it_overlay);
             else
                 it_overlay->second.second = internal::deleted;
         }
         --data.size_with_overlay;
+    }
+
+    void clear()
+    {
+        data.overlay.clear();
+        data.size_with_overlay = 0;
+
+        for (size_t index = 0; index != data.size; ++index)
+            data.overlay.insert(std::make_pair(index, std::make_pair(beltpp::packet(), internal::deleted)));
     }
 
     size_t size() const
