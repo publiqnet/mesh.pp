@@ -136,20 +136,21 @@ p2psocket::p2psocket(p2psocket&&) = default;
 p2psocket::~p2psocket()
 {}
 
-static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_internals> const& pimpl,
-                                         beltpp::ip_address const& item)
+static bool is_configured_address(std::unique_ptr<detail::p2psocket_internals> const& pimpl,
+                                  beltpp::ip_address const& item)
 {
-    bool configured_address = false;
     for (auto const& it : pimpl->connect_to_addresses)
     {
         if (it.remote == item.remote)
-        {
-            configured_address = true;
-            break;
-        }
+            return true;
     }
 
-    if (configured_address)
+    return false;
+}
+static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_internals> const& pimpl,
+                                         beltpp::ip_address const& item)
+{
+    if (is_configured_address(pimpl, item))
     {
         pimpl->writeln("remove_later item, 0, false: " + item.to_string());
         pimpl->m_ptr_state->remove_later(item, 0, false, true, false);
@@ -432,7 +433,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             external_address_ping.remote = beltpp::ip_destination();
 
             external_address_stored = state.get_external_ip_address();
-            if (state.contacts_empty())
+            if (state.contacts_empty() || is_configured_address(m_pimpl, current_connection))
                 external_address_stored = beltpp::ip_address();
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
