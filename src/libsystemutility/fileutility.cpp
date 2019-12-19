@@ -1379,7 +1379,6 @@ void map_loader_internals::discard()
         pimpl->ptransaction->rollback();
         pimpl->ptransaction = detail::null_ptr_transaction();
         index = index_to_rollback;
-        keys_with_overlay = keys(index);
     }
     else
     {
@@ -1390,6 +1389,7 @@ void map_loader_internals::discard()
 #endif
 
     overlay.clear();
+    keys_with_overlay = keys(index);
 }
 
 void map_loader_internals::commit()
