@@ -433,8 +433,11 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             external_address_ping.remote = beltpp::ip_destination();
 
             external_address_stored = state.get_external_ip_address();
+            bool empty_external_address_stored = (external_address_stored.local.empty() &&
+                                                  external_address_stored.remote.empty());
+            bool can_reset_external_address =  false;
             if (state.contacts_empty() || is_configured_address(m_pimpl, current_connection))
-                external_address_stored = beltpp::ip_address();
+                can_reset_external_address = true;
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
 
@@ -454,9 +457,25 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
             }
 
-            if (external_address_stored.local.empty() &&
-                external_address_stored.remote.empty())
+            if (empty_external_address_stored ||
+                can_reset_external_address)
             {
+                if (false == empty_external_address_stored &&
+                    external_address_stored != external_address_ping)
+                {
+                    beltpp::finally guard;
+                    if (m_pimpl->plogger &&
+                        false == m_pimpl->plogger->enabled())
+                    {
+                        guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
+                        m_pimpl->plogger->enable();
+                    }
+                    m_pimpl->writeln("peer working on different route: " + current_connection.to_string());
+                    m_pimpl->writeln("will reset stored external address");
+                    m_pimpl->writeln("stored external address is: " + external_address_stored.to_string());
+                    m_pimpl->writeln("ping external address is: " + external_address_ping.to_string());
+                }
+
                 external_address_stored = external_address_ping;
                 state.set_external_ip_address(external_address_stored);
             }
@@ -470,7 +489,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
                     m_pimpl->plogger->enable();
                 }
-                m_pimpl->writeln("peer working on different route");
+                m_pimpl->writeln("peer working on different route: " + current_connection.to_string());
                 m_pimpl->writeln("stored external address is: " + external_address_stored.to_string());
                 m_pimpl->writeln("ping external address is: " + external_address_ping.to_string());
                 break;
