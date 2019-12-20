@@ -165,6 +165,12 @@ void create_data_directory()
     filesystem::create_directory(data_directory_path());
 }
 
+void reset_data_directory()
+{
+    filesystem::remove_all(data_directory_path());
+    filesystem::create_directory(data_directory_path());
+}
+
 enum class config_data {config, data};
 filesystem::path file_path(vector<string> const& dirs, string const& file, config_data cd)
 {
