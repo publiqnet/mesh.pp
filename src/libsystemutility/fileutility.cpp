@@ -42,6 +42,8 @@ using std::vector;
 using std::unordered_map;
 using std::unordered_set;
 
+//#define CLEAR_ALL_OPTIMIZATION
+
 namespace meshpp
 {
 namespace detail
@@ -265,14 +267,18 @@ public:
     using value_type = T;
 
     block_file_loader(boost::filesystem::path const& path,
-                      vector<T_key> keys,
-                      void* putl = nullptr,
-                      detail::ptr_transaction&& ptransaction_ = detail::null_ptr_transaction())
+                      vector<T_key> const& keys,
+                      void* putl_ = nullptr,
+                      detail::ptr_transaction&& ptransaction_ = detail::null_ptr_transaction(),
+                      bool purpose_clear = false)
         : modified(false)
+#ifdef CLEAR_ALL_OPTIMIZATION
+        , purpose_clear_all(false)
+#endif
         , ptransaction(std::move(ptransaction_))
         , main_path(path)
         , values()
-        , putl(putl)
+        , putl(putl_)
     {
         beltpp::on_failure guard([this, &ptransaction_]()
         {
@@ -345,7 +351,20 @@ public:
             insert_res.first->second.insert({key, false});
         }
 
-        if (contents_exist)
+#ifdef CLEAR_ALL_OPTIMIZATION
+        if (purpose_clear &&
+            keys.size() == markers.size() &&
+            false == load_all)
+            purpose_clear_all = true;
+#else
+        B_UNUSED(purpose_clear);
+#endif
+
+        if (contents_exist
+#ifdef CLEAR_ALL_OPTIMIZATION
+            && false == purpose_clear_all
+#endif
+            )
         for (size_t index = 0; index < markers.size(); ++index)
         {
             auto const& item = markers[index];
@@ -584,7 +603,16 @@ public:
         }
         markers.resize(write_index);
 
-        if (nullptr == ptransaction)
+#ifdef CLEAR_ALL_OPTIMIZATION
+        if (purpose_clear_all)
+            markers.clear();
+#endif
+
+        if (nullptr == ptransaction
+#ifdef CLEAR_ALL_OPTIMIZATION
+            && false == markers.empty()
+#endif
+            )
         {
             boost::system::error_code ec;
             boost::filesystem::copy_file(file_path(),
@@ -641,12 +669,12 @@ public:
         return values.at(key).item;
     }
 private:
-    void check(std::basic_ios<char>& fl,
-               boost::filesystem::path const& path,
-               string const& function,
-               string const& what,
-               string const& where,
-               string const& info) const
+    static void check(std::basic_ios<char>& fl,
+                      boost::filesystem::path const& path,
+                      string const& function,
+                      string const& what,
+                      string const& where,
+                      string const& info)
     {
         auto state_flags = fl.rdstate();
         if (state_flags & std::ios_base::badbit)
@@ -664,6 +692,9 @@ private:
         uint64_t written_size = 0;
         size_t size_when_opened = 0;
 
+#ifdef CLEAR_ALL_OPTIMIZATION
+        if (false == markers.empty())
+#endif
         {
             uint64_t start = 0;
             for (auto const& item : markers)
@@ -688,7 +719,11 @@ private:
             size_when_opened = size_t(fl.tellg());
         }
 
-        if (shift_sum >= size_sum)
+        if (shift_sum >= size_sum
+#ifdef CLEAR_ALL_OPTIMIZATION
+            && shift_sum != 0
+#endif
+            )
         {
             boost::filesystem::fstream fl;
 
@@ -775,7 +810,11 @@ private:
             written_size = start;
         }
 
-        if (written_size < size_when_opened)
+        if (written_size < size_when_opened
+#ifdef CLEAR_ALL_OPTIMIZATION
+            && false == markers.empty()
+#endif
+            )
         {
             boost::system::error_code ec;
             boost::filesystem::resize_file(file_path_tr(), written_size, ec);
@@ -842,6 +881,9 @@ private:
         return file_path_temp;
     }
     bool modified;
+#ifdef CLEAR_ALL_OPTIMIZATION
+    bool purpose_clear_all;
+#endif
     detail::ptr_transaction ptransaction;
     boost::filesystem::path main_path;
     unordered_map<T_key, value> values;
@@ -1202,7 +1244,8 @@ void file_saver_helper(unordered_map<string, vector<value_type>> const& file_nam
                         temp(pthis->dir_path / str_filename,
                              file_keys,
                              pthis->ptr_utl.get(),
-                             std::move(ref_ptransaction));
+                             std::move(ref_ptransaction),
+                             i == e_op_erase);
 
                 //  make sure guard_item will take the transaction back eventually
                 //  in the end of this for step
@@ -1312,6 +1355,12 @@ void map_loader_internals::save()
         {
             if (loaded_keys.end() == loaded_keys.find(key))
             {
+#ifdef CLEAR_ALL_OPTIMIZATION
+                assert(i != e_op_erase);
+                if (i == e_op_erase)
+                    throw std::logic_error("i == e_op_erase");
+#endif
+
                 string str_filename = filename(key, name, limit);
                 Data::StringValue index_item;
                 index_item.value = str_filename;
