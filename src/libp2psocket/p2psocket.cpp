@@ -350,6 +350,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             {
                 assert(false);
                 throw std::logic_error("code is updated so that all connections must have the same fixed local port from beginning");
+                /*
                 sk.send(current_peer, beltpp::packet(beltpp::isocket_drop()));
 
                 if (state.remove_later(current_connection, 0, false, true, false))
@@ -361,6 +362,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     m_pimpl->writeln("add_passive current_connection: " + current_connection.to_string());
                     state.add_passive(current_connection);
                 }
+                */
             }
 
             break;
