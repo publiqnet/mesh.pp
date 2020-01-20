@@ -165,8 +165,11 @@ void cleanup(detail::session_manager_impl<T_session_header>& impl,
              it != item.actions.rend();
              ++it)
         {
-            (*it)->errored = true;
-            it->reset();
+            if ((*it)->initiated)
+            {
+                (*it)->errored = true;
+                it->reset();
+            }
         }
     });
     assert(modified);
@@ -228,6 +231,7 @@ bool session_manager<T_session_header>::add(T_session_header const& header,
             if (previous_completed)
             {
                 action_item->initiate(header_update);
+                action_item->initiated = true;
                 update_last_contacted = true;
                 previous_completed = action_item->completed;
 
@@ -317,6 +321,7 @@ bool session_manager<T_session_header>::process(string const& peerid,
         if (initiate)
         {
             action_item->initiate(header_update);
+            action_item->initiated = true;
             errored = action_item->errored;
 
             if (false == action_item->completed)

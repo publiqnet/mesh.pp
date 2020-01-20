@@ -56,12 +56,19 @@ class SESSIONUTILITYSHARED_EXPORT session_action
 public:
     session_action() = default;
     session_action(session_action const&) = default;
-    virtual ~session_action() {}
+    virtual ~session_action()
+    {
+        if (errored)
+        {
+            assert(initiated);
+        }
+    }
 
     virtual void initiate(T_session_header& header) = 0;
     virtual bool process(beltpp::packet&& package, T_session_header& header) = 0;
     virtual bool permanent() const = 0;
 
+    bool initiated = false;
     bool completed = false;
     bool errored = false;
     size_t expected_next_package_type = size_t(-1);
