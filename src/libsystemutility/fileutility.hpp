@@ -541,51 +541,12 @@ public:
 
     std::unordered_set<std::string> keys() const
     {
-        std::unordered_set<std::string> all_keys;
-
-        for (auto const& item : data.index)
-        {
-            auto insert_res = all_keys.insert(item.first);
-            assert(insert_res.second);
-            B_UNUSED(insert_res);
-        }
-
-        for (auto const& item : data.overlay)
-        {
-            if (item.second.second == internal::deleted)
-            {
-                size_t count = all_keys.erase(item.first);
-                assert(1 == count);
-                B_UNUSED(count);
-            }
-            else
-                all_keys.insert(item.first);
-        }
-
-        assert(all_keys == data.keys_with_overlay);
-        if (all_keys != data.keys_with_overlay)
-            throw std::logic_error("all_keys != data.keys_with_overlay");
-
-        return all_keys;
+        return data.keys_with_overlay;
     }
 
     bool contains(std::string const& key) const
     {
-        bool res;
-
-        auto it_overlay = data.overlay.find(key);
-        if (it_overlay != data.overlay.end())
-            res = (it_overlay->second.second != internal::deleted);
-        else
-            res = (data.index.count(key) > 0);
-
-        bool res_new = (data.keys_with_overlay.count(key) == 1);
-
-        assert(res_new == res);
-        if (res_new != res)
-            throw std::logic_error("res_new != res");
-
-        return res_new;
+        return (data.keys_with_overlay.count(key) == 1);
     }
 
     void clear()
