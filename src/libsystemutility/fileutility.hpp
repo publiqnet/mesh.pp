@@ -570,7 +570,14 @@ public:
 
     void commit()
     {
-        data.commit();
+        try
+        {
+            data.commit();
+        }
+        catch(std::exception const& ex)
+        {
+            throw std::logic_error(std::string("during commit: ") + ex.what());
+        }
     }
 
     map_loader const& as_const() const { return *this; }
@@ -810,7 +817,14 @@ public:
 
     void commit()
     {
-        data.commit();
+        try
+        {
+            data.commit();
+        }
+        catch(std::exception const& ex)
+        {
+            throw std::logic_error(std::string("during commit: ") + ex.what());
+        }
     }
 
     vector_loader const& as_const() const { return *this; }
