@@ -201,7 +201,7 @@ public:
         }
     }
 
-    void discard()
+    void discard() noexcept
     {
         if (ptransaction)
         {
@@ -356,8 +356,8 @@ public:
 
     void load(std::string const& key) const;
     void save();
-    void discard();
-    void commit();
+    void discard() noexcept;
+    void commit() noexcept;
 
     static std::string filename(std::string const& key,
                                 std::string const& name,
@@ -563,21 +563,14 @@ public:
         data.save();
     }
 
-    void discard()
+    void discard() noexcept
     {
         data.discard();
     }
 
-    void commit()
+    void commit() noexcept
     {
-        try
-        {
-            data.commit();
-        }
-        catch(std::exception const& ex)
-        {
-            throw std::logic_error(std::string("during commit: ") + ex.what());
-        }
+        data.commit();
     }
 
     map_loader const& as_const() const { return *this; }
@@ -651,8 +644,8 @@ public:
 
     void load(size_t index) const;
     void save();
-    void discard();
-    void commit();
+    void discard() noexcept;
+    void commit() noexcept;
 
     static std::string filename(size_t index,
                                 std::string const& name,
@@ -810,21 +803,14 @@ public:
         data.save();
     }
 
-    void discard()
+    void discard() noexcept
     {
         data.discard();
     }
 
-    void commit()
+    void commit() noexcept
     {
-        try
-        {
-            data.commit();
-        }
-        catch(std::exception const& ex)
-        {
-            throw std::logic_error(std::string("during commit: ") + ex.what());
-        }
+        data.commit();
     }
 
     vector_loader const& as_const() const { return *this; }

@@ -1416,7 +1416,7 @@ void map_loader_internals::save()
 }
 #endif
 
-void map_loader_internals::discard()
+void map_loader_internals::discard() noexcept
 {
 #ifdef USE_ROCKS_DB
     auto& batch = pimpl->batch;
@@ -1433,7 +1433,7 @@ void map_loader_internals::discard()
     {
         assert(index == index_to_rollback);
         if (index != index_to_rollback)
-            throw std::logic_error("index != index_to_rollback");
+            std::terminate();
     }
 #endif
 
@@ -1441,7 +1441,7 @@ void map_loader_internals::discard()
     keys_with_overlay = keys(index);
 }
 
-void map_loader_internals::commit()
+void map_loader_internals::commit() noexcept
 {
 #ifdef USE_ROCKS_DB
     auto& batch = pimpl->batch;
@@ -1712,7 +1712,7 @@ void vector_loader_internals::save()
     guard.dismiss();
 }
 
-void vector_loader_internals::discard()
+void vector_loader_internals::discard() noexcept
 {
     if (pimpl && pimpl->ptransaction)
     {
@@ -1725,7 +1725,7 @@ void vector_loader_internals::discard()
     size_with_overlay = size;
 }
 
-void vector_loader_internals::commit()
+void vector_loader_internals::commit() noexcept
 {
     if (pimpl && pimpl->ptransaction)
     {
