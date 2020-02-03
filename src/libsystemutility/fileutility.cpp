@@ -226,16 +226,46 @@ class block_file_loader
                 bool res = true;
                 boost::system::error_code ec;
                 if (boost::filesystem::exists(file_path))
+                {
                     res = boost::filesystem::remove(file_path, ec);
-                assert(res);
+                    assert(res);
+
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
                 if (res && boost::filesystem::exists(file_path_tr))
+                {
                     boost::filesystem::rename(file_path_tr, file_path, ec);
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
 
                 if (boost::filesystem::exists(file_path_m))
+                {
                     res = boost::filesystem::remove(file_path_m, ec);
-                assert(res);
+                    assert(res);
+
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
                 if (res && boost::filesystem::exists(file_path_m_tr))
+                {
                     boost::filesystem::rename(file_path_m_tr, file_path_m, ec);
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
             }
         }
 
@@ -247,11 +277,27 @@ class block_file_loader
                 boost::system::error_code ec;
                 bool res = true;
                 if (boost::filesystem::exists(file_path_tr))
+                {
                     res = boost::filesystem::remove(file_path_tr, ec);
-                assert(res);
+                    assert(res);
+
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
                 if (boost::filesystem::exists(file_path_m_tr))
+                {
                     res = boost::filesystem::remove(file_path_m_tr, ec);
-                assert(res);
+                    assert(res);
+
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
                 B_UNUSED(res);
             }
         }
@@ -494,14 +540,23 @@ public:
 
         unordered_set<size_t> erase_indices;
 
+        beltpp::on_failure guard_file_tr;
+
         if (nullptr == ptransaction)
         {
             boost::system::error_code ec;
             if (boost::filesystem::exists(file_path()))
+            {
                 boost::filesystem::copy_file(file_path(),
                                              file_path_tr(),
                                              boost::filesystem::copy_option::overwrite_if_exists,
                                              ec);
+
+                guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
+            }
+
+            if (ec)
+                throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(),boost::filesystem::copy_option::overwrite_if_exists,ec)");
         }
 
         for (auto& value : values)
@@ -547,13 +602,15 @@ public:
 
         {
             boost::filesystem::fstream fl;
-
             fl.open(file_path_tr(), std::ios_base::binary |
                                     std::ios_base::out |
                                     std::ios_base::in);
 
             if (!fl)
                 throw std::runtime_error("save(): unable to open fstream: " + file_path_tr().string());
+
+            guard_file_tr.dismiss();
+            guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
 
             fl.seekg(0, std::ios_base::end);
             check(fl, file_path_tr(), "save", "seekg", "end", string());
@@ -569,6 +626,9 @@ public:
             check(fl, file_path_tr(), "save", "write",
                   std::to_string(start_pos) + "-" + std::to_string(start_pos + bulk_buffer.size()),
                   "opened size: " + std::to_string(size_when_opened));
+
+            fl.close();
+            check(fl, file_path_tr(), "save", "close", "all", string());
         }
 
         compact();
@@ -580,6 +640,9 @@ public:
                                                                                            file_path_tr(),
                                                                                            file_path_marker(),
                                                                                            file_path_marker_tr());
+
+        guard_file_tr.dismiss();
+
         modified = false;
     }
 
@@ -608,7 +671,8 @@ public:
             markers.clear();
 #endif
 
-        if (nullptr == ptransaction
+        if (nullptr == ptransaction &&
+            boost::filesystem::exists(file_path())
 #ifdef CLEAR_ALL_OPTIMIZATION
             && false == markers.empty()
 #endif
@@ -619,6 +683,8 @@ public:
                                          file_path_tr(),
                                          boost::filesystem::copy_option::overwrite_if_exists,
                                          ec);
+            if (ec)
+                throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(), boost::filesystem::copy_option::overwrite_if_exists, ec)");
         }
 
         compact();
@@ -669,21 +735,6 @@ public:
         return values.at(key).item;
     }
 private:
-    static void check(std::basic_ios<char>& fl,
-                      boost::filesystem::path const& path,
-                      string const& function,
-                      string const& what,
-                      string const& where,
-                      string const& info)
-    {
-        auto state_flags = fl.rdstate();
-        if (state_flags & std::ios_base::badbit)
-            throw std::runtime_error(function + "(): badbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? string() : " - " + info));
-        if (state_flags & std::ios_base::eofbit)
-            throw std::runtime_error(function + "(): eofbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? string() : " - " + info));
-        if (state_flags & std::ios_base::failbit)
-            throw std::runtime_error(function + "(): failbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? string() : " - " + info));
-    }
 
     void compact()
     {
@@ -807,6 +858,9 @@ private:
                 start = item.end;
             }
 
+            fl.close();
+            check(fl, file_path_tr(), "compact", "close", "all", string());
+
             written_size = start;
         }
 
@@ -818,16 +872,22 @@ private:
         {
             boost::system::error_code ec;
             boost::filesystem::resize_file(file_path_tr(), written_size, ec);
+            if (ec)
+                throw std::runtime_error(ec.message() + ", " + file_path_tr().string() + ", boost::filesystem::resize_file(file_path_tr(), written_size, ec)");
         }
 
         if (markers.empty())
         {
-            bool res = true;
-            boost::system::error_code ec;
             if (boost::filesystem::exists(file_path_tr()))
+            {
+                bool res = true;
+                boost::system::error_code ec;
                 res = boost::filesystem::remove(file_path_tr(), ec);
-            assert(res);
-            B_UNUSED(res);
+                assert(res);
+                B_UNUSED(res);
+                if (ec)
+                    throw std::runtime_error(ec.message() + ", " + file_path_tr().string() + ", boost::filesystem::remove(file_path_tr(), ec)");
+            }
         }
     }
 
@@ -841,16 +901,17 @@ private:
                 bool res = boost::filesystem::remove(file_path_marker_tr(), ec);
                 assert(res);
                 B_UNUSED(res);
+                if (ec)
+                    throw std::runtime_error(ec.message() + ", " + file_path_marker_tr().string() + ", boost::filesystem::remove(file_path_marker_tr(), ec)");
             }
             return;
         }
 
         boost::filesystem::ofstream ofl;
-
         ofl.open(file_path_marker_tr(), std::ios_base::binary |
                                         std::ios_base::trunc);
         if (!ofl)
-            throw std::runtime_error("save_markers(): cannot open: " + file_path_marker_tr().string());
+            throw std::runtime_error("save_markers(): unable to open fstream: " + file_path_marker_tr().string());
 
         static_assert(sizeof(marker) == 3 * sizeof(uint64_t), "size mismatch");
 

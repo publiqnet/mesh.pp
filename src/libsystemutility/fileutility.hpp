@@ -46,6 +46,7 @@ inline void load_file(boost::filesystem::path const& path,
                       std::istreambuf_iterator<char>& end)
 {
     fl.open(path, std::ios_base::binary);
+#if 0
     if (!fl)
     {
         {
@@ -57,9 +58,34 @@ inline void load_file(boost::filesystem::path const& path,
         }
         fl.open(path, std::ios_base::binary);
     }
+#endif
 
-    end = std::istreambuf_iterator<char>();
-    begin = std::istreambuf_iterator<char>(fl);
+    if (!fl)
+    {
+        end = std::istreambuf_iterator<char>();
+        begin = std::istreambuf_iterator<char>();
+    }
+    else
+    {
+        end = std::istreambuf_iterator<char>();
+        begin = std::istreambuf_iterator<char>(fl);
+    }
+}
+
+inline void check(std::basic_ios<char>& fl,
+                  boost::filesystem::path const& path,
+                  std::string const& function,
+                  std::string const& what,
+                  std::string const& where,
+                  std::string const& info)
+{
+    auto state_flags = fl.rdstate();
+    if (state_flags & std::ios_base::badbit)
+        throw std::runtime_error(function + "(): badbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+    if (state_flags & std::ios_base::eofbit)
+        throw std::runtime_error(function + "(): eofbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
+    if (state_flags & std::ios_base::failbit)
+        throw std::runtime_error(function + "(): failbit, after " + what + " to " + where + " on: " + path.string() + (info.empty() ? std::string() : " - " + info));
 }
 
 template <typename T,
@@ -88,10 +114,27 @@ class file_loader
                 commited = true;
                 bool res = true;
                 boost::system::error_code ec;
-                res = boost::filesystem::remove(file_path, ec);
-                assert(res);
+                if (boost::filesystem::exists(file_path))
+                {
+                    res = boost::filesystem::remove(file_path, ec);
+                    assert(res);
+
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
                 if (res)
+                {
                     boost::filesystem::rename(file_path_tr, file_path, ec);
+                    
+                    if (ec)
+                    {
+                        assert(false);
+                        std::terminate();
+                    }
+                }
             }
         }
 
@@ -104,6 +147,12 @@ class file_loader
                 bool res = boost::filesystem::remove(file_path_tr, ec);
                 assert(res);
                 B_UNUSED(res);
+
+                if (ec)
+                {
+                    assert(false);
+                    std::terminate();
+                }
             }
         }
     private:
@@ -184,11 +233,15 @@ public:
                                      + file_path_tr().string());
 
         fl << ptr->to_string();
+        check(fl, file_path_tr(), "save", "<<", "all", std::string());
+
+        fl.close();
+        check(fl, file_path_tr(), "save", "close", "all", std::string());
 
         if (nullptr == ptransaction)
             ptransaction = beltpp::new_dc_unique_ptr<beltpp::itransaction,
                                                      file_loader::class_transaction>(file_path,
-                                                                                 file_path_tr());
+                                                                                     file_path_tr());
         modified = false;
     }
 
