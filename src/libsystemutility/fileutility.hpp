@@ -165,8 +165,7 @@ public:
     file_loader(boost::filesystem::path const& path,
                 void* putl = nullptr,
                 detail::ptr_transaction&& ptransaction_
-                    = detail::null_ptr_transaction(),
-                bool read = true)
+                    = detail::null_ptr_transaction())
         : modified(false)
         , ptransaction(std::move(ptransaction_))
         , file_path(path)
@@ -192,8 +191,7 @@ public:
         if (begin != end)
         {
             T ob;
-            if (read)
-                ob.from_string(std::string(begin, end), putl);
+            ob.from_string(std::string(begin, end), putl);
             beltpp::assign(*ptr, std::move(ob));
         }
 
@@ -261,6 +259,15 @@ public:
             ptransaction->rollback();
             ptransaction = detail::null_ptr_transaction();
         }
+
+        std::istreambuf_iterator<char> end, begin;
+        boost::filesystem::ifstream fl;
+        load_file(file_path, fl, begin, end);
+
+        T ob;
+        if (begin != end)
+            ob.from_string(std::string(begin, end), putl);
+        beltpp::assign(*ptr, std::move(ob));
 
         modified = false;
     }
