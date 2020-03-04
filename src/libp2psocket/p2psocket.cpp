@@ -491,7 +491,17 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             if (chrono::seconds(-30) > diff ||
                 chrono::seconds(30) <= diff)
             {
-                m_pimpl->writeln("invalid ping timestamp");
+                beltpp::finally guard;
+                if (m_pimpl->plogger &&
+                    false == m_pimpl->plogger->enabled())
+                {
+                    guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
+                    m_pimpl->plogger->enable();
+                }
+
+                m_pimpl->writeln("invalid ping timestamp from: " +
+                                 current_connection.to_string() + ", " +
+                                 msg.nodeid);
                 break;
             }
             m_pimpl->writeln("verifying message");
@@ -505,20 +515,22 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             if (empty_external_address_stored ||
                 can_reset_external_address)
             {
-                if (false == empty_external_address_stored &&
-                    external_address_stored != external_address_ping)
+                beltpp::finally guard;
+                if (m_pimpl->plogger &&
+                    false == m_pimpl->plogger->enabled())
                 {
-                    beltpp::finally guard;
-                    if (m_pimpl->plogger &&
-                        false == m_pimpl->plogger->enabled())
-                    {
-                        guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
-                        m_pimpl->plogger->enable();
-                    }
+                    guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
+                    m_pimpl->plogger->enable();
+                }
+
+                if (empty_external_address_stored)
+                    m_pimpl->writeln("auto-detected public address is: " + external_address_ping.to_string());
+                else if (external_address_stored != external_address_ping)
+                {
                     m_pimpl->writeln("peer working on different route: " + current_connection.to_string());
-                    m_pimpl->writeln("will reset stored external address");
-                    m_pimpl->writeln("stored external address is: " + external_address_stored.to_string());
-                    m_pimpl->writeln("ping external address is: " + external_address_ping.to_string());
+                    m_pimpl->writeln("will reset stored public address");
+                    m_pimpl->writeln("stored public address is: " + external_address_stored.to_string());
+                    m_pimpl->writeln("received ping public address is: " + external_address_ping.to_string());
                 }
 
                 external_address_stored = external_address_ping;
@@ -535,8 +547,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     m_pimpl->plogger->enable();
                 }
                 m_pimpl->writeln("peer working on different route: " + current_connection.to_string());
-                m_pimpl->writeln("stored external address is: " + external_address_stored.to_string());
-                m_pimpl->writeln("ping external address is: " + external_address_ping.to_string());
+                m_pimpl->writeln("stored public address is: " + external_address_stored.to_string());
+                m_pimpl->writeln("received ping public address is: " + external_address_ping.to_string());
                 break;
             }
 
