@@ -42,7 +42,7 @@ using std::vector;
 using std::unordered_map;
 using std::unordered_set;
 
-//#define CLEAR_ALL_OPTIMIZATION
+#define CLEAR_ALL_OPTIMIZATION
 
 namespace meshpp
 {

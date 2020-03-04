@@ -40,7 +40,8 @@ public:
               std::vector<beltpp::ip_address> const& connect_to_addresses,
               beltpp::void_unique_ptr&& putl,
               beltpp::ilog* plogger,
-              meshpp::private_key const& sk);
+              meshpp::private_key const& sk,
+              bool discovery_server);
     p2psocket(p2psocket&& other);
     ~p2psocket() override;
 
@@ -69,7 +70,8 @@ p2psocket getp2psocket(beltpp::event_handler& eh,
                        std::vector<beltpp::ip_address> const& connect_to_addresses,
                        beltpp::void_unique_ptr&& putl,
                        beltpp::ilog* plogger,
-                       meshpp::private_key const& sk)
+                       meshpp::private_key const& sk,
+                       bool discovery_server)
 {
     return
     p2psocket(eh,
@@ -77,7 +79,8 @@ p2psocket getp2psocket(beltpp::event_handler& eh,
               connect_to_addresses,
               std::move(putl),
               plogger,
-              sk);
+              sk,
+              discovery_server);
 }
 
 }

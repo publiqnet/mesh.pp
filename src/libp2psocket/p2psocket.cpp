@@ -34,6 +34,36 @@ using sf = beltpp::socket_family_t<&message_list_load>;
 namespace meshpp
 {
 
+std::vector<ip_address> init_bind_to_address(bool discovery_server,
+                                             ip_address const& bind_to_address,
+                                             std::vector<ip_address> const& connect_to_addresses)
+{
+    std::vector<ip_address> result;
+
+    if (false == discovery_server)
+    {
+        result = connect_to_addresses;
+
+        for (auto& item : result)
+        {
+            if (item.local.empty() && item.remote.empty())
+                throw std::runtime_error("incorrect connect configuration");
+
+            if (false == item.local.empty() &&
+                item.remote.empty())
+            {
+                item.remote = item.local;
+                item.local = beltpp::ip_destination();
+            }
+
+            if (false == bind_to_address.local.empty())
+                item.local.port = bind_to_address.local.port;
+        }
+    }
+
+    return result;
+}
+
 namespace detail
 {
 class p2psocket_internals
@@ -44,13 +74,15 @@ public:
                         std::vector<ip_address> const& connect_to_addresses_,
                         beltpp::void_unique_ptr&& putl,
                         beltpp::ilog* _plogger,
-                        meshpp::private_key const& sk)
-        : m_ptr_socket(new beltpp::socket(
+                        meshpp::private_key const& sk,
+                        bool discovery_server_)
+        : discovery_server(discovery_server_)
+        , m_ptr_socket(new beltpp::socket(
             beltpp::getsocket<sf>(eh, socket::option_reuse_port, std::move(putl))
                                           ))
         , m_ptr_state(getp2pstate(sk.get_public_key()))
         , plogger(_plogger)
-        , connect_to_addresses(connect_to_addresses_)
+        , connect_to_addresses(init_bind_to_address(discovery_server, bind_to_address, connect_to_addresses_))
         , receive_attempt_count(0)
         , _secret_key(sk)
         , m_configured_connect_timer()
@@ -68,21 +100,6 @@ public:
             ip_address address(bind_to_address.local, bind_to_address.ip_type);
             state.add_passive(address);
         }
-        for (auto& item : connect_to_addresses)
-        {
-            if (item.local.empty() && item.remote.empty())
-                throw std::runtime_error("incorrect connect configuration");
-
-            if (false == item.local.empty() &&
-                item.remote.empty())
-            {
-                item.remote = item.local;
-                item.local = beltpp::ip_destination();
-            }
-
-            if (false == bind_to_address.local.empty())
-                item.local.port = bind_to_address.local.port;
-        }
 
         for (auto const& item : connect_to_addresses)
             state.add_passive(item);
@@ -97,11 +114,13 @@ public:
             plogger->message(value);
     }
 
+    bool discovery_server;
     unique_ptr<beltpp::socket> m_ptr_socket;
     meshpp::p2pstate_ptr m_ptr_state;
 
     beltpp::ilog* plogger;
-    std::vector<ip_address> connect_to_addresses;
+    std::vector<ip_address> const connect_to_addresses;
+    ip_address the_first_connect_to_address_from_socket;
     size_t receive_attempt_count;
     meshpp::private_key _secret_key;
     beltpp::timer m_configured_connect_timer;
@@ -118,14 +137,16 @@ p2psocket::p2psocket(beltpp::event_handler& eh,
                      std::vector<ip_address> const& connect_to_addresses,
                      beltpp::void_unique_ptr&& putl,
                      beltpp::ilog* plogger,
-                     meshpp::private_key const& sk)
+                     meshpp::private_key const& sk,
+                     bool discovery_server)
     : isocket(eh)
     , m_pimpl(new detail::p2psocket_internals(eh,
                                               bind_to_address,
                                               connect_to_addresses,
                                               std::move(putl),
                                               plogger,
-                                              sk))
+                                              sk,
+                                              discovery_server))
 {
 
 }
@@ -147,6 +168,25 @@ static bool is_configured_address(std::unique_ptr<detail::p2psocket_internals> c
 
     return false;
 }
+
+static bool is_the_first_configured_address(std::unique_ptr<detail::p2psocket_internals>& pimpl,
+                                            ip_address const& peer_connection,
+                                            ip_address const& item)
+{
+    if (false == pimpl->the_first_connect_to_address_from_socket.remote.empty() &&
+        pimpl->the_first_connect_to_address_from_socket == item)
+        return true;
+
+    if (false == pimpl->connect_to_addresses.empty() &&
+        pimpl->connect_to_addresses.front().remote == item.remote)
+    {
+        pimpl->the_first_connect_to_address_from_socket = peer_connection;
+        return true;
+    }
+
+    return false;
+}
+
 static void remove_if_configured_address(std::unique_ptr<detail::p2psocket_internals> const& pimpl,
                                          beltpp::ip_address const& item)
 {
@@ -324,8 +364,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Ping ping_msg;
 
-                ip_address address = sk.info_connection(current_peer);
-                beltpp::assign(ping_msg.connection_info, address);
+                ip_address peer_connection = sk.info_connection(current_peer);
+                beltpp::assign(ping_msg.connection_info, peer_connection);
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
@@ -434,11 +474,14 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             external_address_ping.local = external_address_ping.remote;
             external_address_ping.remote = beltpp::ip_destination();
 
+            ip_address peer_connection = sk.info_connection(current_peer);
+
             external_address_stored = state.get_external_ip_address();
             bool empty_external_address_stored = (external_address_stored.local.empty() &&
                                                   external_address_stored.remote.empty());
-            bool can_reset_external_address =  false;
-            if (state.contacts_empty() || is_configured_address(m_pimpl, current_connection))
+            bool can_reset_external_address = false;
+            if (state.contacts_empty() ||
+                is_the_first_configured_address(m_pimpl, peer_connection, current_connection))
                 can_reset_external_address = true;
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
@@ -633,8 +676,11 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             assign(connect_to, std::move(msg.addr));
             connect_to.local = current_connection.local;
 
-            m_pimpl->writeln("add_passive connect_to, 1000: " + connect_to.to_string());
-            state.add_passive(connect_to, 1000);
+            if (false == m_pimpl->discovery_server)
+            {
+                m_pimpl->writeln("add_passive connect_to, 1000: " + connect_to.to_string());
+                state.add_passive(connect_to, 1000);
+            }
 
             break;
         }
@@ -768,8 +814,8 @@ void p2psocket::timer_action()
     {
         Ping ping_msg;
 
-        ip_address address = sk.info_connection(item);
-        beltpp::assign(ping_msg.connection_info, address);
+        ip_address peer_connection = sk.info_connection(item);
+        beltpp::assign(ping_msg.connection_info, peer_connection);
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
