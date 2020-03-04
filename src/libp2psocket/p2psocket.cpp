@@ -364,8 +364,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 Ping ping_msg;
 
-                ip_address peer_connection = sk.info_connection(current_peer);
-                beltpp::assign(ping_msg.connection_info, peer_connection);
+                beltpp::assign(ping_msg.connection_info, current_connection);
                 ping_msg.nodeid = state.name();
                 ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
                 string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
@@ -826,8 +825,8 @@ void p2psocket::timer_action()
     {
         Ping ping_msg;
 
-        ip_address peer_connection = sk.info_connection(item);
-        beltpp::assign(ping_msg.connection_info, peer_connection);
+        ip_address current_connection = sk.info(item);
+        beltpp::assign(ping_msg.connection_info, current_connection);
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
