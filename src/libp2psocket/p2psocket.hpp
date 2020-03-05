@@ -15,6 +15,7 @@
 #include <list>
 #include <vector>
 #include <chrono>
+#include <unordered_set>
 
 namespace meshpp
 {
@@ -83,5 +84,7 @@ p2psocket getp2psocket(beltpp::event_handler& eh,
               discovery_server);
 }
 
+P2PSOCKETSHARED_EXPORT
+std::vector<std::unordered_set<std::string>> peers_distance(std::string const& nodeid, std::unordered_set<std::string> const& all_peers);
 }
 

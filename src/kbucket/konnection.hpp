@@ -101,7 +101,7 @@ private:
     value_type _val;
 };
 
-std::ostream& operator<<(std::ostream& o, string_distance const &r) { return o<<r._val; }
+inline std::ostream& operator<<(std::ostream& o, string_distance const &r) { return o<<r._val; }
 
 struct Konnection : details::Kontakt<std::string, string_distance>
 {

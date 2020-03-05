@@ -1,4 +1,6 @@
 #include "p2psocket.hpp"
+#include <kbucket/konnection.hpp>
+#include <kbucket/kbucket.hpp>
 #include "p2pstate.hpp"
 #include "message.hpp"
 
@@ -8,11 +10,7 @@
 #include <belt.pp/timer.hpp>
 
 #include <exception>
-#include <string>
-#include <memory>
-#include <chrono>
 #include <thread>
-#include <unordered_set>
 
 using namespace P2PMessage;
 
@@ -863,6 +861,27 @@ beltpp::ip_address p2psocket::info_connection(peer_id const& peer) const
 beltpp::ievent_item const& p2psocket::worker() const
 {
     return *m_pimpl->m_ptr_socket.get();
+}
+
+vector<unordered_set<string>> peers_distance(string const& nodeid, unordered_set<string> const& all_peers)
+{
+    vector<unordered_set<string>> result;
+
+    // init slots
+    for (auto i = 0; i < 20; ++i)
+        result.push_back(unordered_set<string>());
+    
+    // fill peers
+    for (auto const& peer : all_peers)
+    {
+        auto const & distance = contact_actions<Konnection>::distance(nodeid, peer);
+        auto const & index = contact_actions<Konnection>::index_from_distance(distance);
+        
+        if(index < 20)
+            result[index].insert(peer);
+    };
+
+    return result;
 }
 }
 
