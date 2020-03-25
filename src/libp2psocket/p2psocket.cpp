@@ -67,7 +67,7 @@ namespace detail
 class p2psocket_internals
 {
 public:
-    p2psocket_internals(beltpp::event_handler& eh,
+    p2psocket_internals(beltpp::ievent_handler& eh,
                         ip_address const& bind_to_address,
                         std::vector<ip_address> const& connect_to_addresses_,
                         beltpp::void_unique_ptr&& putl,
