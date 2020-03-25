@@ -75,9 +75,7 @@ public:
                         meshpp::private_key const& sk,
                         bool discovery_server_)
         : discovery_server(discovery_server_)
-        , m_ptr_socket(new beltpp::socket(
-            beltpp::getsocket<sf>(eh, socket::option_reuse_port, std::move(putl))
-                                          ))
+        , m_ptr_socket(beltpp::getsocket<sf>(eh, beltpp::libsocket::option_reuse_port, std::move(putl)))
         , m_ptr_state(getp2pstate(sk.get_public_key()))
         , plogger(_plogger)
         , connect_to_addresses(init_bind_to_address(discovery_server, bind_to_address, connect_to_addresses_))
@@ -137,7 +135,7 @@ p2psocket::p2psocket(beltpp::event_handler& eh,
                      beltpp::ilog* plogger,
                      meshpp::private_key const& sk,
                      bool discovery_server)
-    : isocket(eh)
+    : stream(eh)
     , m_pimpl(new detail::p2psocket_internals(eh,
                                               bind_to_address,
                                               connect_to_addresses,
@@ -209,7 +207,7 @@ void p2psocket::prepare_wait()
     for (auto const& remove_sk : to_remove.second)
     {
         m_pimpl->writeln("sending drop");
-        sk.send(remove_sk, beltpp::packet(beltpp::isocket_drop()));
+        sk.send(remove_sk, beltpp::packet(beltpp::stream_drop()));
     }
 
     auto to_listen = state.get_to_listen();
@@ -316,7 +314,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
         peer = *it_begin;
         m_pimpl->notify_removed_peers.erase(it_begin);
 
-        return_packets.emplace_back(beltpp::isocket_drop());
+        return_packets.emplace_back(beltpp::stream_drop());
         return return_packets;
     }
 
@@ -332,9 +330,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
     for (auto& received_packet : received_packets)
     {
-        if (beltpp::isocket_drop::rtt != received_packet.type() &&
-            beltpp::isocket_open_error::rtt != received_packet.type() &&
-            beltpp::isocket_open_refused::rtt != received_packet.type())
+        if (beltpp::stream_drop::rtt != received_packet.type() &&
+            beltpp::socket_open_error::rtt != received_packet.type() &&
+            beltpp::socket_open_refused::rtt != received_packet.type())
         {
             assert(false == current_peer.empty());
             try {
@@ -352,7 +350,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
         switch (received_packet.type())
         {
-        case beltpp::isocket_join::rtt:
+        case beltpp::stream_join::rtt:
         {
             if (0 == state.get_fixed_local_port() ||
                 current_connection.local.port == state.get_fixed_local_port())
@@ -404,9 +402,9 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             break;
         }
-        case beltpp::isocket_protocol_error::rtt:
+        case beltpp::stream_protocol_error::rtt:
         {
-            beltpp::isocket_protocol_error msg;
+            beltpp::stream_protocol_error msg;
             std::move(received_packet).get(msg);
 
             m_pimpl->writeln("got error from bad guy " + current_connection.to_string());
@@ -422,10 +420,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 return_packets.emplace_back(std::move(msg));
             break;
         }
-        case beltpp::isocket_open_refused::rtt:
+        case beltpp::socket_open_refused::rtt:
         {
             //  may change some logic later
-            beltpp::isocket_open_refused msg;
+            beltpp::socket_open_refused msg;
             std::move(received_packet).get(msg);
             peer = "p2p: " + current_peer;
             auto msg_address = msg.address;
@@ -434,10 +432,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             remove_if_configured_address(m_pimpl, msg_address);
             break;
         }
-        case beltpp::isocket_open_error::rtt:
+        case beltpp::socket_open_error::rtt:
         {
             //  may change some logic later
-            beltpp::isocket_open_error msg;
+            beltpp::socket_open_error msg;
             std::move(received_packet).get(msg);
             peer = "p2p: " + current_peer;
             auto msg_address = msg.address;
@@ -446,7 +444,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             remove_if_configured_address(m_pimpl, msg_address);
             break;
         }
-        case beltpp::isocket_drop::rtt:
+        case beltpp::stream_drop::rtt:
         {
             m_pimpl->writeln("dropped " + current_peer);
             m_pimpl->writeln("remove_later current_peer, 0, true: " +
@@ -456,7 +454,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             peer = current_peer_nodeid;
             if (false == current_peer_nodeid.empty())
-                return_packets.emplace_back(beltpp::isocket_drop());
+                return_packets.emplace_back(beltpp::stream_drop());
 
             break;
         }
@@ -577,7 +575,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     p2pstate::contact_status::new_contact == status)
                 {
                     peer = msg.nodeid;
-                    return_packets.emplace_back(beltpp::isocket_join());
+                    return_packets.emplace_back(beltpp::stream_join());
                 }
             }
             else
@@ -793,7 +791,7 @@ void p2psocket::send(peer_id const& peer,
 
     if (state.get_peer_id(peer, p2p_peerid))
     {
-        if (pack.type() == beltpp::isocket_drop::rtt)
+        if (pack.type() == beltpp::stream_drop::rtt)
         {
             m_pimpl->writeln("remove_later p2p_peerid, 0, true: " + p2p_peerid);
             state.remove_later(p2p_peerid, 0, true, false);

@@ -28,13 +28,13 @@ namespace detail
     using fptr_creator_str = beltpp::void_unique_ptr(*)(std::string const&);
 }
 
-class P2PSOCKETSHARED_EXPORT p2psocket : public beltpp::isocket
+class P2PSOCKETSHARED_EXPORT p2psocket : public beltpp::stream
 {
 public:
-    using peer_id = beltpp::isocket::peer_id;
+    using peer_id = beltpp::stream::peer_id;
     using peer_ids = std::list<peer_id>;
     using packet = beltpp::packet;
-    using packets = beltpp::isocket::packets;
+    using packets = beltpp::stream::packets;
 
     p2psocket(beltpp::event_handler& eh,
               beltpp::ip_address const& bind_to_address,

@@ -29,7 +29,8 @@ int main(int argc, char* argv[])
     try
     {
         beltpp::event_handler eh;
-        beltpp::socket sk = beltpp::getsocket<sf>(eh);
+        beltpp::socket_ptr ptr_sk = beltpp::getsocket<sf>(eh);
+        beltpp::socket& sk = *ptr_sk;
         //eh.set_timer(std::chrono::seconds(10));
 
         ip_address addr("127.0.0.1", 5555);
@@ -54,17 +55,17 @@ int main(int argc, char* argv[])
                     {
                         switch (received_packet.type())
                         {
-                        case beltpp::isocket_join::rtt:
+                        case beltpp::stream_join::rtt:
                         {
                             cout << "peer " << peer << " joined" << endl;
                             break;
                         }
-                        case beltpp::isocket_drop::rtt:
+                        case beltpp::stream_drop::rtt:
                             cout << "peer " << peer << " dropped" << endl;
                             break;
-                        case beltpp::isocket_protocol_error::rtt:
+                        case beltpp::stream_protocol_error::rtt:
                         {
-                            beltpp::isocket_protocol_error msg;
+                            beltpp::stream_protocol_error msg;
                             received_packet.get(msg);
                             cout << "error from peer " << peer << endl;
                             cout << msg.buffer << endl;
@@ -158,20 +159,20 @@ int main(int argc, char* argv[])
                 assert(received_packets.size() == 1);
                 auto& packet = received_packets.front();
 
-                if (packet.type() == beltpp::isocket_join::rtt)
+                if (packet.type() == beltpp::stream_join::rtt)
                 {
                     cout << "joined: " << peer << endl;
-                    sk.send(peer, beltpp::packet(beltpp::isocket_drop()));
+                    sk.send(peer, beltpp::packet(beltpp::stream_drop()));
                 }
-                else if (packet.type() == beltpp::isocket_open_refused::rtt)
+                else if (packet.type() == beltpp::socket_open_refused::rtt)
                 {
-                    beltpp::isocket_open_refused msg;
+                    beltpp::socket_open_refused msg;
                     packet.get(msg);
                     cout << "open refused: " << peer << ": " << msg.reason << endl;
                 }
-                else if (packet.type() == beltpp::isocket_open_error::rtt)
+                else if (packet.type() == beltpp::socket_open_error::rtt)
                 {
-                    beltpp::isocket_open_error msg;
+                    beltpp::socket_open_error msg;
                     packet.get(msg);
                     cout << "open error: " << peer << ": " << msg.reason << endl;
                 }
