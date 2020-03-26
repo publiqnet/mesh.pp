@@ -4,11 +4,11 @@
 
 #include <libcryptoutility/cryptoutility.hpp>
 
+#include <belt.pp/ievent.hpp>
 #include <belt.pp/isocket.hpp>
 #include <belt.pp/packet.hpp>
 #include <belt.pp/message_global.hpp>
 #include <belt.pp/ilog.hpp>
-#include <belt.pp/event.hpp>
 
 #include <memory>
 #include <string>
@@ -59,7 +59,7 @@ public:
     beltpp::ip_address external_address() const;
     beltpp::ip_address info_connection(peer_id const& peer) const;
 
-    beltpp::ievent_item const& worker() const;
+    beltpp::event_item const& worker() const;
 
 private:
     std::unique_ptr<detail::p2psocket_internals> m_pimpl;

@@ -1,8 +1,8 @@
 #include "message.hpp"
 
 #include <belt.pp/packet.hpp>
+#include <belt.pp/ievent.hpp>
 #include <belt.pp/socket.hpp>
-#include <belt.pp/event.hpp>
 
 #include <iostream>
 #include <unordered_set>
@@ -28,8 +28,8 @@ int main(int argc, char* argv[])
 {
     try
     {
-        beltpp::event_handler eh;
-        beltpp::socket_ptr ptr_sk = beltpp::getsocket<sf>(eh);
+        beltpp::event_handler_ptr eh = beltpp::libsocket::construct_event_handler();
+        beltpp::socket_ptr ptr_sk = beltpp::libsocket::getsocket<sf>(*eh);
         beltpp::socket& sk = *ptr_sk;
         //eh.set_timer(std::chrono::seconds(10));
 
@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
         addr.ip_type = ip_address::e_type::ipv4;
 
 
-        unordered_set<beltpp::ievent_item const*> set;
+        unordered_set<beltpp::event_item const*> set;
 
         if (argc == 1)
         {
@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
             {
                 try
                 {
-                    eh.wait(set);
+                    eh->wait(set);
 
                     peer_id peer;
                     packets received_packets = sk.receive(peer);
@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
             peer_id connected_peer;
             while (true)
             {
-                eh.wait(set);
+                eh->wait(set);
                 peer_id peer;
                 packets received_packets = sk.receive(peer);
 
@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
 
             while (true)
             {
-                eh.wait(set);
+                eh->wait(set);
                 peer_id peer;
                 packets received_packets = sk.receive(peer);
                 if (received_packets.empty())

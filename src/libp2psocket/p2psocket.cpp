@@ -67,7 +67,7 @@ namespace detail
 class p2psocket_internals
 {
 public:
-    p2psocket_internals(beltpp::ievent_handler& eh,
+    p2psocket_internals(beltpp::event_handler& eh,
                         ip_address const& bind_to_address,
                         std::vector<ip_address> const& connect_to_addresses_,
                         beltpp::void_unique_ptr&& putl,
@@ -75,7 +75,7 @@ public:
                         meshpp::private_key const& sk,
                         bool discovery_server_)
         : discovery_server(discovery_server_)
-        , m_ptr_socket(beltpp::getsocket<sf>(eh, beltpp::libsocket::option_reuse_port, std::move(putl)))
+        , m_ptr_socket(beltpp::libsocket::getsocket<sf>(eh, beltpp::libsocket::option_reuse_port, std::move(putl)))
         , m_ptr_state(getp2pstate(sk.get_public_key()))
         , plogger(_plogger)
         , connect_to_addresses(init_bind_to_address(discovery_server, bind_to_address, connect_to_addresses_))
@@ -856,7 +856,7 @@ beltpp::ip_address p2psocket::info_connection(peer_id const& peer) const
         throw std::runtime_error("no such node: " + peer);
 }
 
-beltpp::ievent_item const& p2psocket::worker() const
+beltpp::event_item const& p2psocket::worker() const
 {
     return *m_pimpl->m_ptr_socket.get();
 }
