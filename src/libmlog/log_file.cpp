@@ -101,6 +101,7 @@ public:
 
 beltpp::ilog_ptr file_logger(string const& name, filesystem::path const& fname)
 {
-    return beltpp::new_dc_unique_ptr<beltpp::ilog, log_file>(name, fname);
+    log_file* p = new log_file(name, fname);
+    return beltpp::ilog_ptr(p);
 }
 }
