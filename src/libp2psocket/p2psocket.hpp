@@ -42,7 +42,8 @@ public:
               beltpp::void_unique_ptr&& putl,
               beltpp::ilog* plogger,
               meshpp::private_key const& sk,
-              bool discovery_server);
+              bool discovery_server,
+              std::unique_ptr<beltpp::socket>&& inject_socket);
     p2psocket(p2psocket&& other);
     ~p2psocket() override;
 
@@ -72,7 +73,8 @@ p2psocket getp2psocket(beltpp::event_handler& eh,
                        beltpp::void_unique_ptr&& putl,
                        beltpp::ilog* plogger,
                        meshpp::private_key const& sk,
-                       bool discovery_server)
+                       bool discovery_server,
+                       std::unique_ptr<beltpp::socket>&& inject_socket)
 {
     return
     p2psocket(eh,
@@ -81,7 +83,8 @@ p2psocket getp2psocket(beltpp::event_handler& eh,
               std::move(putl),
               plogger,
               sk,
-              discovery_server);
+              discovery_server,
+              std::move(inject_socket));
 }
 
 P2PSOCKETSHARED_EXPORT

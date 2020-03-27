@@ -17,6 +17,7 @@ using namespace P2PMessage;
 using beltpp::ip_address;
 using beltpp::ip_destination;
 using beltpp::socket;
+using beltpp::t_unique_ptr;
 using peer_id = socket::peer_id;
 
 namespace chrono = std::chrono;
@@ -73,9 +74,12 @@ public:
                         beltpp::void_unique_ptr&& putl,
                         beltpp::ilog* _plogger,
                         meshpp::private_key const& sk,
-                        bool discovery_server_)
+                        bool discovery_server_,
+                        unique_ptr<socket>&& inject_socket)
         : discovery_server(discovery_server_)
-        , m_ptr_socket(beltpp::libsocket::getsocket<sf>(eh, beltpp::libsocket::option_reuse_port, std::move(putl)))
+        , m_ptr_socket(nullptr == inject_socket ?
+                           beltpp::take_unique_ptr(beltpp::libsocket::getsocket<sf>(eh, beltpp::libsocket::option_reuse_port, std::move(putl))) :
+                           beltpp::take_unique_ptr(std::move(inject_socket)) )
         , m_ptr_state(getp2pstate(sk.get_public_key()))
         , plogger(_plogger)
         , connect_to_addresses(init_bind_to_address(discovery_server, bind_to_address, connect_to_addresses_))
@@ -111,7 +115,7 @@ public:
     }
 
     bool discovery_server;
-    unique_ptr<beltpp::socket> m_ptr_socket;
+    t_unique_ptr<socket> m_ptr_socket;
     meshpp::p2pstate_ptr m_ptr_state;
 
     beltpp::ilog* plogger;
@@ -134,7 +138,8 @@ p2psocket::p2psocket(beltpp::event_handler& eh,
                      beltpp::void_unique_ptr&& putl,
                      beltpp::ilog* plogger,
                      meshpp::private_key const& sk,
-                     bool discovery_server)
+                     bool discovery_server,
+                     unique_ptr<socket>&& inject_socket)
     : stream(eh)
     , m_pimpl(new detail::p2psocket_internals(eh,
                                               bind_to_address,
@@ -142,7 +147,8 @@ p2psocket::p2psocket(beltpp::event_handler& eh,
                                               std::move(putl),
                                               plogger,
                                               sk,
-                                              discovery_server))
+                                              discovery_server,
+                                              std::move(inject_socket)))
 {
 
 }
