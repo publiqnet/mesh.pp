@@ -51,10 +51,9 @@ target_link_libraries(systemutility
         mesh.pp
         belt.pp
         packet
+        utility
         Boost::system
         Boost::filesystem
-    PRIVATE
-        utility
     )
 
 if(NOT WIN32 AND NOT APPLE)
