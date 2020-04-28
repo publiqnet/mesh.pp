@@ -47,14 +47,6 @@ template <>
 class session_container<nodeid_session_header>
 {
 public:
-    struct by_address
-    {
-        inline static std::string extract(session<nodeid_session_header> const& ob)
-        {
-            return ob.header.address.to_string();
-        }
-    };
-
     struct by_peer_id
     {
         inline static std::string extract(session<nodeid_session_header> const& ob)
@@ -83,8 +75,6 @@ public:
     boost::multi_index::indexed_by<
         boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_peer_id>,
             boost::multi_index::global_fun<session<nodeid_session_header> const&, std::string, &by_peer_id::extract>>,
-        boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_address>,
-            boost::multi_index::global_fun<session<nodeid_session_header> const&, std::string, &by_address::extract>>,
         boost::multi_index::hashed_unique<boost::multi_index::tag<struct by_nodeid>,
             boost::multi_index::global_fun<session<nodeid_session_header> const&, std::string, &by_nodeid::extract>>,
         boost::multi_index::ordered_non_unique<boost::multi_index::tag<struct by_wait_for_contact>,

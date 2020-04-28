@@ -24,8 +24,8 @@ public:
     bool operator == (nodeid_session_header const& other) const
     {
         return address == other.address &&
-                peerid == other.peerid &&
-                nodeid == other.nodeid;
+               peerid == other.peerid &&
+               nodeid == other.nodeid;
     }
 
     bool operator != (nodeid_session_header const& other) const
