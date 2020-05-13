@@ -13,12 +13,15 @@
 #include <cryptopp/sha.h>
 #include <cryptopp/base64.h>
 #include <cryptopp/dsa.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/modes.h>
 
 #include <string>
 #include <cassert>
 #include <vector>
 #include <exception>
 #include <random>
+#include <cstring>
 
 using std::string;
 using std::vector;
@@ -327,6 +330,48 @@ string from_base58(string const& data)
 {
     auto vec = detail::from_base58(data);
     return string(vec.begin(), vec.end());
+}
+
+string aes_encrypt(string const& key, string const& plaintext)
+{
+    // DEFAULT_KEYLENGTH=16 bytes, that is 128 bit AES key
+    CryptoPP::byte aes_key[CryptoPP::AES::DEFAULT_KEYLENGTH];
+    CryptoPP::byte iv[CryptoPP::AES::BLOCKSIZE];
+    memset(aes_key, 0x00, CryptoPP::AES::DEFAULT_KEYLENGTH);
+    memcpy(aes_key, key.c_str(), std::min(uint64_t(key.length()), uint64_t(CryptoPP::AES::DEFAULT_KEYLENGTH)));
+    memset(iv, 0x00, CryptoPP::AES::BLOCKSIZE);
+
+    string ciphertext;
+
+    CryptoPP::AES::Encryption aesEncryption(aes_key, CryptoPP::AES::DEFAULT_KEYLENGTH);
+    CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(aesEncryption, iv);
+
+    CryptoPP::StreamTransformationFilter stfEncryptor(cbcEncryption, new CryptoPP::StringSink(ciphertext));
+    stfEncryptor.Put(reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.length());
+    stfEncryptor.MessageEnd();
+
+    return ciphertext;
+}
+
+string aes_decrypt(string const& key, string const& ciphertext)
+{
+    // DEFAULT_KEYLENGTH=16 bytes, that is 128 bit AES key
+    CryptoPP::byte aes_key[CryptoPP::AES::DEFAULT_KEYLENGTH];
+    CryptoPP::byte iv[CryptoPP::AES::BLOCKSIZE];
+    memset(aes_key, 0x00, CryptoPP::AES::DEFAULT_KEYLENGTH);
+    memcpy(aes_key, key.c_str(), std::min(uint64_t(key.length()), uint64_t(CryptoPP::AES::DEFAULT_KEYLENGTH)));
+    memset(iv, 0x00, CryptoPP::AES::BLOCKSIZE);
+
+    string decryptedtext;
+
+    CryptoPP::AES::Decryption aesDecryption(aes_key, CryptoPP::AES::DEFAULT_KEYLENGTH);
+    CryptoPP::CBC_Mode_ExternalCipher::Decryption cbcDecryption(aesDecryption, iv);
+
+    CryptoPP::StreamTransformationFilter stfDecryptor(cbcDecryption, new CryptoPP::StringSink(decryptedtext));
+    stfDecryptor.Put(reinterpret_cast<const unsigned char*>(ciphertext.c_str()), ciphertext.size());
+    stfDecryptor.MessageEnd();
+
+    return decryptedtext;
 }
 
 uint64_t distance(string const& hash58_first, string const& hash58_second)
