@@ -880,7 +880,7 @@ public:
     string bucket_dump() override
     {
         std::stringstream ss;
-        kbucket.print_list(ss);
+        kbucket.print_count(ss);
         return ss.str();
     }
 

@@ -5,6 +5,8 @@
 
 //#include <iostream>
 #include <vector>
+#include <map>
+#include <set>
 
 namespace bmi = boost::multi_index;
 
@@ -136,6 +138,7 @@ public:
     bool replace(const Contact& contact);
 
     void print_list(std::ostream &os);
+    void print_count(std::ostream &os);
     iterator find(const Contact& contact) const;
 
     std::vector<Contact> list_nearests_to(const Contact &contact, bool prefer_same_index = false) const;
@@ -256,6 +259,24 @@ void KBucket<Contact, K>::print_list(std::ostream &os)
         auto const & index = actions::index_from_distance(distance);
         os<<"index: "<<index<<", id: "<<static_cast<std::string>(it).substr(0, 8) << std::endl;
     };
+}
+
+template <class Contact, int K>
+void KBucket<Contact, K>::print_count(std::ostream &os)
+{
+    std::map<size_t, std::set<std::string>> map_by_distance;
+
+    auto & contacts_by_distance = contacts.template get<by_distance>();
+    for(auto &it : contacts_by_distance)
+    {
+        auto const & distance = actions::distance(origin, it);
+        auto const & index = actions::index_from_distance(distance);
+
+        map_by_distance[index].insert(it);
+    };
+
+    for (auto const& it : map_by_distance)
+        os << "\nslot " << it.first << " : count " << it.second.size() << std::endl;
 }
 
 template <class Contact, int K>
