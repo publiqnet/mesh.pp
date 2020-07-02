@@ -556,24 +556,25 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             p2pstate::contact_status status =
                 state.add_contact(current_peer, msg.nodeid);
 
+            Pong msg_pong;
+            msg_pong.nodeid = state.name();
+            msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
+
+            string message_pong = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
+            auto signed_message = m_pimpl->_secret_key.sign(message_pong);
+            m_pimpl->writeln("sending pong with signed message");
+            m_pimpl->writeln(message_pong);
+            msg_pong.signature = std::move(signed_message.base58);
+
+            sk.send(current_peer, beltpp::packet(std::move(msg_pong)));
+
             if (status != p2pstate::contact_status::no_contact)
             {
+                state.remove_later(current_peer, 10, true, true);
                 state.set_active_nodeid(current_peer, msg.nodeid);
 
-                Pong msg_pong;
-                msg_pong.nodeid = state.name();
-                msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
-
-                string message_pong = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
-                auto signed_message = m_pimpl->_secret_key.sign(message_pong);
-                m_pimpl->writeln("sending pong with signed message");
-                m_pimpl->writeln(message_pong);
-                msg_pong.signature = std::move(signed_message.base58);
-
-                sk.send(current_peer, beltpp::packet(std::move(msg_pong)));
-
                 m_pimpl->writeln("remove_later current_peer, 10, true, true: " + current_peer + ", " + current_connection.to_string());
-                state.remove_later(current_peer, 10, true, true);
+
                 /*m_pimpl->writeln("undo remove");
                 state.undo_remove(current_peer);*/
 
@@ -584,8 +585,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                     return_packets.emplace_back(beltpp::stream_join());
                 }
             }
-            else
-                m_pimpl->writeln("cannot add contact");
+
             break;
         }
         case Pong::rtt:
@@ -613,6 +613,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
             }
 
+            // will update if peer is already added
             state.update(current_peer, msg.nodeid);
 
             m_pimpl->writeln("sending find node");
@@ -810,7 +811,7 @@ void p2psocket::send(peer_id const& peer,
         }
     }
     else
-        throw std::runtime_error("no such node: " + peer);
+        throw std::runtime_error("send() no such node: " + peer);
 }
 
 void p2psocket::timer_action()
@@ -859,7 +860,7 @@ beltpp::ip_address p2psocket::info_connection(peer_id const& peer) const
     if (state.get_peer_id(peer, p2p_peerid))
         return m_pimpl->m_ptr_socket->info(p2p_peerid);
     else
-        throw std::runtime_error("no such node: " + peer);
+        throw std::runtime_error("info_connection() no such node: " + peer);
 }
 
 beltpp::event_item const& p2psocket::worker() const
