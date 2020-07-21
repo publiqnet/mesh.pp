@@ -66,6 +66,5 @@ install(FILES
     pid.hpp
     pid.gen.hpp
     processutility.hpp
-    rdbutility.hpp
     settings.hpp
     DESTINATION ${MESHPP_INSTALL_DESTINATION_INCLUDE}/libsystemutility)
