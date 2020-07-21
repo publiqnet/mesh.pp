@@ -21,10 +21,6 @@ add_custom_command (
 
 add_definitions(-DSYSTEMUTILITY_LIBRARY)
 
-#if(TARGET rocksdb)
-#    add_definitions(-DUSE_ROCKS_DB)
-#endif()
-
 # define the library
 add_library(systemutility
     data.hpp
@@ -41,10 +37,6 @@ add_library(systemutility
     settings.cpp
     settings.hpp)
 
-if(TARGET rocksdb)
-    target_sources(systemutility PRIVATE rdbutility.hpp)
-endif()
-
 # libraries this module links to
 target_link_libraries(systemutility
     PUBLIC
@@ -59,13 +51,6 @@ target_link_libraries(systemutility
 if(NOT WIN32 AND NOT APPLE)
     find_package(Threads REQUIRED)
     target_link_libraries(systemutility PRIVATE Threads::Threads)
-endif()
-
-if(TARGET rocksdb)
-    target_link_libraries(systemutility
-        PRIVATE
-            rocksdb
-        )
 endif()
 
 # what to do on make install

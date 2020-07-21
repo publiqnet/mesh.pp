@@ -17,12 +17,6 @@ static_assert(sizeof(intptr_t) == sizeof(HANDLE), "check the sizes");
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#ifdef USE_ROCKS_DB
-#include <rocksdb/db.h>
-#include <rocksdb/options.h>
-#include <rocksdb/slice.h>
-#endif
-
 static_assert(intptr_t(-1) == int(-1), "be sure it works");
 static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
 
@@ -41,8 +35,6 @@ using std::string;
 using std::vector;
 using std::unordered_map;
 using std::unordered_set;
-
-#define CLEAR_ALL_OPTIMIZATION
 
 namespace meshpp
 {
@@ -318,9 +310,7 @@ public:
                       detail::ptr_transaction&& ptransaction_ = detail::null_ptr_transaction(),
                       bool purpose_clear = false)
         : modified(false)
-#ifdef CLEAR_ALL_OPTIMIZATION
         , purpose_clear_all(false)
-#endif
         , ptransaction(std::move(ptransaction_))
         , main_path(path)
         , values()
@@ -397,20 +387,12 @@ public:
             insert_res.first->second.insert({key, false});
         }
 
-#ifdef CLEAR_ALL_OPTIMIZATION
         if (purpose_clear &&
             keys.size() == markers.size() &&
             false == load_all)
             purpose_clear_all = true;
-#else
-        B_UNUSED(purpose_clear);
-#endif
 
-        if (contents_exist
-#ifdef CLEAR_ALL_OPTIMIZATION
-            && false == purpose_clear_all
-#endif
-            )
+        if (contents_exist && false == purpose_clear_all)
         for (size_t index = 0; index < markers.size(); ++index)
         {
             auto const& item = markers[index];
@@ -666,17 +648,12 @@ public:
         }
         markers.resize(write_index);
 
-#ifdef CLEAR_ALL_OPTIMIZATION
         if (purpose_clear_all)
             markers.clear();
-#endif
 
         if (nullptr == ptransaction &&
-            boost::filesystem::exists(file_path())
-#ifdef CLEAR_ALL_OPTIMIZATION
-            && false == markers.empty()
-#endif
-            )
+            boost::filesystem::exists(file_path()) &&
+            false == markers.empty())
         {
             boost::system::error_code ec;
             boost::filesystem::copy_file(file_path(),
@@ -743,9 +720,7 @@ private:
         uint64_t written_size = 0;
         size_t size_when_opened = 0;
 
-#ifdef CLEAR_ALL_OPTIMIZATION
         if (false == markers.empty())
-#endif
         {
             uint64_t start = 0;
             for (auto const& item : markers)
@@ -770,11 +745,7 @@ private:
             size_when_opened = size_t(fl.tellg());
         }
 
-        if (shift_sum >= size_sum
-#ifdef CLEAR_ALL_OPTIMIZATION
-            && shift_sum != 0
-#endif
-            )
+        if (shift_sum >= size_sum && shift_sum != 0)
         {
             boost::filesystem::fstream fl;
 
@@ -864,11 +835,7 @@ private:
             written_size = start;
         }
 
-        if (written_size < size_when_opened
-#ifdef CLEAR_ALL_OPTIMIZATION
-            && false == markers.empty()
-#endif
-            )
+        if (written_size < size_when_opened && false == markers.empty())
         {
             boost::system::error_code ec;
             boost::filesystem::resize_file(file_path_tr(), written_size, ec);
@@ -942,9 +909,7 @@ private:
         return file_path_temp;
     }
     bool modified;
-#ifdef CLEAR_ALL_OPTIMIZATION
     bool purpose_clear_all;
-#endif
     detail::ptr_transaction ptransaction;
     boost::filesystem::path main_path;
     unordered_map<T_key, value> values;
@@ -952,25 +917,8 @@ private:
     vector<marker> markers;
 };
 
-#ifdef USE_ROCKS_DB
-unordered_map<string, string> load_index(rocksdb::DB& db)
-{
-    unordered_map<string, string> index;
-
-    std::unique_ptr<rocksdb::Iterator> it;
-    it.reset(db.NewIterator(rocksdb::ReadOptions()));
-
-    for (it->SeekToFirst(); it->Valid(); it->Next())
-    {
-        auto key = it->key().ToString();
-        index[key] = "filename(key, name, limit)"; // something dummy for now
-    }
-
-    return index;
-}
-#else
 unordered_map<string, string> load_index(string const& name,
-                                              boost::filesystem::path const& path)
+                                         boost::filesystem::path const& path)
 {
     auto ptr_utl = meshpp::detail::get_putl();
 
@@ -1001,24 +949,14 @@ unordered_map<string, string> load_index(string const& name,
 
     return index;
 }
-#endif
+
 class map_loader_internals_impl
 {
 public:
     map_loader_internals_impl()
-#ifdef USE_ROCKS_DB
-    : ptr_rocks_db(nullptr)
-    , batch()
-#else
     : ptransaction(detail::null_ptr_transaction())
-#endif
     {}
-#ifdef USE_ROCKS_DB
-    std::unique_ptr<rocksdb::DB> ptr_rocks_db;
-    rocksdb::WriteBatch batch;
-#else
     ptr_transaction ptransaction;
-#endif
 };
 
 unordered_set<string> keys(unordered_map<string, string> const& index)
@@ -1037,37 +975,13 @@ map_loader_internals::map_loader_internals(string const& name,
     : limit(limit)
     , name(name)
     , dir_path(path)
-#ifdef USE_ROCKS_DB
-    , index()
-#else
     , index(load_index(name, path))
     , index_to_rollback(index)
     , keys_with_overlay(keys(index))
-#endif
     , overlay()
     , ptr_utl(std::move(ptr_utl))
     , pimpl(new map_loader_internals_impl())
-{
-#ifdef USE_ROCKS_DB
-    throw std::runtime_error("map_loader_internals(): s.ok()");
-    rocksdb::Options options;
-    options.IncreaseParallelism();
-    options.OptimizeLevelStyleCompaction();
-    options.create_if_missing = true;
-    options.target_file_size_multiplier = 2;
-
-    rocksdb::DB* pdb = nullptr;
-    rocksdb::Status s;
-    s = rocksdb::DB::Open(options, (path / name).string(), &pdb);
-    if (!s.ok())
-        throw std::runtime_error("map_loader_internals(): s.ok()");
-
-    pimpl->ptr_rocks_db.reset(pdb);
-    rocksdb::DB& db = *pdb;
-
-    index = load_index(db);
-#endif
-}
+{}
 
 map_loader_internals::map_loader_internals(map_loader_internals&&) = default;
 
@@ -1075,23 +989,6 @@ map_loader_internals::~map_loader_internals() = default;
 
 void map_loader_internals::load(string const& key) const
 {
-#ifdef USE_ROCKS_DB
-    rocksdb::DB& db = *pimpl->ptr_rocks_db;
-    string value_str;
-    rocksdb::Slice key_s(key);
-    auto s = db.Get(rocksdb::ReadOptions(), key_s, &value_str);
-    if(false == s.ok())
-        throw std::runtime_error("map_loader_internals::load(): pdb->Get()");
-
-    Data::StringBlockItem item;
-    if (false == detail::from_block_string(item, value_str, key, false, ptr_utl.get()))
-        throw std::runtime_error("map_loader_internals::load(): from_block_string()");
-
-    //  load item corresponding to key to overlay
-    overlay[key] = std::make_pair(std::move(item.item),
-                                  map_loader_internals::none);
-
-#else
     ptr_transaction item_ptransaction = detail::null_ptr_transaction();
 
     beltpp::finally guard1;
@@ -1140,55 +1037,7 @@ void map_loader_internals::load(string const& key) const
     //  load item corresponding to key to overlay
     overlay[key] = std::make_pair(std::move(temp[key].item),
                                   map_loader_internals::none);
-#endif
 }
-
-#ifdef USE_ROCKS_DB
-void map_loader_internals::save()
-{
-    auto ptr_utl_local = meshpp::detail::get_putl();
-
-    if (overlay.empty())
-        return;
-
-    beltpp::on_failure guard([this]
-    {
-        discard();
-    });
-
-    auto& batch = pimpl->batch;
-    batch.Clear();
-
-    for (auto& item : overlay)
-    {
-        if (item.second.second == map_loader_internals::none)
-            continue;
-        //  update the block
-
-        if (item.second.second == map_loader_internals::deleted)
-        {
-            rocksdb::Slice di_s(item.first);
-            batch.Delete(di_s);
-        }
-        else if (item.second.second == map_loader_internals::modified)
-        {
-            rocksdb::Slice key_s(item.first);
-
-            Data::StringBlockItem store;
-            store.key = item.first;
-            store.item = std::move(item.second.first);
-
-            rocksdb::Slice value_s(store.to_string());
-
-            item.second.first = std::move(store.item);
-
-            batch.Put(key_s, value_s);
-        }
-    }
-
-    guard.dismiss();
-}
-#else
 
 namespace
 {
@@ -1416,11 +1265,9 @@ void map_loader_internals::save()
         {
             if (loaded_keys.end() == loaded_keys.find(key))
             {
-#ifdef CLEAR_ALL_OPTIMIZATION
                 assert(i != e_op_erase);
                 if (i == e_op_erase)
                     throw std::logic_error("i == e_op_erase");
-#endif
 
                 string str_filename = filename(key, name, limit);
                 Data::StringValue index_item;
@@ -1475,15 +1322,9 @@ void map_loader_internals::save()
 
     guard.dismiss();
 }
-#endif
 
 void map_loader_internals::discard() noexcept
 {
-#ifdef USE_ROCKS_DB
-    auto& batch = pimpl->batch;
-
-    batch.Clear();
-#else
     if (pimpl && pimpl->ptransaction)
     {
         pimpl->ptransaction->rollback();
@@ -1496,7 +1337,6 @@ void map_loader_internals::discard() noexcept
         if (index != index_to_rollback)
             std::terminate();
     }
-#endif
 
     overlay.clear();
     keys_with_overlay = keys(index);
@@ -1504,35 +1344,12 @@ void map_loader_internals::discard() noexcept
 
 void map_loader_internals::commit() noexcept
 {
-#ifdef USE_ROCKS_DB
-    auto& batch = pimpl->batch;
-    auto& db = *pimpl->ptr_rocks_db.get();
-
-    if(batch.Count())
-    {
-        auto s = db.Write(rocksdb::WriteOptions(), &batch);
-        if (!s.ok())
-            throw std::runtime_error("map_loader_internals::commit(): s.ok()");
-        batch.Clear();
-    }
-    for (auto& item : overlay)
-    {
-        if (item.second.second == map_loader_internals::none)
-            continue;
-        if (item.second.second == map_loader_internals::deleted)
-            index.erase(item.first);
-        else if (item.second.second == map_loader_internals::modified)
-            index.insert(std::make_pair(item.first, filename(item.first, name, limit)));
-    }
-    overlay.clear();
-#else
     if (pimpl && pimpl->ptransaction)
     {
         pimpl->ptransaction->commit();
         pimpl->ptransaction = detail::null_ptr_transaction();
         index_to_rollback = index;
     }
-#endif
 }
 
 string map_loader_internals::filename(string const& key,
@@ -1588,19 +1405,9 @@ class vector_loader_internals_impl
 {
 public:
     vector_loader_internals_impl()
-#ifdef USE_ROCKS_DB
-    : ptr_rocks_db(nullptr)
-    , batch()
-#else
     : ptransaction(detail::null_ptr_transaction())
-#endif
     {}
-#ifdef USE_ROCKS_DB
-    std::unique_ptr<rocksdb::DB> ptr_rocks_db;
-    rocksdb::WriteBatch batch;
-#else
     ptr_transaction ptransaction;
-#endif
 };
 
 vector_loader_internals::vector_loader_internals(string const& name,
