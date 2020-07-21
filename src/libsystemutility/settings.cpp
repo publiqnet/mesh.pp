@@ -158,17 +158,11 @@ filesystem::path data_directory_path()
 
 void create_config_directory()
 {
-    filesystem::create_directory(config_directory_path());
+    filesystem::create_directories(config_directory_path());
 }
 void create_data_directory()
 {
-    filesystem::create_directory(data_directory_path());
-}
-
-void reset_data_directory()
-{
-    filesystem::remove_all(data_directory_path());
-    filesystem::create_directory(data_directory_path());
+    filesystem::create_directories(data_directory_path());
 }
 
 enum class config_data {config, data};
