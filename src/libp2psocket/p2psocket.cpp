@@ -162,13 +162,12 @@ p2psocket::~p2psocket()
 static bool is_configured_address(std::unique_ptr<detail::p2psocket_internals> const& pimpl,
                                   beltpp::ip_address const& item)
 {
-    for (auto const& it : pimpl->connect_to_addresses)
-    {
-        if (it.remote == item.remote)
-            return true;
-    }
-
-    return false;
+    return std::any_of(pimpl->connect_to_addresses.cbegin(),
+                       pimpl->connect_to_addresses.cend(),
+                       [&item](ip_address const& it)
+                       {
+                           return item.remote == it.remote;
+                       });
 }
 
 static bool is_the_first_configured_address(std::unique_ptr<detail::p2psocket_internals>& pimpl,
