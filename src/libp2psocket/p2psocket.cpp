@@ -575,9 +575,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 m_pimpl->writeln("remove_later current_peer, 10, true, true: " + current_peer + ", " + current_connection.to_string());
 
-                /*m_pimpl->writeln("undo remove");
-                state.undo_remove(current_peer);*/
-
                 if (false == msg.nodeid.empty() &&
                     p2pstate::contact_status::new_contact == status)
                 {
@@ -599,7 +596,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
-            if (chrono::seconds(-30) >  diff ||
+            if (chrono::seconds(-30) > diff ||
                 chrono::seconds(30) <= diff)
             {
                 m_pimpl->writeln("invalid pong timestamp");
@@ -613,7 +610,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
             }
 
-            // will update if peer is already added
+            // this checks and updates only if peer is already added
             state.update(current_peer, msg.nodeid);
 
             m_pimpl->writeln("sending find node");
