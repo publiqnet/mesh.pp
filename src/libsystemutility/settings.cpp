@@ -119,9 +119,8 @@ filesystem::path config_directory_path()
         fs_config = filesystem::path(home) / ".config";
     }
 
-    if (fs_config.empty() ||
-        false == filesystem::is_directory(fs_config))
-        throw runtime_error("detected invalid config directory: " + fs_config.string());
+    if (fs_config.empty())
+        throw runtime_error("cannot find the config directory");
 
 #elif defined(M_OS_WINDOWS)
     wchar_t appdata[MAX_PATH];
