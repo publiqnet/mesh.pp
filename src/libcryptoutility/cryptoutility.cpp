@@ -374,6 +374,32 @@ string aes_decrypt(string const& key, string const& ciphertext)
     return decryptedtext;
 }
 
+string ECIES_encrypt(string const& key, string const& plain_b64_msg)
+{
+
+    B_UNUSED(key);
+    B_UNUSED(plain_b64_msg);
+
+    string cipher_b64_msg;
+
+    B_UNUSED(cipher_b64_msg);
+
+    return cipher_b64_msg;
+}
+
+string ECIES_decrypt(string const& key, string const& cipher_b64_msg)
+{
+
+    B_UNUSED(key);
+    B_UNUSED(cipher_b64_msg);
+
+    string plain_b64_msg;
+
+    B_UNUSED(plain_b64_msg);
+
+    return plain_b64_msg;
+}
+
 uint64_t distance(string const& hash58_first, string const& hash58_second)
 {
     vector<unsigned char> vec_first, vec_second;

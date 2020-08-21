@@ -166,6 +166,9 @@ std::string from_base64(InputIt first, InputIt last)
 CRYPTOUTILITYSHARED_EXPORT std::string aes_encrypt(std::string const& key, std::string const& plaintext);
 CRYPTOUTILITYSHARED_EXPORT std::string aes_decrypt(std::string const& key, std::string const& ciphertext);
 
+CRYPTOUTILITYSHARED_EXPORT std::string ECIES_encrypt(std::string const& key, std::string const& plaintext);
+CRYPTOUTILITYSHARED_EXPORT std::string ECIES_decrypt(std::string const& key, std::string const& ciphertext);
+
 CRYPTOUTILITYSHARED_EXPORT uint64_t distance(std::string const& hash58_first, std::string const& hash58_second);
 
 }
