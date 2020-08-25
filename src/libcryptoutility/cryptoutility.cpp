@@ -43,6 +43,8 @@ bool base58_to_pk_hex(string const& b58_str, string& pk);
 bool base58_to_pk(string const& b58_str, CryptoPP::ECP::Point &pk);
 string ECPoint_to_zstr(const CryptoPP::OID &oid, const CryptoPP::ECP::Point &P, bool compressed = true);
 CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string& z_str);
+std::string compress_pk(const CryptoPP::OID &oid, std::string str);
+std::string decompress_pk(const CryptoPP::OID &oid, std::string str);
 string hash(const string & message);
 vector<unsigned char> from_base58(std::string const & data);
 }
@@ -147,6 +149,97 @@ signature private_key::sign(std::string const& message) const
     string signature_der_b58 = to_base58(signature_der);
 
     return signature(get_public_key(), message, signature_der_b58);
+}
+
+std::string private_key::decrypt(std::string msg) const
+{
+    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+    auto ecgp = CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(secp256k1);
+
+    CryptoPP::ECDH<CryptoPP::ECP, CryptoPP::NoCofactorMultiplication>::Domain dh(ecgp);
+    
+    size_t compressed_pk_size = 1 + (dh.PublicKeyLength() - 1) / 2;
+    
+    CryptoPP::SecByteBlock sk(dh.PrivateKeyLength()), shared_value(dh.AgreedValueLength());
+    CryptoPP::Integer sk_i;
+
+    detail::wif_to_sk(base58_wif, sk_i);
+    sk_i.Encode(sk, sk.size());
+
+    auto pk_str = detail::decompress_pk(secp256k1, std::string(msg.begin(), msg.begin() + compressed_pk_size));
+
+    if (! dh.Agree(shared_value, sk, (CryptoPP::byte*)pk_str.data(), true))
+        throw std::runtime_error("ECDH stage failed");
+
+    CryptoPP::HKDF<CryptoPP::SHA256> hkdf;
+    CryptoPP::SecByteBlock key_buf(32 + 16 + 32);
+
+    hkdf.DeriveKey(key_buf.data(), key_buf.size(), shared_value.data(), shared_value.size(), nullptr, 0, nullptr, 0);
+
+    auto enc_key = std::string(key_buf.begin(), key_buf.begin() + 32);
+    auto enc_iv = std::string(key_buf.begin() + 32, key_buf.begin() + 32 + 16);
+    auto mac_key = std::string(key_buf.begin() + 32 + 16, key_buf.end());
+
+    CryptoPP::CBC_Mode< CryptoPP::AES >::Decryption aes_dec;
+
+    std::string cipher(msg.begin() + compressed_pk_size + 32, msg.end());
+    
+    CryptoPP::HMAC<CryptoPP::SHA256> hmac((CryptoPP::byte*)mac_key.data(), mac_key.size());
+    const int flags = CryptoPP::HashVerificationFilter::THROW_EXCEPTION | CryptoPP::HashVerificationFilter::HASH_AT_BEGIN; 
+    
+    CryptoPP::StringSource(msg.substr(compressed_pk_size), true, new CryptoPP::HashVerificationFilter(hmac, NULL, flags)); 
+
+    aes_dec.SetKeyWithIV((CryptoPP::byte*)enc_key.data(), enc_key.size(), (CryptoPP::byte*)enc_iv.data(), enc_iv.size());
+ 
+    std::string result;
+    CryptoPP::StringSource(cipher, true, new CryptoPP::StreamTransformationFilter(aes_dec, new CryptoPP::StringSink(result)));
+
+    return result;    
+}
+
+std::string public_key::encrypt(std::string msg) const
+{
+    CryptoPP::AutoSeededRandomPool rng;
+    auto secp256k1 = CryptoPP::ASN1::secp256k1();
+    auto ecgp = CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(secp256k1);
+
+    CryptoPP::ECDH<CryptoPP::ECP, CryptoPP::NoCofactorMultiplication>::Domain dh(ecgp);
+    
+    CryptoPP::SecByteBlock e_sk(dh.PrivateKeyLength()), e_pk(dh.PublicKeyLength()), shared_value(dh.AgreedValueLength());
+    dh.GenerateKeyPair(rng, e_sk, e_pk);
+
+    auto pk_v = detail::from_base58(str_base58);
+    auto pk_str = detail::decompress_pk(secp256k1, std::string(pk_v.begin(), pk_v.end()-4));
+
+    if (! dh.Agree(shared_value, e_sk, (CryptoPP::byte*)pk_str.data(), true))
+        throw std::runtime_error("ECDH stage failed");
+
+    CryptoPP::HKDF<CryptoPP::SHA256> hkdf;
+    CryptoPP::SecByteBlock key_buf(32 + 16 + 32);
+
+    hkdf.DeriveKey(key_buf.data(), key_buf.size(), shared_value.data(), shared_value.size(), nullptr, 0, nullptr, 0);
+
+    auto enc_key = std::string(key_buf.begin(), key_buf.begin() + 32);
+    auto enc_iv = std::string(key_buf.begin() + 32, key_buf.begin() + 32 + 16);
+    auto mac_key = std::string(key_buf.begin() + 32 + 16, key_buf.end());
+
+    CryptoPP::CBC_Mode< CryptoPP::AES >::Encryption aec_enc;
+    std::string cipher, mac;
+
+    aec_enc.SetKeyWithIV((CryptoPP::byte*)enc_key.data(), enc_key.size(), (CryptoPP::byte*)enc_iv.data(), enc_iv.size());
+ 
+    CryptoPP::StringSource(msg, true, new CryptoPP::StreamTransformationFilter(aec_enc, new CryptoPP::StringSink(cipher)));
+
+    CryptoPP::HMAC<CryptoPP::SHA256> hmac((CryptoPP::byte*)mac_key.data(), mac_key.size());
+    CryptoPP::StringSource(cipher, true, new CryptoPP::HashFilter(hmac, new CryptoPP::StringSink(mac)));
+
+    std::string result(e_pk.begin(), e_pk.end());
+
+    result = detail::compress_pk(secp256k1, result);
+    result += mac;
+    result += cipher;
+
+    return result;    
 }
 
 public_key::public_key(string const& str_base58_)
@@ -765,6 +858,18 @@ CryptoPP::ECP::Point zstr_to_ECPoint(const CryptoPP::OID &oid, const std::string
 
     ecc.DecodePoint(P, (CryptoPP::byte*)z_str.data(), z_str.size());
     return P;
+}
+
+std::string decompress_pk(const CryptoPP::OID &oid, std::string str)
+{
+    auto P = zstr_to_ECPoint(oid, str);
+    return ECPoint_to_zstr(oid, P, false);
+}
+
+std::string compress_pk(const CryptoPP::OID &oid, std::string str)
+{
+    auto P = zstr_to_ECPoint(oid, str);
+    return ECPoint_to_zstr(oid, P, true);
 }
 
 string hash(const string & message)

@@ -41,6 +41,8 @@ public:
     std::string get_base58_wif() const;
     public_key get_public_key() const;
     signature sign(std::string const& message) const;
+
+    std::string decrypt(std::string msg) const;
 private:
     std::string base58_wif;
 };
@@ -54,6 +56,8 @@ public:
 
     std::string to_string() const;
     std::string get_base58() const;
+
+    std::string encrypt(std::string msg) const;
 private:
     std::string str_base58;
     //std::string raw_base58;
