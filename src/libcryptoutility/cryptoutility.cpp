@@ -15,6 +15,7 @@
 #include <cryptopp/dsa.h>
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
+#include <cryptopp/hkdf.h>
 
 #include <string>
 #include <cassert>
