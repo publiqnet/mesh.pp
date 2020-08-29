@@ -382,7 +382,7 @@ public:
         for (auto const& key : keys)
         {
             auto insert_res =
-                    uint64_keys_ex.insert({detail::key_to_uint64_t(key), {}});
+                    uint64_keys_ex.insert({detail::key_to_uint64_t(key), unordered_map<T_key, bool>()});
 
             insert_res.first->second.insert({key, false});
         }
