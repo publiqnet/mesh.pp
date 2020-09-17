@@ -15,7 +15,6 @@
 #include <cryptopp/dsa.h>
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
-#include <cryptopp/hkdf.h>
 
 #include <string>
 #include <cassert>
@@ -172,11 +171,13 @@ std::string private_key::decrypt(std::string msg) const
     if (! dh.Agree(shared_value, sk, (CryptoPP::byte*)pk_str.data(), true))
         throw std::runtime_error("ECDH stage failed");
 
-    CryptoPP::HKDF<CryptoPP::SHA256> hkdf;
-    CryptoPP::SecByteBlock key_buf(32 + 16 + 32);
+    char i1[] = {0, 0, 0, 1} , i2[] = {0, 0, 0, 2}, i3[] = {0, 0, 0, 3};
+    std::string _i1(i1, 4), _i2(i2, 4), _i3(i3, 4);
 
-    hkdf.DeriveKey(key_buf.data(), key_buf.size(), shared_value.data(), shared_value.size(), nullptr, 0, nullptr, 0);
-
+    auto shared_value_str = std::string(reinterpret_cast<std::string::value_type *>(&shared_value[0]), shared_value.size());
+    auto dk = detail::hash(shared_value_str + _i1) + detail::hash(shared_value_str + _i2) + detail::hash(shared_value_str + _i3);
+    CryptoPP::SecByteBlock key_buf(reinterpret_cast<CryptoPP::byte*>(&dk[0]), 32 + 16 + 32);
+    
     auto enc_key = std::string(key_buf.begin(), key_buf.begin() + 32);
     auto enc_iv = std::string(key_buf.begin() + 32, key_buf.begin() + 32 + 16);
     auto mac_key = std::string(key_buf.begin() + 32 + 16, key_buf.end());
@@ -215,10 +216,12 @@ std::string public_key::encrypt(std::string msg) const
     if (! dh.Agree(shared_value, e_sk, (CryptoPP::byte*)pk_str.data(), true))
         throw std::runtime_error("ECDH stage failed");
 
-    CryptoPP::HKDF<CryptoPP::SHA256> hkdf;
-    CryptoPP::SecByteBlock key_buf(32 + 16 + 32);
+    char i1[] = {0, 0, 0, 1} , i2[] = {0, 0, 0, 2}, i3[] = {0, 0, 0, 3};
+    std::string _i1(i1, 4), _i2(i2, 4), _i3(i3, 4);
 
-    hkdf.DeriveKey(key_buf.data(), key_buf.size(), shared_value.data(), shared_value.size(), nullptr, 0, nullptr, 0);
+    auto shared_value_str = std::string(reinterpret_cast<std::string::value_type *>(&shared_value[0]), shared_value.size());
+    auto dk = detail::hash(shared_value_str + _i1) + detail::hash(shared_value_str + _i2) + detail::hash(shared_value_str + _i3);
+    CryptoPP::SecByteBlock key_buf(reinterpret_cast<CryptoPP::byte*>(&dk[0]), 32 + 16 + 32);
 
     auto enc_key = std::string(key_buf.begin(), key_buf.begin() + 32);
     auto enc_iv = std::string(key_buf.begin() + 32, key_buf.begin() + 32 + 16);
