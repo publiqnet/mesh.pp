@@ -73,16 +73,20 @@ public:
 
     virtual std::vector<std::string> list_nearest_to(std::string const& nodeid) = 0;
 
-    virtual std::vector<std::string> process_node_details(beltpp::socket::peer_id const& peer_id,
+    virtual std::vector<std::string> process_node_details(beltpp::socket::peer_id const& peerid,
                                                           std::string const& origin_nodeid,
                                                           std::vector<std::string> const& nodeids) = 0;
 
-    virtual std::string get_nodeid(beltpp::socket::peer_id const& peer_id) = 0;
+    virtual std::string get_nodeid(beltpp::socket::peer_id const& peerid) = 0;
     virtual bool get_peer_id(std::string const& nodeid, beltpp::socket::peer_id& peerid) = 0;
     virtual bool process_introduce_request(std::string const& nodeid,
-                                           beltpp::socket::peer_id& peer_id) = 0;
+                                           beltpp::socket::peer_id& peerid) = 0;
 
     virtual std::string bucket_dump() = 0;
+
+    virtual bool is_peer_verified(beltpp::socket::peer_id const& peerid) = 0;
+    virtual void set_peer_verified(beltpp::socket::peer_id const& peerid) = 0;
+    virtual void set_peer_unverified(beltpp::socket::peer_id const& peerid) = 0;
 };
 
 using p2pstate_ptr = beltpp::t_unique_ptr<p2pstate>;

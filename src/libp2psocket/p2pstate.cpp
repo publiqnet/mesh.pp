@@ -884,6 +884,21 @@ public:
         return ss.str();
     }
 
+    bool is_peer_verified(peer_id const& peerid) override
+    {
+        return verified_peers.count(peerid) > 0;
+    }
+
+    void set_peer_verified(peer_id const& peerid) override
+    {
+        verified_peers.insert(peerid);
+    }
+
+    void set_peer_unverified(peer_id const& peerid) override
+    {
+        verified_peers.erase(peerid);
+    }
+
 private:
     unsigned short fixed_local_port;
     beltpp::ip_address external_ip_address;
@@ -892,6 +907,8 @@ private:
     //  node lookup design is wrong, does not fit in
     //unique_ptr<NodeLookup> node_lookup;
     communication_state<peer_state> program_state;
+
+    unordered_set<peer_id> verified_peers;
 };
 
 namespace meshpp

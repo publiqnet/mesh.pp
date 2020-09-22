@@ -418,11 +418,14 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln("remove_later current_peer, 0, true: " +
                              current_peer + ", " +
                              current_connection.to_string());
+
+            state.set_peer_unverified(current_peer);
             state.remove_later(current_peer, 0, true, false);
 
             peer = current_peer_nodeid;
             if (false == current_peer_nodeid.empty())
                 return_packets.emplace_back(std::move(msg));
+
             break;
         }
         case beltpp::socket_open_refused::rtt:
@@ -455,6 +458,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             m_pimpl->writeln("remove_later current_peer, 0, true: " +
                              current_peer + ", " +
                              current_connection.to_string());
+
+            state.set_peer_unverified(current_peer);
             state.remove_later(current_peer, 0, false, false);
 
             peer = current_peer_nodeid;
@@ -504,13 +509,26 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                                  msg.nodeid);
                 break;
             }
+
             m_pimpl->writeln("verifying message");
             m_pimpl->writeln(message);
-            if (!verify_signature(msg.nodeid, message, msg.signature))
+
+            if (false == msg.signature.empty())
             {
-                m_pimpl->writeln("ping signature verification failed");
+                if (!verify_signature(msg.nodeid, message, msg.signature))
+                {
+                    m_pimpl->writeln("ping signature verification failed");
+                    break;
+                }
+
+                state.set_peer_verified(current_peer);
+            }
+            else if (false == state.is_peer_verified(current_peer))
+            {
+                m_pimpl->writeln("receive simple ping from unverified peer");
                 break;
             }
+
 
             if (empty_external_address_stored ||
                 can_reset_external_address)
@@ -552,18 +570,22 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
             }
 
-            p2pstate::contact_status status =
-                state.add_contact(current_peer, msg.nodeid);
+            p2pstate::contact_status status = state.add_contact(current_peer, msg.nodeid);
 
             Pong msg_pong;
             msg_pong.nodeid = state.name();
             msg_pong.stamp.tm = system_clock::to_time_t(system_clock::now());
 
             string message_pong = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
-            auto signed_message = m_pimpl->_secret_key.sign(message_pong);
+            
             m_pimpl->writeln("sending pong with signed message");
             m_pimpl->writeln(message_pong);
-            msg_pong.signature = std::move(signed_message.base58);
+            
+            if (false == msg.signature.empty())
+            {
+                auto signed_message = m_pimpl->_secret_key.sign(message_pong);
+                msg_pong.signature = std::move(signed_message.base58);
+            }
 
             sk.send(current_peer, beltpp::packet(std::move(msg_pong)));
 
@@ -829,10 +851,16 @@ void p2psocket::timer_action()
         ping_msg.nodeid = state.name();
         ping_msg.stamp.tm = system_clock::to_time_t(system_clock::now());
         string message = ping_msg.nodeid + ::beltpp::gm_time_t_to_gm_string(ping_msg.stamp.tm);
+
         m_pimpl->writeln("sending ping with signed message");
         m_pimpl->writeln(ping_msg.to_string());
-        auto signed_message  = m_pimpl->_secret_key.sign(message);
-        ping_msg.signature = signed_message.base58;
+
+        if (false == state.is_peer_verified(item))
+        {
+            auto signed_message = m_pimpl->_secret_key.sign(message);
+            ping_msg.signature = std::move(signed_message.base58);
+        }
+
         sk.send(item, beltpp::packet(ping_msg));
     }
 }
