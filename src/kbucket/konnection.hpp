@@ -18,31 +18,29 @@ namespace details{
 
 using std::string;
 
-template <class T_node_id_type = CryptoPP::Integer, class T_distance_type = T_node_id_type, class  T_age_type = std::chrono::time_point<std::chrono::system_clock>>
+template <class T_node_id_type = CryptoPP::Integer, class T_distance_type = T_node_id_type>
 struct Kontakt
 {
     using node_id_type = T_node_id_type;
     using distance_type = T_distance_type;   //  makes sense for kbucket, it seems
-    using age_type = T_age_type;
 
-    distance_type distance_from (const Kontakt &r) const { return distance_type(_node_id) - distance_type(r._node_id); }
+    distance_type distance_from (const Kontakt& r) const 
+    { 
+        return distance_type(_node_id) - distance_type(r._node_id); 
+    }
 
 public:
     //GET
     node_id_type get_id() const { return _node_id; }
-    age_type age() const { return _age; }
     //SET
-    void set_access_time(age_type const & age) { _age = age; }
     void set_id(const node_id_type& nd_id) { _node_id = nd_id; }
 
 protected:
-    Kontakt(node_id_type const& node_id = {}, age_type age = {}) :
-        _node_id(node_id),
-        _age(age)
+    Kontakt(node_id_type const& node_id = {})
+        : _node_id(node_id)
     {}
 
     node_id_type _node_id;
-    age_type _age;
 };
 
 }
@@ -51,15 +49,20 @@ struct string_distance
 {
     using value_type = CryptoPP::Integer;
 
-    string_distance(const std::string & str = {}) : _val{}
+    string_distance(const std::string & str = {})
+        : _val{}
     {
-        if(str.empty())
+        if (str.empty())
             return;
+
         CryptoPP::SHA256 hash;
         CryptoPP::StringSource ss(str, true, new CryptoPP::HashFilter(hash));
         _val.Decode(*ss.AttachedTransformation(), hash.DigestSize());
     }
-    string_distance(value_type const& val):_val{val}{}
+
+    string_distance(value_type const& val)
+        :_val{val}
+    {}
 
     bool operator<(string_distance const& r) const { return _val < r._val; }
     bool operator>(string_distance const& r) const { return _val > r._val; }
@@ -67,7 +70,7 @@ struct string_distance
     bool operator!=(string_distance const& r) const { return _val != r._val; }
     void operator/=(string_distance const& r) { _val /= r._val; }
     string_distance& operator++() { ++_val; return *this; }
-    string_distance operator-(string_distance const &r) const
+    string_distance operator-(string_distance const& r) const
     {
         if (this == &r || *this == r)
         {
@@ -75,7 +78,8 @@ struct string_distance
         }
         else
         {
-            auto abs_a = _val.AbsoluteValue(), abs_b = r._val.AbsoluteValue();
+            auto abs_a = _val.AbsoluteValue();
+            auto abs_b = r._val.AbsoluteValue();
             value_type result = (abs_b > abs_a) ? abs_b : abs_a;
 
             size_t size_a = abs_a.ByteCount();
@@ -101,23 +105,34 @@ private:
     value_type _val;
 };
 
-inline std::ostream& operator<<(std::ostream& o, string_distance const &r) { return o<<r._val; }
+inline std::ostream& operator<<(std::ostream& o, string_distance const& r) { return o << r._val; }
 
 struct Konnection : details::Kontakt<std::string, string_distance>
 {
     Konnection(node_id_type const& node_id = {},
-               age_type const& age = {},
                peer_id const& peer = {},
                ip_address const& address = {}) :
-        details::Kontakt<node_id_type, distance_type, age_type>{node_id, age},
+        details::Kontakt<node_id_type, distance_type>{node_id},
         _peer{peer},
         _address(address)
     {}
 
-    std::string to_string() const { std::ostringstream ss; ss << get_id(); return ss.str(); }
-    operator std::string() const { return to_string(); }
+    std::string to_string() const 
+    { 
+        std::ostringstream ss; 
+        ss << get_id(); 
+        return ss.str(); 
+    }
+    
+    operator std::string() const 
+    { 
+        return to_string(); 
+    }
 
-    peer_id get_peer() const { return _peer; }
+    peer_id get_peer() const 
+    { 
+        return _peer; 
+    }
 
 private:
     peer_id _peer;
