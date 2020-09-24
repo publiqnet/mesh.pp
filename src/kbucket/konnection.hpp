@@ -14,9 +14,8 @@
 using peer_id = beltpp::socket::peer_id;
 using ip_address = beltpp::ip_address;
 
-namespace details{
-
-using std::string;
+namespace details
+{
 
 template <class T_node_id_type = CryptoPP::Integer, class T_distance_type = T_node_id_type>
 struct Kontakt
@@ -30,10 +29,7 @@ struct Kontakt
     }
 
 public:
-    //GET
     node_id_type get_id() const { return _node_id; }
-    //SET
-    void set_id(const node_id_type& nd_id) { _node_id = nd_id; }
 
 protected:
     Kontakt(node_id_type const& node_id = {})
@@ -49,7 +45,7 @@ struct string_distance
 {
     using value_type = CryptoPP::Integer;
 
-    string_distance(const std::string & str = {})
+    string_distance(const std::string& str = {})
         : _val{}
     {
         if (str.empty())
@@ -111,10 +107,10 @@ struct Konnection : details::Kontakt<std::string, string_distance>
 {
     Konnection(node_id_type const& node_id = {},
                peer_id const& peer = {},
-               ip_address const& address = {}) :
-        details::Kontakt<node_id_type, distance_type>{node_id},
-        _peer{peer},
-        _address(address)
+               ip_address const& address = {})
+        : details::Kontakt<node_id_type, distance_type>{node_id}
+        , _peer{peer}
+        , _address(address)
     {}
 
     std::string to_string() const 

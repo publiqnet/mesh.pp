@@ -20,9 +20,8 @@ struct contact_actions
     static distance_type one() { return ++zero(); }
     static distance_type two() { return ++one(); }
 
-
     static distance_type distance(const T_Contact& a, const T_Contact& b) { return a.distance_from(b); }
-//    static bool is_same(const Contact& a, const Contact& b) { return distance(a, b) == zero(); }
+//    static bool is_same(const T_Contact& a, const T_Contact& b) { return distance(a, b) == zero(); }
     static index_type index_from_distance(distance_type distance)
     {
         index_type cnt{};
@@ -80,7 +79,6 @@ class KBucket
             T_Contact _origin;
     };
 
-
     using ContactIndex = bmi::multi_index_container<T_Contact, bmi::indexed_by<
         bmi::ordered_unique<bmi::tag<by_distance>, bmi::identity<T_Contact>, rel_distance >,
         bmi::ordered_non_unique<bmi::tag<by_index>, bmi::identity<T_Contact>, rel_index >
@@ -98,7 +96,7 @@ public:
     const_iterator cend() const { return contacts.cend(); }
     const_iterator cbegin() const { return contacts.cbegin(); }
 
-    KBucket(const T_Contact &origin_ = {}) 
+    KBucket(const T_Contact& origin_ = {}) 
         : origin{origin_}
         , contacts{boost::make_tuple(
                    boost::make_tuple(bmi::identity<T_Contact>{}, rel_distance{origin}),
@@ -106,21 +104,24 @@ public:
                    )}
     {}
 
-    KBucket<T_Contact, K> rebase(const T_Contact& new_origin, bool include_origin = true) const;
+//    KBucket<T_Contact, K> rebase(const T_Contact& new_origin, bool include_origin = true) const;
 
     std::pair<iterator, bool> insert(const T_Contact& contact);
 
     iterator erase(const iterator& pos);
-    iterator erase(const iterator& first, const iterator& last);
     iterator erase(const T_Contact& contact);
+//    iterator erase(const iterator& first, const iterator& last);
 
-    void clear() { ContactIndex{boost::make_tuple(
+    void clear()
+    { 
+        ContactIndex{boost::make_tuple(
                         boost::make_tuple(bmi::identity<T_Contact>{}, rel_distance{origin}),
                         boost::make_tuple(bmi::identity<T_Contact>{}, rel_index{origin})
-                        )}.swap(contacts); }
+                        )}.swap(contacts); 
+    }
 
-    bool replace(const iterator& it, const T_Contact& contact);
     bool replace(const T_Contact& contact);
+    bool replace(const iterator& it, const T_Contact& contact);
 
 //    void print_list(std::ostream& os);
     void print_count(std::ostream& os);
@@ -128,7 +129,6 @@ public:
 
 //    std::vector<T_Contact> list_closests() const;
     std::vector<T_Contact> list_nearests_to(const T_Contact &contact, bool prefer_same_index = false) const;
-    const T_Contact& operator[](const distance_type& key) const;
 
 private:
     T_Contact origin;
@@ -136,25 +136,25 @@ private:
 };
 
 
-template <class T_Contact, int K>
-KBucket<T_Contact, K> KBucket<T_Contact, K>::rebase(const T_Contact &new_origin, bool include_origin) const
-{
-    if (actions::is_same(new_origin, this->origin))
-        return *this;
-
-    KBucket<T_Contact, K> result(new_origin);
-
-    if (include_origin)
-        result.insert(this->origin);
-
-    for (auto const& it : contacts)
-    {
-        if (!actions::is_same(it, new_origin))
-            result.insert(it);
-    }
-
-    return result;
-}
+//template <class T_Contact, int K>
+//KBucket<T_Contact, K> KBucket<T_Contact, K>::rebase(const T_Contact &new_origin, bool include_origin) const
+//{
+//    if (actions::is_same(new_origin, this->origin))
+//        return *this;
+//
+//    KBucket<T_Contact, K> result(new_origin);
+//
+//    if (include_origin)
+//        result.insert(this->origin);
+//
+//    for (auto const& it : contacts)
+//    {
+//        if (!actions::is_same(it, new_origin))
+//            result.insert(it);
+//    }
+//
+//    return result;
+//}
 
 template <class T_Contact, int K>
 std::pair<typename KBucket<T_Contact, K>::iterator, bool> KBucket<T_Contact, K>::insert(const T_Contact& contact)
@@ -181,11 +181,11 @@ typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const iter
     return contacts.erase(pos);
 }
 
-template <class T_Contact, int K>
-typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const iterator& first, const iterator& last)
-{
-    return contacts.erase(first, last);
-}
+//template <class T_Contact, int K>
+//typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const iterator& first, const iterator& last)
+//{
+//    return contacts.erase(first, last);
+//}
 
 template <class T_Contact, int K>
 typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const T_Contact& contact)
@@ -222,10 +222,15 @@ std::vector<T_Contact> KBucket<T_Contact, K>::list_nearests_to(const T_Contact& 
         it = std::find_if(std::begin(contacts_by_distance), std::end(contacts_by_distance),
                          [&](const T_Contact &a){ return index_ == actions::index(origin, a); } );
     }
-    auto result_end = loop_copy(it, std::begin(contacts_by_distance), std::end(contacts_by_distance),
-                   std::begin(result), std::end(result));
+
+    auto result_end = loop_copy(it, 
+                                std::begin(contacts_by_distance), 
+                                std::end(contacts_by_distance),
+                                std::begin(result), 
+                                std::end(result));
 
     result.erase(result_end, std::end(result));
+
     return result;
 }
 
