@@ -23,7 +23,7 @@ struct Kontakt
     using node_id_type = T_node_id_type;
     using distance_type = T_distance_type;   //  makes sense for kbucket, it seems
 
-    distance_type distance_from (const Kontakt& r) const 
+    distance_type distance_from (Kontakt const& r) const
     { 
         return distance_type(_node_id) - distance_type(r._node_id); 
     }

@@ -3,10 +3,9 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index_container.hpp>
 
-//#include <iostream>
-#include <vector>
 #include <map>
 #include <set>
+#include <vector>
 
 namespace bmi = boost::multi_index;
 
@@ -20,7 +19,7 @@ struct contact_actions
     static distance_type one() { return ++zero(); }
     static distance_type two() { return ++one(); }
 
-    static distance_type distance(const T_Contact& a, const T_Contact& b) { return a.distance_from(b); }
+    static distance_type distance(T_Contact const& a, T_Contact const& b) { return a.distance_from(b); }
 //    static bool is_same(const T_Contact& a, const T_Contact& b) { return distance(a, b) == zero(); }
     static index_type index_from_distance(distance_type distance)
     {
@@ -39,56 +38,53 @@ template <class T_Contact, int K = 20>
 class KBucket
 {
     using actions = contact_actions<T_Contact>;
-
-    using distance_type = typename actions::distance_type;
     using index_type = typename actions::index_type;
+    using distance_type = typename actions::distance_type;
 
-    struct by_distance {};
     struct by_index {};
-//    struct by_value {};
-
-    struct rel_distance
-    {
-        rel_distance(T_Contact const & origin): _origin{origin} {}
-
-        bool operator()(T_Contact const& a, T_Contact const& b) const
-        {
-            auto const& da = actions::distance(_origin, a);
-            auto const& db = actions::distance(_origin, b);
-
-            return da < db;
-        }
-
-        private:
-            T_Contact _origin;
-    };
+    struct by_distance {};
 
     struct rel_index
     {
-        rel_index(T_Contact const& origin): _origin{origin} {}
+        rel_index(T_Contact const& origin) : _origin{ origin } {}
 
         bool operator ()(T_Contact const& a, T_Contact const& b) const
         {
-            auto const& ia = actions::index(_origin, a);
-            auto const& ib = actions::index(_origin, b);
+            auto const& index_a = actions::index(_origin, a);
+            auto const& index_b = actions::index(_origin, b);
 
-            return ia <= ib;
+            return index_a < index_b;
         }
 
-        private:
-            T_Contact _origin;
+    private:
+        T_Contact _origin;
     };
 
-    using ContactIndex = bmi::multi_index_container<T_Contact, bmi::indexed_by<
-        bmi::ordered_unique<bmi::tag<by_distance>, bmi::identity<T_Contact>, rel_distance >,
-        bmi::ordered_non_unique<bmi::tag<by_index>, bmi::identity<T_Contact>, rel_index >
-    >>;
+    struct rel_distance
+    {
+        rel_distance(T_Contact const& origin): _origin{ origin } {}
+
+        bool operator()(T_Contact const& a, T_Contact const& b) const
+        {
+            auto const& dist_a = actions::distance(_origin, a);
+            auto const& dist_b = actions::distance(_origin, b);
+
+            return dist_a < dist_b;
+        }
+
+    private:
+        T_Contact _origin;
+    };
+
+    using ContactIndex = bmi::multi_index_container<T_Contact, 
+                                                    bmi::indexed_by<bmi::ordered_unique<bmi::tag<by_distance>, bmi::identity<T_Contact>, rel_distance >,
+                                                                    bmi::ordered_non_unique<bmi::tag<by_index>, bmi::identity<T_Contact>, rel_index >
+                                                                   >
+                                                   >;
 
 public:
     using iterator = typename ContactIndex::iterator;
     using const_iterator = typename ContactIndex::const_iterator;
-
-    enum { LEVELS = K };
 
     iterator end() const { return contacts.end(); }
     iterator begin() const { return contacts.begin(); }
@@ -96,39 +92,38 @@ public:
     const_iterator cend() const { return contacts.cend(); }
     const_iterator cbegin() const { return contacts.cbegin(); }
 
-    KBucket(const T_Contact& origin_ = {}) 
-        : origin{origin_}
+    KBucket(T_Contact const& origin_ = {})
+        : origin{ origin_ }
         , contacts{boost::make_tuple(
-                   boost::make_tuple(bmi::identity<T_Contact>{}, rel_distance{origin}),
-                   boost::make_tuple(bmi::identity<T_Contact>{}, rel_index{origin})
+                   boost::make_tuple(bmi::identity<T_Contact>{}, rel_distance{ origin }),
+                   boost::make_tuple(bmi::identity<T_Contact>{}, rel_index{ origin })
                    )}
     {}
 
-//    KBucket<T_Contact, K> rebase(const T_Contact& new_origin, bool include_origin = true) const;
+    std::pair<iterator, bool> insert(T_Contact const& contact);
 
-    std::pair<iterator, bool> insert(const T_Contact& contact);
-
-    iterator erase(const iterator& pos);
+//    iterator erase(const iterator& pos);
     iterator erase(const T_Contact& contact);
 //    iterator erase(const iterator& first, const iterator& last);
+//    KBucket<T_Contact, K> rebase(const T_Contact& new_origin, bool include_origin = true) const;
 
     void clear()
     { 
         ContactIndex{boost::make_tuple(
-                        boost::make_tuple(bmi::identity<T_Contact>{}, rel_distance{origin}),
-                        boost::make_tuple(bmi::identity<T_Contact>{}, rel_index{origin})
+                        boost::make_tuple(bmi::identity<T_Contact>{}, rel_distance{ origin }),
+                        boost::make_tuple(bmi::identity<T_Contact>{}, rel_index{ origin })
                         )}.swap(contacts); 
     }
 
-    bool replace(const T_Contact& contact);
-    bool replace(const iterator& it, const T_Contact& contact);
+    bool replace(T_Contact const& contact);
+//    bool replace(const iterator& it, T_Contact const& contact);
 
 //    void print_list(std::ostream& os);
     void print_count(std::ostream& os);
-    iterator find(const T_Contact& contact) const;
+    iterator find(T_Contact const& contact) const;
 
 //    std::vector<T_Contact> list_closests() const;
-    std::vector<T_Contact> list_nearests_to(const T_Contact &contact, bool prefer_same_index = false) const;
+    std::vector<T_Contact> list_nearests_to(T_Contact const& contact, bool prefer_same_index = false) const;
 
 private:
     T_Contact origin;
@@ -165,21 +160,25 @@ std::pair<typename KBucket<T_Contact, K>::iterator, bool> KBucket<T_Contact, K>:
 
     auto index = actions::index_from_distance(distance);
 
-    auto eq_index = [&](const T_Contact& c) { return actions::index(origin, c) == index; };
+    auto eq_index = [&](const T_Contact& c) 
+    { 
+        return actions::index(origin, c) == index; 
+    };
 
     auto const &contacts_by_index  = contacts.template get<by_index>();
     auto index_count = std::count_if(std::begin(contacts_by_index), std::end(contacts_by_index), eq_index);
+
     if (index_count >= K)
         return {contacts.template project<by_distance>(std::find_if(std::begin(contacts_by_index), std::end(contacts_by_index), eq_index)), false};
 
     return contacts.insert(contact);
 }
 
-template <class T_Contact, int K>
-typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const iterator& pos)
-{
-    return contacts.erase(pos);
-}
+//template <class T_Contact, int K>
+//typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const iterator& pos)
+//{
+//    return contacts.erase(pos);
+//}
 
 //template <class T_Contact, int K>
 //typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const iterator& first, const iterator& last)
@@ -188,11 +187,13 @@ typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const iter
 //}
 
 template <class T_Contact, int K>
-typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(const T_Contact& contact)
+typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(T_Contact const& contact)
 {
     auto it = find(contact);
+    
     if (it != end())
-        return erase(it);
+        return contacts.erase(it);
+
     return it;
 }
 
@@ -211,9 +212,9 @@ T_DstIt loop_copy(T_SrcIt pivot, T_SrcIt first, T_SrcIt last, T_DstIt d_first, T
 template <class T_Contact, int K>
 std::vector<T_Contact> KBucket<T_Contact, K>::list_nearests_to(const T_Contact& contact, bool prefer_same_index) const
 {
-    auto & contacts_by_distance = contacts.template get<by_distance>();
+    std::vector<T_Contact> result{ K };
 
-    std::vector<T_Contact> result{K};
+    auto& contacts_by_distance = contacts.template get<by_distance>();
 
     auto it = std::begin(contacts_by_distance);
     if (prefer_same_index)
@@ -273,20 +274,25 @@ void KBucket<T_Contact, K>::print_count(std::ostream& os)
 template <class T_Contact, int K>
 typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::find(const T_Contact& contact) const
 {
-    return std::find_if(begin(), end(), [&contact](const T_Contact& c){ return actions::distance(contact, c) == actions::zero(); });
+    return std::find_if(begin(), end(), [&contact](T_Contact const& c){ return actions::distance(contact, c) == actions::zero(); });
 }
 
-template <class T_Contact, int K>
-bool KBucket<T_Contact, K>::replace(iterator const & it, const T_Contact& contact)
-{
-    if (it == end())
-        return false;
-
-    return contacts.replace(it, contact);
-}
+//template <class T_Contact, int K>
+//bool KBucket<T_Contact, K>::replace(iterator const& it, const T_Contact& contact)
+//{
+//    if (it == end())
+//        return false;
+//
+//    return contacts.replace(it, contact);
+//}
 
 template <class T_Contact, int K>
 bool KBucket<T_Contact, K>::replace(const T_Contact& contact)
 {
-    return replace(find(contact), contact);
+    auto const& it = find(contact);
+
+    if (it == end())
+        return false;
+
+    return contacts.replace(it, contact);
 }
