@@ -667,10 +667,10 @@ public:
         program_state.do_step();
     }
 
-    contact_status add_contact(peer_id const& peerid,
-                               string const& nodeid) override
+    contact_status add_contact(peer_id const& peerid, string const& nodeid) override
     {
-        Konnection k{nodeid, peerid, {}};
+        Konnection k{nodeid, peerid};
+
         if (kbucket.find(k) != kbucket.end())
             return contact_status::existing_contact;
         else if (kbucket.insert(k).second)
@@ -693,7 +693,7 @@ public:
 
     void update(peer_id const& peerid, string const& nodeid) override
     {
-        Konnection k(nodeid, peerid, {});
+        Konnection k(nodeid, peerid);
         kbucket.replace(k);
 
         //  node lookup design is wrong, does not fit in

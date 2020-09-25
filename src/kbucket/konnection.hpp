@@ -28,8 +28,10 @@ struct Kontakt
         return distance_type(_node_id) - distance_type(r._node_id); 
     }
 
-public:
-    node_id_type get_id() const { return _node_id; }
+    node_id_type get_id() const 
+    { 
+        return _node_id; 
+    }
 
 protected:
     Kontakt(node_id_type const& node_id = {})
@@ -84,8 +86,10 @@ struct string_distance
             for (size_t index = 0; index < size; ++index)
             {
                 unsigned char byte_a = 0, byte_b = 0;
+
                 if (index <= size_a)
                     byte_a = abs_a.GetByte(index);
+
                 if (index <= size_b)
                     byte_b = abs_b.GetByte(index);
 
@@ -101,16 +105,17 @@ private:
     value_type _val;
 };
 
-inline std::ostream& operator<<(std::ostream& o, string_distance const& r) { return o << r._val; }
+inline std::ostream& operator<<(std::ostream& o, string_distance const& r) 
+{ 
+    return o << r._val; 
+}
 
 struct Konnection : details::Kontakt<std::string, string_distance>
 {
     Konnection(node_id_type const& node_id = {},
-               peer_id const& peer = {},
-               ip_address const& address = {})
-        : details::Kontakt<node_id_type, distance_type>{node_id}
-        , _peer{peer}
-        , _address(address)
+               peer_id const& peer = {})
+        : details::Kontakt<node_id_type, distance_type>{ node_id }
+        , _peer{ peer }
     {}
 
     std::string to_string() const 
@@ -132,5 +137,4 @@ struct Konnection : details::Kontakt<std::string, string_distance>
 
 private:
     peer_id _peer;
-    ip_address _address;
 };
