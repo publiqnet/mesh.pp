@@ -40,8 +40,8 @@ public:
     virtual void set_active_nodeid(beltpp::socket::peer_id const& peer_id,
                                    std::string const& nodeid) = 0;
 
-    virtual void update(beltpp::socket::peer_id const& peer_id,
-                        std::string const& nodeid) = 0;
+//    virtual void update(beltpp::socket::peer_id const& peer_id,
+//                        std::string const& nodeid) = 0;
 
     virtual std::vector<beltpp::socket::peer_id> get_connected_peerids() const = 0;
     virtual std::vector<beltpp::ip_address> get_connected_addresses() const = 0;

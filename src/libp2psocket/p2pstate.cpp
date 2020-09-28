@@ -691,15 +691,15 @@ public:
         program_state.set_active_value(peerid, value);
     }
 
-    void update(peer_id const& peerid, string const& nodeid) override
-    {
-        Konnection k(nodeid, peerid);
-        kbucket.replace(k);
-
-        //  node lookup design is wrong, does not fit in
-        /*if(node_lookup)
-            node_lookup->update_peer(k);*/
-    }
+//    void update(peer_id const& peerid, string const& nodeid) override
+//    {
+//        Konnection k(nodeid, peerid);
+//        kbucket.replace(k);
+//
+//        //  node lookup design is wrong, does not fit in
+//        /*if(node_lookup)
+//            node_lookup->update_peer(k);*/
+//    }
 
     vector<peer_id> get_connected_peerids() const override
     {

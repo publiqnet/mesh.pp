@@ -631,9 +631,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
             }
 
-            // this checks and updates only if peer is already added
-            state.update(current_peer, msg.nodeid);
-
             m_pimpl->writeln("sending find node");
 
             FindNode msg_fn;
