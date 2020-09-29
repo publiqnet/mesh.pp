@@ -812,19 +812,28 @@ public:
                                         string const& origin_nodeid,
                                         vector<string> const& nodeids) override
     {
+        B_UNUSED(peerid);
+        B_UNUSED(origin_nodeid);
         vector<string> result;
 
-        Konnection from{origin_nodeid, peerid};
-        std::vector<Konnection> _konnections;
-        for (auto const & nodeid : nodeids)
+//        Konnection from{origin_nodeid, peerid};
+//        std::vector<Konnection> _konnections;
+        for (auto const& nodeid : nodeids)
         {
-            if (nodeid == SelfID)   // skip ourself if it happens the we are one of the closest nodes
+            if (nodeid == SelfID)   // skip ourself if it happens
                 continue;
-            Konnection _konnection{nodeid};
-            if (kbucket.end() == kbucket.find(_konnection))
-                result.push_back(_konnection.to_string());
 
-            _konnections.push_back(_konnection);
+            Konnection _konnection{ nodeid };
+            if (kbucket.end() == kbucket.find(_konnection))
+            {
+                auto it = droped_nodes.find(nodeid);
+                if (it != droped_nodes.end() && it->second.second < it->second.first)
+                    ++it->second.second; // skip
+                else
+                    result.push_back(_konnection.to_string()); // try to connect
+            }
+
+//            _konnections.push_back(_konnection);
         }
 
         //  node lookup design is wrong, does not fit in
@@ -899,6 +908,30 @@ public:
         verified_peers.erase(peerid);
     }
 
+    void process_node_join(string const& nodeid) override
+    {
+        if (nodeid.empty())
+            return;
+
+        droped_nodes.erase(nodeid);
+    }
+
+    void process_node_drop(string const& nodeid) override
+    {
+        if (nodeid.empty())
+            return;
+
+        auto it = droped_nodes.find(nodeid);
+
+        if (it == droped_nodes.end())
+            droped_nodes.insert({ nodeid, {1, 0} });
+        else if (it->second.second >= it->second.first)
+        {
+            it->second.second = 0;
+            it->second.first *= 10;
+        }
+    }
+
 private:
     unsigned short fixed_local_port;
     beltpp::ip_address external_ip_address;
@@ -909,6 +942,7 @@ private:
     communication_state<peer_state> program_state;
 
     unordered_set<peer_id> verified_peers;
+    unordered_map<string, pair<size_t, size_t>> droped_nodes;
 };
 
 namespace meshpp

@@ -30,6 +30,8 @@ using std::unordered_set;
 
 using sf = beltpp::socket_family_t<&message_list_load>;
 
+#define PING_INTERVAL 30
+
 namespace meshpp
 {
 
@@ -464,7 +466,11 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             peer = current_peer_nodeid;
             if (false == current_peer_nodeid.empty())
+            {
                 return_packets.emplace_back(beltpp::stream_drop());
+
+                state.process_node_drop(current_peer_nodeid);
+            }
 
             break;
         }
@@ -490,15 +496,11 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 can_reset_external_address = true;
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
-
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
-
-            if (chrono::seconds(-30) > diff ||
-                chrono::seconds(30) <= diff)
+            if (chrono::seconds(-PING_INTERVAL) > diff || chrono::seconds(PING_INTERVAL) <= diff)
             {
                 beltpp::finally guard;
-                if (m_pimpl->plogger &&
-                    false == m_pimpl->plogger->enabled())
+                if (m_pimpl->plogger && false == m_pimpl->plogger->enabled())
                 {
                     guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
                     m_pimpl->plogger->enable();
@@ -529,13 +531,10 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 break;
             }
 
-
-            if (empty_external_address_stored ||
-                can_reset_external_address)
+            if (empty_external_address_stored || can_reset_external_address)
             {
                 beltpp::finally guard;
-                if (m_pimpl->plogger &&
-                    false == m_pimpl->plogger->enabled())
+                if (m_pimpl->plogger && false == m_pimpl->plogger->enabled())
                 {
                     guard = beltpp::finally([this]{m_pimpl->plogger->disable();});
                     m_pimpl->plogger->enable();
@@ -578,7 +577,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             string message_pong = msg_pong.nodeid + ::beltpp::gm_time_t_to_gm_string(msg_pong.stamp.tm);
             
-            m_pimpl->writeln("sending pong with signed message");
             m_pimpl->writeln(message_pong);
             
             if (false == msg.signature.empty())
@@ -596,13 +594,14 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
                 m_pimpl->writeln("remove_later current_peer, 10, true, true: " + current_peer + ", " + current_connection.to_string());
 
-                if (false == msg.nodeid.empty() &&
-                    p2pstate::contact_status::new_contact == status)
+                if (false == msg.nodeid.empty() && p2pstate::contact_status::new_contact == status)
                 {
                     peer = msg.nodeid;
                     return_packets.emplace_back(beltpp::stream_join());
                 }
             }
+            else
+                state.process_node_drop(msg.nodeid);
 
             break;
         }
@@ -617,17 +616,25 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             auto diff = system_clock::from_time_t(msg.stamp.tm) - system_clock::now();
             string message = msg.nodeid + ::beltpp::gm_time_t_to_gm_string(msg.stamp.tm);
-            if (chrono::seconds(-30) > diff ||
-                chrono::seconds(30) <= diff)
+            if (chrono::seconds(-PING_INTERVAL) > diff || chrono::seconds(PING_INTERVAL) <= diff)
             {
                 m_pimpl->writeln("invalid pong timestamp");
                 break;
             }
-            m_pimpl->writeln("verifying message");
+
             m_pimpl->writeln(message);
-            if (!verify_signature(msg.nodeid, message, msg.signature))
+
+            if (false == msg.signature.empty())
             {
-                m_pimpl->writeln("pong signature verification failed");
+                if (!verify_signature(msg.nodeid, message, msg.signature))
+                {
+                    m_pimpl->writeln("pong signature verification failed");
+                    break;
+                }
+            }
+            else if (false == state.is_peer_verified(current_peer))
+            {
+                m_pimpl->writeln("receive simple pong from unverified peer");
                 break;
             }
 
@@ -723,6 +730,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                 Other pack;
                 std::move(received_packet).get(pack);
                 return_packets.emplace_back(std::move(pack.contents));
+
+                state.process_node_join(current_peer_nodeid);
             }
             break;
         }

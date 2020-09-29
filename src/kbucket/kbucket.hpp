@@ -215,7 +215,7 @@ T_DstIt loop_copy(T_SrcIt pivot, T_SrcIt first, T_SrcIt last, T_DstIt d_first, T
 template <class T_Contact, int K>
 std::vector<T_Contact> KBucket<T_Contact, K>::list_nearests_to(const T_Contact& contact, bool prefer_same_index) const
 {
-    std::vector<T_Contact> result{ K };
+    std::vector<T_Contact> result{ 10 * K }; // TODO check logic
 
     auto& contacts_by_distance = contacts.template get<by_distance>();
 

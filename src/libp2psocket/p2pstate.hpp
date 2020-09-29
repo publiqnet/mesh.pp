@@ -87,6 +87,9 @@ public:
     virtual bool is_peer_verified(beltpp::socket::peer_id const& peerid) = 0;
     virtual void set_peer_verified(beltpp::socket::peer_id const& peerid) = 0;
     virtual void set_peer_unverified(beltpp::socket::peer_id const& peerid) = 0;
+
+    virtual void process_node_join(std::string const& nodeid) = 0;
+    virtual void process_node_drop(std::string const& nodeid) = 0;
 };
 
 using p2pstate_ptr = beltpp::t_unique_ptr<p2pstate>;
