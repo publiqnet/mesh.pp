@@ -653,7 +653,8 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
 
             NodeDetails response;
             response.origin = state.name();
-            response.nodeids = state.list_nearest_to(msg.nodeid);
+            //response.nodeids = state.list_nearest_to(msg.nodeid);
+            response.nodeids = state.get_kbucket_nodeids();
 
             sk.send(current_peer, beltpp::packet(std::move(response)));
             break;
@@ -664,10 +665,7 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
             NodeDetails msg;
             std::move(received_packet).get(msg);
 
-            vector<string> want_introduce =
-                    state.process_node_details(current_peer,
-                                               msg.origin,
-                                               msg.nodeids);
+            vector<string> want_introduce = state.filter_introduce_candidates(msg.nodeids);
 
             for (auto const& intro : want_introduce)
             {

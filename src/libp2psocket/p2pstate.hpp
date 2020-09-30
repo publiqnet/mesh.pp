@@ -71,11 +71,10 @@ public:
     //  has to take care of kbucket clean up
     virtual std::pair<std::vector<std::pair<std::string, bool>>, std::vector<beltpp::socket::peer_id>> remove_pending() = 0;
 
-    virtual std::vector<std::string> list_nearest_to(std::string const& nodeid) = 0;
-
-    virtual std::vector<std::string> process_node_details(beltpp::socket::peer_id const& peerid,
-                                                          std::string const& origin_nodeid,
-                                                          std::vector<std::string> const& nodeids) = 0;
+    //virtual std::vector<std::string> list_nearest_to(std::string const& nodeid) = 0;
+    virtual std::vector<std::string> get_kbucket_nodeids() const = 0; // probably name is not the best
+    
+    virtual std::vector<std::string> filter_introduce_candidates(std::vector<std::string> const& nodeids) = 0;
 
     virtual std::string get_nodeid(beltpp::socket::peer_id const& peerid) = 0;
     virtual bool get_peer_id(std::string const& nodeid, beltpp::socket::peer_id& peerid) = 0;

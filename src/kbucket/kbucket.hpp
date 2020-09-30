@@ -111,7 +111,7 @@ public:
     iterator erase(iterator const& pos);
     iterator erase(T_Contact const& contact);
     iterator erase(iterator const& first, iterator const& last);
-    KBucket<T_Contact, K> rebase(T_Contact const& new_origin, bool include_origin = true) const;
+//    KBucket<T_Contact, K> rebase(T_Contact const& new_origin, bool include_origin = true) const;
 
     void clear()
     { 
@@ -123,7 +123,9 @@ public:
 
     bool replace(T_Contact const& contact);
     iterator find(T_Contact const& contact) const;
-    std::vector<T_Contact> list_nearests_to(T_Contact const& contact, bool prefer_same_index = false) const;
+//    std::vector<T_Contact> list_nearests_to(T_Contact const& contact, bool prefer_same_index = false) const;
+
+    std::vector<std::string> get_nodeids() const;
 
     void print_list(std::ostream& os);
     void print_count(std::ostream& os);
@@ -134,25 +136,25 @@ private:
 };
 
 
-template <class T_Contact, int K>
-KBucket<T_Contact, K> KBucket<T_Contact, K>::rebase(T_Contact const& new_origin, bool include_origin) const
-{
-    if (actions::is_same(new_origin, this->origin))
-        return *this;
-
-    KBucket<T_Contact, K> result(new_origin);
-
-    if (include_origin)
-        result.insert(this->origin);
-
-    for (auto const& it : contacts)
-    {
-        if (!actions::is_same(it, new_origin))
-            result.insert(it);
-    }
-
-    return result;
-}
+//template <class T_Contact, int K>
+//KBucket<T_Contact, K> KBucket<T_Contact, K>::rebase(T_Contact const& new_origin, bool include_origin) const
+//{
+//    if (actions::is_same(new_origin, this->origin))
+//        return *this;
+//
+//    KBucket<T_Contact, K> result(new_origin);
+//
+//    if (include_origin)
+//        result.insert(this->origin);
+//
+//    for (auto const& it : contacts)
+//    {
+//        if (!actions::is_same(it, new_origin))
+//            result.insert(it);
+//    }
+//
+//    return result;
+//}
 
 template <class T_Contact, int K>
 std::pair<typename KBucket<T_Contact, K>::iterator, bool> KBucket<T_Contact, K>::insert(const T_Contact& contact)
@@ -200,40 +202,54 @@ typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::erase(T_Contact 
     return it;
 }
 
-template< class T_SrcIt, class T_DstIt >
-T_DstIt loop_copy(T_SrcIt pivot, T_SrcIt first, T_SrcIt last, T_DstIt d_first, T_DstIt d_last)
-{
-    for (auto it = pivot; it != last && d_first != d_last; ++it)
-        *d_first++ = *it;
+//template< class T_SrcIt, class T_DstIt >
+//T_DstIt loop_copy(T_SrcIt pivot, T_SrcIt first, T_SrcIt last, T_DstIt d_first, T_DstIt d_last)
+//{
+//    for (auto it = pivot; it != last && d_first != d_last; ++it)
+//        *d_first++ = *it;
+//
+//    for (auto it = first; it != pivot && d_first != d_last; ++it)
+//        *d_first++ = *it;
+//
+//    return d_first;
+//}
 
-    for (auto it = first; it != pivot && d_first != d_last; ++it)
-        *d_first++ = *it;
-
-    return d_first;
-}
+//template <class T_Contact, int K>
+//std::vector<T_Contact> KBucket<T_Contact, K>::list_nearests_to(const T_Contact& contact, bool prefer_same_index) const
+//{
+//    std::vector<T_Contact> result{ 10 * K };
+//
+//    auto& contacts_by_distance = contacts.template get<by_distance>();
+//
+//    auto it = std::begin(contacts_by_distance);
+//    if (prefer_same_index)
+//    {
+//        auto index_ = actions::index(origin, contact);
+//        it = std::find_if(std::begin(contacts_by_distance), std::end(contacts_by_distance),
+//                         [&](const T_Contact &a){ return index_ == actions::index(origin, a); } );
+//    }
+//
+//    auto result_end = loop_copy(it, 
+//                                std::begin(contacts_by_distance), 
+//                                std::end(contacts_by_distance),
+//                                std::begin(result), 
+//                                std::end(result));
+//
+//    result.erase(result_end, std::end(result));
+//
+//    return result;
+//}
 
 template <class T_Contact, int K>
-std::vector<T_Contact> KBucket<T_Contact, K>::list_nearests_to(const T_Contact& contact, bool prefer_same_index) const
+std::vector<std::string> KBucket<T_Contact, K>::get_nodeids() const
 {
-    std::vector<T_Contact> result{ 10 * K }; // TODO check logic
+    std::vector<std::string> result;
 
     auto& contacts_by_distance = contacts.template get<by_distance>();
-
+    
     auto it = std::begin(contacts_by_distance);
-    if (prefer_same_index)
-    {
-        auto index_ = actions::index(origin, contact);
-        it = std::find_if(std::begin(contacts_by_distance), std::end(contacts_by_distance),
-                         [&](const T_Contact &a){ return index_ == actions::index(origin, a); } );
-    }
-
-    auto result_end = loop_copy(it, 
-                                std::begin(contacts_by_distance), 
-                                std::end(contacts_by_distance),
-                                std::begin(result), 
-                                std::end(result));
-
-    result.erase(result_end, std::end(result));
+    for (; it != std::end(contacts_by_distance); ++it)
+        result.push_back(it->to_string());
 
     return result;
 }

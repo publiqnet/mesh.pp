@@ -784,8 +784,7 @@ public:
         program_state.undo_remove(peerid);
     }
 
-    pair<vector<pair<string, bool>>,
-         vector<peer_id>> remove_pending() override
+    pair<vector<pair<string, bool>>, vector<peer_id>> remove_pending() override
     {
         auto to_remove = program_state.remove_pending();
 
@@ -795,29 +794,29 @@ public:
         return to_remove;
     }
 
-    vector<string> list_nearest_to(string const& nodeid) override
+ //   vector<string> list_nearest_to(string const& nodeid) override
+ //   {
+ //       Konnection k(nodeid);
+ //       //auto tmp_bucket = kbucket.rebase(k, false);
+ //       auto konnections = kbucket.list_nearests_to(k, false);
+ //
+ //       vector<string> result;
+ //
+ //       for (Konnection const& konnection_item : konnections)
+ //           result.push_back(konnection_item.to_string());
+ //
+ //       return result;
+ //   }
+
+    vector<string> get_kbucket_nodeids() const override
     {
-        Konnection k(nodeid);
-        auto konnections = kbucket.list_nearests_to(k, false);
-
-        vector<string> result;
-
-        for (Konnection const& konnection_item : konnections)
-            result.push_back(konnection_item.to_string());
-
-        return result;
+        return kbucket.get_nodeids();
     }
-
-    vector<string> process_node_details(peer_id const& peerid,
-                                        string const& origin_nodeid,
-                                        vector<string> const& nodeids) override
+    
+    vector<string> filter_introduce_candidates(vector<string> const& nodeids) override
     {
-        B_UNUSED(peerid);
-        B_UNUSED(origin_nodeid);
         vector<string> result;
 
-//        Konnection from{origin_nodeid, peerid};
-//        std::vector<Konnection> _konnections;
         for (auto const& nodeid : nodeids)
         {
             if (nodeid == SelfID)   // skip ourself if it happens
@@ -832,20 +831,7 @@ public:
                 else
                     result.push_back(_konnection.to_string()); // try to connect
             }
-
-//            _konnections.push_back(_konnection);
         }
-
-        //  node lookup design is wrong, does not fit in
-        /*if(node_lookup)
-        {
-            node_lookup->add_konnections(from, _konnections);
-
-            /-* NODE LOOKUP MAINTENANCE *-/
-            auto const & orphans = node_lookup->orphan_list();
-            for (auto const & li : orphans)
-                result.push_back(static_cast<std::string>(li));
-        }*/
 
         return result;
     }
