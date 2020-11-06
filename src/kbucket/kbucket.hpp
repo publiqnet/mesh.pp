@@ -121,7 +121,7 @@ public:
                         )}.swap(contacts); 
     }
 
-    bool replace(T_Contact const& contact);
+//    bool replace(T_Contact const& contact);
     iterator find(T_Contact const& contact) const;
 //    std::vector<T_Contact> list_nearests_to(T_Contact const& contact, bool prefer_same_index = false) const;
 
@@ -290,13 +290,13 @@ typename KBucket<T_Contact, K>::iterator KBucket<T_Contact, K>::find(T_Contact c
     return std::find_if(begin(), end(), [&contact](T_Contact const& c){ return actions::distance(contact, c) == actions::zero(); });
 }
 
-template <class T_Contact, int K>
-bool KBucket<T_Contact, K>::replace(T_Contact const& contact)
-{
-    auto const& it = find(contact);
+// template <class T_Contact, int K>
+// bool KBucket<T_Contact, K>::replace(T_Contact const& contact)
+// {
+//     auto const& it = find(contact);
 
-    if (it == end())
-        return false;
+//     if (it == end())
+//         return false;
 
-    return contacts.replace(it, contact);
-}
+//     return contacts.replace(it, contact);
+// }

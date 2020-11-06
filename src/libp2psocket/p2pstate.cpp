@@ -914,7 +914,9 @@ public:
         else if (it->second.second >= it->second.first)
         {
             it->second.second = 0;
-            it->second.first *= 10;
+
+            if (it->second.first < 1000000000000)
+                it->second.first *= 10;
         }
     }
 

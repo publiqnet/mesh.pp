@@ -214,6 +214,9 @@ void p2psocket::prepare_wait()
     for (auto const& remove_sk : to_remove.second)
     {
         m_pimpl->writeln("sending drop");
+
+        state.set_peer_unverified(remove_sk);
+
         sk.send(remove_sk, beltpp::packet(beltpp::stream_drop()));
     }
 
@@ -421,7 +424,6 @@ p2psocket::packets p2psocket::receive(p2psocket::peer_id& peer)
                              current_peer + ", " +
                              current_connection.to_string());
 
-            state.set_peer_unverified(current_peer);
             state.remove_later(current_peer, 0, true, false);
 
             peer = current_peer_nodeid;
@@ -858,12 +860,6 @@ void p2psocket::timer_action()
 
         m_pimpl->writeln("sending ping with signed message");
         m_pimpl->writeln(ping_msg.to_string());
-
-        if (false == state.is_peer_verified(item))
-        {
-            auto signed_message = m_pimpl->_secret_key.sign(message);
-            ping_msg.signature = std::move(signed_message.base58);
-        }
 
         sk.send(item, beltpp::packet(ping_msg));
     }
