@@ -532,12 +532,12 @@ public:
                 boost::filesystem::copy_file(file_path(),
                                              file_path_tr(),
                                              boost::filesystem::copy_option::overwrite_if_exists,
-                                             ec); 
+                                             ec);
                 if (ec)
                     throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(),boost::filesystem::copy_option::overwrite_if_exists,ec)");
 
                 guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
-            } 
+            }
         }
 
         for (auto& value : values)
@@ -580,7 +580,7 @@ public:
 
         if (false == boost::filesystem::exists(file_path_tr()))
             boost::filesystem::ofstream(file_path_tr(), std::ios_base::trunc);
-            
+
         guard_file_tr.dismiss();
         guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
 
