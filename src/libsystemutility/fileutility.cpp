@@ -532,13 +532,12 @@ public:
                 boost::filesystem::copy_file(file_path(),
                                              file_path_tr(),
                                              boost::filesystem::copy_option::overwrite_if_exists,
-                                             ec);
+                                             ec); 
+                if (ec)
+                    throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(),boost::filesystem::copy_option::overwrite_if_exists,ec)");
 
                 guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
-            }
-
-            if (ec)
-                throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(),boost::filesystem::copy_option::overwrite_if_exists,ec)");
+            } 
         }
 
         for (auto& value : values)
@@ -581,6 +580,9 @@ public:
 
         if (false == boost::filesystem::exists(file_path_tr()))
             boost::filesystem::ofstream(file_path_tr(), std::ios_base::trunc);
+            
+        guard_file_tr.dismiss();
+        guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
 
         {
             boost::filesystem::fstream fl;
@@ -591,8 +593,6 @@ public:
             if (!fl)
                 throw std::runtime_error("save(): unable to open fstream: " + file_path_tr().string());
 
-            guard_file_tr.dismiss();
-            guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
 
             fl.seekg(0, std::ios_base::end);
             check(fl, file_path_tr(), "save", "seekg", "end", string());
@@ -651,6 +651,8 @@ public:
         if (purpose_clear_all)
             markers.clear();
 
+        beltpp::on_failure guard_file_tr;
+
         if (nullptr == ptransaction &&
             boost::filesystem::exists(file_path()) &&
             false == markers.empty())
@@ -662,6 +664,8 @@ public:
                                          ec);
             if (ec)
                 throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(), boost::filesystem::copy_option::overwrite_if_exists, ec)");
+
+            guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
         }
 
         compact();
@@ -673,6 +677,8 @@ public:
                                                                                            file_path_tr(),
                                                                                            file_path_marker(),
                                                                                            file_path_marker_tr());
+
+        guard_file_tr.dismiss();
     }
 
     void commit() noexcept
@@ -880,10 +886,20 @@ private:
         if (!ofl)
             throw std::runtime_error("save_markers(): unable to open fstream: " + file_path_marker_tr().string());
 
+        beltpp::on_failure guard_file_marker_tr([this]{ boost::filesystem::remove(file_path_marker_tr()); });
+
         static_assert(sizeof(marker) == 3 * sizeof(uint64_t), "size mismatch");
 
         if (false == markers.empty())
+        {
             ofl.write(reinterpret_cast<char const*>(&markers.front().start), int64_t(sizeof(marker) * markers.size()));
+            check(ofl, file_path_marker_tr(), "save_markers", "write", "all", string());
+        }
+
+        ofl.close();
+        check(ofl, file_path_marker_tr(), "save_markers", "close", "all", string());
+
+        guard_file_marker_tr.dismiss();
     }
 
     boost::filesystem::path file_path_marker() const
