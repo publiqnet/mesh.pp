@@ -280,7 +280,7 @@ using std::endl;
 int main()
 {
     size_t const limit = 2;
-    beltpp::json::ptr_expression_tree pexp;
+    beltpp::json::expression_tree_pointer pexp;
     beltpp::json::expression_tree* proot = nullptr;
     {
     string test1 = "{\"rtt\":{},\"message\":{\"rtt\":4},\"\" :1";
