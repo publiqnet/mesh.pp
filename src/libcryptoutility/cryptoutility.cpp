@@ -19,7 +19,6 @@
 #include <string>
 #include <cassert>
 #include <vector>
-#include <exception>
 #include <random>
 #include <cstring>
 

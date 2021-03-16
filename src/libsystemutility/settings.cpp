@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <exception>
+#include <stdexcept>
 
 #if defined(M_OS_LINUX)
 

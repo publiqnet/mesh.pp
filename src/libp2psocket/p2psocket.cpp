@@ -10,6 +10,7 @@
 #include <belt.pp/timer.hpp>
 
 #include <exception>
+#include <stdexcept>
 #include <thread>
 
 using namespace P2PMessage;

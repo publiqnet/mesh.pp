@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <exception>
+#include <stdexcept>
 #include <chrono>
 #include <unordered_map>
 #include <memory>

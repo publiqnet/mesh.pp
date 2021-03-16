@@ -28,7 +28,6 @@ static_assert(sizeof(intptr_t) >= sizeof(int), "check the sizes");
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <exception>
 #include <future>
 
 using std::string;

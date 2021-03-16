@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <exception>
+#include <stdexcept>
 #include <iterator>
 #include <string>
 #include <functional>
