@@ -295,7 +295,7 @@ int main()
     else
     {
         cout << "<===" << endl;
-        cout << beltpp::dump(proot) << endl;
+        cout << beltpp::dump(*proot) << endl;
         cout << "===>" << endl;
         if (beltpp::e_three_state_result::success == code)
             return 0;
@@ -315,7 +315,7 @@ int main()
     else
     {
         cout << "<===" << endl;
-        cout << beltpp::dump(proot) << endl;
+        cout << beltpp::dump(*proot) << endl;
         cout << "===>" << endl;
         if (beltpp::e_three_state_result::success == code)
             return 0;
