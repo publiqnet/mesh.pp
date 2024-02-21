@@ -530,10 +530,10 @@ public:
             {
                 boost::filesystem::copy_file(file_path(),
                                              file_path_tr(),
-                                             boost::filesystem::copy_option::overwrite_if_exists,
+                                             boost::filesystem::copy_options::overwrite_existing,
                                              ec);
                 if (ec)
-                    throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(),boost::filesystem::copy_option::overwrite_if_exists,ec)");
+                    throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(),boost::filesystem::copy_options::overwrite_existing,ec)");
 
                 guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
             }
@@ -659,10 +659,10 @@ public:
             boost::system::error_code ec;
             boost::filesystem::copy_file(file_path(),
                                          file_path_tr(),
-                                         boost::filesystem::copy_option::overwrite_if_exists,
+                                         boost::filesystem::copy_options::overwrite_existing,
                                          ec);
             if (ec)
-                throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(), boost::filesystem::copy_option::overwrite_if_exists, ec)");
+                throw std::runtime_error(ec.message() + ", " + file_path().string() + ", boost::filesystem::copy_file(file_path(),file_path_tr(), boost::filesystem::copy_options::overwrite_existing, ec)");
 
             guard_file_tr = beltpp::on_failure([this]{ boost::filesystem::remove(file_path_tr()); });
         }
